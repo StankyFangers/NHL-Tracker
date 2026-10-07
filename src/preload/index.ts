@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('nhlTracker', {
   roster: (team: string) => ipcRenderer.invoke('nhl:roster', team),
   standings: () => ipcRenderer.invoke('nhl:standings'),
   clubStats: (team: string) => ipcRenderer.invoke('nhl:clubStats', team),
+  dfoLines: (team: string) => ipcRenderer.invoke('dfo:lines', team),
+  dfoPlayerStats: (team: string, names: string[]) => ipcRenderer.invoke('dfo:playerStats', team, names),
   notify: (title: string, body: string) => ipcRenderer.invoke('app:notify', { title, body }),
   updateInfo: () => ipcRenderer.invoke('app:updateInfo'),
   openUpdateUrl: (url: string) => ipcRenderer.invoke('app:openUpdateUrl', url)

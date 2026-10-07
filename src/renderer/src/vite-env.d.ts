@@ -8,6 +8,8 @@ interface Window {
     roster: (team: string) => Promise<any>
     standings: () => Promise<any>
     clubStats: (team: string) => Promise<any>
+    dfoLines: (team: string) => Promise<any>
+    dfoPlayerStats: (team: string, names: string[]) => Promise<any>
     notify: (title: string, body: string) => Promise<any>
     updateInfo: () => Promise<any>
     openUpdateUrl: (url: string) => Promise<any>
