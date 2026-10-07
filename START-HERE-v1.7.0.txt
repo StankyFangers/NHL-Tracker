@@ -1,0 +1,15 @@
+NHL Tracker v1.7.0 Development Source
+
+This source was reconstructed from the NHL Tracker FINAL-SOURCE archive plus the actual v1.6.1, v1.6.2, and v1.6.3 patches, then the v1.7.0 Part 1A foundation changes were applied.
+
+Development mode uses the separate "NHL Tracker Dev" Electron profile so it does not share the installed NHL Tracker profile.
+
+Recommended Windows location:
+  G:\NHL Tracker Dev
+
+After extracting:
+  cd "/g/NHL Tracker Dev"
+  npm install
+  npm run dev
+
+Do not copy personal bet data into this source. The installed NHL Tracker remains separate.

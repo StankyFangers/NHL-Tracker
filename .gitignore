@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+
+# Build output
+out/
+dist/
+
+# Vite / Electron generated files
+.vite/
+*.log
+
+# Local patch backups
+.patch-backups/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Temporary files
+*.tmp
+*.temp
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# Generated Electron/Vite config artifacts
+electron.vite.config.*.mjs
+
+# Development patch documentation
+PATCH-NOTES-*.txt
+README-v1.7.1-*.txt
+
+# Packaged releases
+release/
+
+# Development source backups
+*.backup-*
+*.pre-*-backup
+*.bak
