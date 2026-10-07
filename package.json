@@ -1,6 +1,6 @@
 {
   "name": "nhl-tracker",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "Spoiler-controlled NHL live tracker",
   "main": "./out/main/index.js",
   "author": "NHL Tracker",
@@ -51,7 +51,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "resources/money-puck.ico"
