@@ -1,9 +1,9 @@
 {
   "name": "nhl-tracker",
-  "version": "1.7.2",
+  "version": "1.7.5",
   "description": "Spoiler-controlled NHL live tracker",
   "main": "./out/main/index.js",
-  "author": "NHL Tracker",
+  "author": "NHL Tracker <geddylwalker@gmail.com>",
   "license": "MIT",
   "scripts": {
     "dev": "electron-vite dev",

@@ -1,6 +1,7 @@
-import { app, BrowserWindow, ipcMain, Notification, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, Notification, shell, dialog } from 'electron'
 import { join } from 'path'
 import { homedir } from 'os'
+import { writeFile } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 
 const NHL = 'https://api-web.nhle.com/v1'
@@ -27,10 +28,14 @@ function parseDfoLinePage(html:string,team:string,url:string){
  const defense=linkedNames(section(html,'Defensive Pairings','1st Powerplay Unit|1st Power Play Unit')).slice(0,6)
  const pp1=linkedNames(section(html,'1st Powerplay Unit|1st Power Play Unit','2nd Powerplay Unit|2nd Power Play Unit')).slice(0,5)
  const pp2=linkedNames(section(html,'2nd Powerplay Unit|2nd Power Play Unit','1st Penalty Kill Unit')).slice(0,5)
+ // Goalies are listed separately from the skater lines. Do not infer 'confirmed' from ordering.
+ const goalieSection=section(html,'>Goalies<|Goalies','>Injuries<|Injuries|Badges:|Team Sites')
+ const goalieNames=linkedNames(goalieSection).slice(0,4)
+ const goalieStatus=/\bconfirmed\b/i.test(htmlText(goalieSection))?'CONFIRMED':/\bprojected|expected\b/i.test(htmlText(goalieSection))?'PROJECTED':'UNKNOWN'
  const injuriesText=section(html,'>Injuries<|Injuries','Badges:|Team Sites'),injuries:[string,string][]=[]
  for(const status of ['out','dtd','ir']){const rx=new RegExp(status+'[\\\\s\\\\S]{0,700}?<a[^>]+href="[^"]*/players/[^"]*"[^>]*>([\\\\s\\\\S]*?)</a>','ig');for(const m of injuriesText.matchAll(rx))injuries.push([htmlText(m[1]),status.toUpperCase()])}
  const rows=<T>(xs:T[],n:number)=>Array.from({length:Math.ceil(xs.length/n)},(_,i)=>xs.slice(i*n,(i+1)*n))
- return {team,url,updatedAt:updated,source,sourceUrl,checkedAt:new Date().toISOString(),forwardLines:rows(forwards,3),defensePairs:rows(defense,2),pp1,pp2,injuries}
+ return {team,url,updatedAt:updated,source,sourceUrl,checkedAt:new Date().toISOString(),forwardLines:rows(forwards,3),defensePairs:rows(defense,2),pp1,pp2,injuries,goalies:goalieNames,goalieStatus}
 }
 async function dfoLines(team:string){
  const key=String(team||'').toUpperCase(),slug=DFO_TEAM_SLUGS[key];if(!slug)throw new Error('No Daily Faceoff team mapping for '+key)
@@ -45,8 +50,35 @@ async function dfoPlayerStats(team:string,names:string[]){
  for(const p of rosterPlayers){const full=[p?.firstName?.default,p?.lastName?.default].filter(Boolean).join(' ');if(full)byName.set(playerNameKey(full),p)}
  const skaters=[...(club?.skaters||[]),...(club?.forwards||[]),...(club?.defensemen||[])];const seasonById=new Map<number,any>();for(const p of skaters){const id=Number(p?.playerId||p?.id||0);if(id)seasonById.set(id,p)}
  const out:Record<string,any>={}
- await Promise.all((names||[]).map(async display=>{const p=byName.get(playerNameKey(display));const id=Number(p?.id||p?.playerId||0);if(!id)return;const season=seasonById.get(id)||{};let log:any={};try{log=await nhlJson('/player/'+id+'/game-log/now')}catch{}const games=(log?.gameLog||log?.games||[]).slice(0,10);const sum=(k:string,alts:string[]=[])=>games.reduce((n:number,g:any)=>n+Number(g?.[k]??alts.map(x=>g?.[x]).find(v=>v!=null)??0),0);const g=sum('goals'),aa=sum('assists'),sog=sum('shots',['shotsOnGoal','sog']);out[String(display).toLowerCase()]={playerId:id,l10:{g,a:aa,p:g+aa,sog},season:{g:Number(season?.goals||0),a:Number(season?.assists||0),p:Number(season?.points??Number(season?.goals||0)+Number(season?.assists||0)),sog:Number(season?.shots??season?.shotsOnGoal??season?.sog??0)}}}))
+ await Promise.all((names||[]).map(async display=>{const p=byName.get(playerNameKey(display));const id=Number(p?.id||p?.playerId||0);if(!id)return;const season=seasonById.get(id)||{};let log:any={};try{log=await nhlJson('/player/'+id+'/game-log/now')}catch{}const allGames=(log?.gameLog||log?.games||[]);const games=allGames.slice(0,10);const sum=(k:string,alts:string[]=[])=>games.reduce((n:number,g:any)=>n+Number(g?.[k]??alts.map(x=>g?.[x]).find(v=>v!=null)??0),0);const g=sum('goals'),aa=sum('assists'),sog=sum('shots',['shotsOnGoal','sog']);const toSeconds=(v:any):number|null=>{
+  if(typeof v==='number'&&Number.isFinite(v)&&v>0)return v;
+  if(typeof v!=='string'||!/^\d+:\d{2}(?::\d{2})?$/.test(v.trim()))return null;
+  const parts=v.trim().split(':').map(Number);
+  return parts.length===3?parts[0]*3600+parts[1]*60+parts[2]:parts[0]*60+parts[1];
+ };
+ const times=allGames.map((g:any)=>toSeconds(g?.toi??g?.timeOnIce??g?.timeOnIcePerGame)).filter((v:any):v is number=>v!=null&&v>0);
+ const avgSeconds=times.length?Math.round(times.reduce((a:number,b:number)=>a+b,0)/times.length):null;
+ const averageToi=avgSeconds!=null?`${Math.floor(avgSeconds/60)}:${String(avgSeconds%60).padStart(2,'0')}`:null;
+ out[String(display).toLowerCase()]={averageToi,playerId:id,l10:{g,a:aa,p:g+aa,sog},season:{g:Number(season?.goals||0),a:Number(season?.assists||0),p:Number(season?.points??Number(season?.goals||0)+Number(season?.assists||0)),sog:Number(season?.shots??season?.shotsOnGoal??season?.sog??0)}}}))
  return out
+}
+async function goalieAverageToi(team:string,names:string[]){
+ const [roster,club]=await Promise.all([nhlJson('/roster/'+encodeURIComponent(team)+'/current'),nhlJson('/club-stats/'+encodeURIComponent(team)+'/now')]);
+ const goalies=roster?.goalies||[];const season=club?.goalies||[];
+ const result:Record<string,{averageToi:string,games:number}>={};
+ for(const display of names){const p=goalies.find((g:any)=>playerNameKey([g?.firstName?.default,g?.lastName?.default].filter(Boolean).join(' '))===playerNameKey(display));if(!p)continue;
+ const stats=season.find((g:any)=>Number(g.playerId||g.id)===Number(p.id||p.playerId));if(!stats)continue;
+ const games=Number(stats.gamesPlayed||0);
+ const raw=stats.timeOnIce||stats.toi||stats.totalTimeOnIce;
+ let seconds=NaN;
+ if(typeof raw==='number')seconds=raw;
+ else if(typeof raw==='string'&&/^\d+:\d{2}(?::\d{2})?$/.test(raw)){
+  const parts=raw.split(':').map(Number);seconds=parts.length===3?parts[0]*3600+parts[1]*60+parts[2]:parts[0]*60+parts[1];
+ }
+ if(!games||!Number.isFinite(seconds)||seconds<=0)continue;
+ const avg=Math.round(seconds/games);result[display.toLowerCase()]={averageToi:`${Math.floor(avg/60)}:${String(avg%60).padStart(2,'0')}`,games};
+ }
+ return result;
 }
 async function nhlJson(path: string) {
   const response = await fetch(`${NHL}${path}`, {
@@ -69,6 +101,7 @@ function createWindow(): void {
     webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: false }
   })
   mainWindow.setMenuBarVisibility(false)
+  mainWindow.maximize()
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   else mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
 }
@@ -77,15 +110,37 @@ app.whenReady().then(() => {
   electronApp.setAppUserModelId(is.dev ? 'com.nhltracker.app.dev' : 'com.nhltracker.app')
   app.on('browser-window-created', (_, window) => optimizer.watchWindowShortcuts(window))
 
+  ipcMain.handle('app:saveLineComboPdf',async (_event,payload:{slateDate?:string;title:string;subtitle:string;lines:string[]})=>{
+    const {filePath,canceled}=await dialog.showSaveDialog({title:'Save Daily Line Combo PDF',defaultPath:join(app.getPath('downloads'),`NHL Combos - ${/^\d{4}-\d{2}-\d{2}$/.test(payload?.slateDate||'')?payload.slateDate:new Date().toISOString().slice(0,10)}.pdf`),filters:[{name:'PDF',extensions:['pdf']}]})
+    if(canceled||!filePath)return {cancelled:true}
+    const escapeHtml=(value:string)=>String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+    const lines=Array.isArray(payload?.lines)?payload.lines.slice(0,300).map(x=>String(x).slice(0,600)):[]
+    const html=`<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4;margin:18mm 14mm}body{font:11px Arial,sans-serif;color:#152034}h1{font-size:18px;margin:0 0 7px}h2{font-size:10px;color:#777;margin:0 0 25px}.entry{line-height:1.6;margin:0 0 18px;break-inside:avoid;white-space:nowrap;font-size:11px}.matchupHeading{font-size:13px;font-weight:700;text-align:center;margin:20px 0 12px;break-after:avoid}</style></head><body><h1>${escapeHtml(payload.title)}</h1><h2>${escapeHtml(payload.subtitle)}</h2>${lines.map(line=>/^\s*[A-Z]{2,3}\s+@\s+[A-Z]{2,3}\s+[—-]/.test(line)?`<div class="matchupHeading">${escapeHtml(line)}</div>`:`<div class="entry">${escapeHtml(line)}</div>`).join('')}<script>document.querySelectorAll('.entry').forEach(el=>{let size=11;while(el.scrollWidth>el.clientWidth&&size>5.5){size-=0.25;el.style.fontSize=size+'px'}})</script></body></html>`
+    const pdfWindow=new BrowserWindow({show:false,width:1100,height:800,webPreferences:{sandbox:true}})
+    try{
+      await pdfWindow.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent(html))
+      const pdf=await pdfWindow.webContents.printToPDF({printBackground:true,pageSize:'A4'})
+      await writeFile(filePath,pdf)
+      return {saved:true}
+    }catch(e){return {error:String(e)}}finally{if(!pdfWindow.isDestroyed())pdfWindow.destroy()}
+  })
   ipcMain.handle('nhl:score', async (_e, date?: string) => nhlJson(date ? `/score/${date}` : '/score/now'))
   ipcMain.handle('nhl:pbp', async (_e, gameId: number) => nhlJson(`/gamecenter/${gameId}/play-by-play`))
   ipcMain.handle('nhl:landing', async (_e, gameId: number) => nhlJson(`/gamecenter/${gameId}/landing`))
+  ipcMain.handle('nhl:shiftcharts', async (_e, gameId: number) => {
+    if (!Number.isSafeInteger(gameId) || gameId <= 0) throw new Error('Invalid NHL game ID')
+    const url = `https://api.nhle.com/stats/rest/en/shiftcharts?cayenneExp=${encodeURIComponent('gameId='+gameId)}`
+    const response = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' })
+    if (!response.ok) throw new Error(`NHL shiftcharts failed: ${response.status}`)
+    return response.json()
+  })
   ipcMain.handle('nhl:boxscore', async (_e, gameId: number) => nhlJson(`/gamecenter/${gameId}/boxscore`))
   ipcMain.handle('nhl:roster', async (_e, team: string) => nhlJson(`/roster/${encodeURIComponent(team)}/current`))
   ipcMain.handle('nhl:standings', async () => nhlJson('/standings/now'))
   ipcMain.handle('nhl:clubStats', async (_e, team: string) => nhlJson(`/club-stats/${encodeURIComponent(team)}/now`))
   ipcMain.handle('dfo:lines', async (_e, team: string) => dfoLines(team))
   ipcMain.handle('dfo:playerStats', async (_e, team: string, names: string[]) => dfoPlayerStats(team,names))
+  ipcMain.handle('dfo:goalieToi', async (_e, team: string, names: string[]) => goalieAverageToi(team,names))
   ipcMain.handle('app:notify', async (_e, payload: { title: string; body: string }) => { if (Notification.isSupported()) new Notification({ title: payload.title, body: payload.body, silent: true }).show(); return true })
   ipcMain.handle('app:updateInfo', async () => {
     const installedVersion = app.getVersion()

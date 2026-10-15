@@ -684,3 +684,386 @@ html,body,#root,.app,main{scrollbar-width:thin;scrollbar-color:#3e7898 #0a1118}
 
 /* NHL 1.7.2 layout fix — specific overrides */
 .betHistoryList{display:flex!important;flex-direction:column!important;grid-template-columns:none!important;gap:8px!important;max-height:390px;overflow-y:auto;overflow-x:hidden;padding:3px 6px 3px 0}.betHistoryRow{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;align-items:center;gap:12px;min-height:66px;padding:11px 14px;border:1px solid #294657;border-radius:8px;background:#0c1a23}.betHistorySummary{display:grid!important;grid-template-columns:minmax(0,1fr) auto auto auto;gap:12px;align-items:center;min-width:0}.betHistorySummary>b{font-size:13px!important;white-space:normal!important;overflow-wrap:anywhere}.betHistorySummary>span,.betHistorySummary>strong,.betHistorySummary>em{font-size:11px!important;white-space:nowrap;font-style:normal}.betHistoryRow>.inlineRebet{position:static!important;transform:none!important;margin:0!important;width:auto!important;min-width:90px;white-space:nowrap}.dfoPlayer>div:first-child b{font-size:15px!important}.dfoPlayer>div:first-child span{font-size:11px!important}.dfoStats b,.dfoStats small{font-size:10px!important}.dfoStats em{font-size:14px!important;font-weight:800}.dfoStats{grid-template-columns:50px repeat(4,minmax(0,1fr))!important;gap:5px!important}.dfoPlayerGrid.pp .dfoPlayer>div:first-child b{font-size:13px!important}@media(max-width:850px){.betHistorySummary{grid-template-columns:minmax(0,1fr) auto;row-gap:5px}.betHistoryRow{grid-template-columns:minmax(0,1fr) auto}}
+
+/* v1.7.3: continuous Zamboni loop, unaffected by clock resynchronization */
+.liveClock.intermission .zamboniPatrol{position:absolute!important;left:0!important;right:0!important;bottom:0!important;width:100%!important;height:28px!important;display:block!important;animation:none!important;pointer-events:none!important}
+.liveClock.intermission .zamboniPatrol .zamboniImage{position:absolute!important;left:0;bottom:0!important;width:44px!important;height:auto!important;display:block!important;animation:nhlZamboniContinuous 7s linear infinite!important;will-change:transform!important}
+@keyframes nhlZamboniContinuous{from{left:-44px;transform:scaleX(-1)}to{left:100%;transform:scaleX(-1)}}
+@media(prefers-reduced-motion:reduce){.liveClock.intermission .zamboniPatrol .zamboniImage{animation:nhlZamboniContinuous 7s linear infinite!important}}
+/* Final override: animate full-width wrapper so travel scales with actual clock width. */
+.liveClock.intermission .zamboniPatrol{animation:nhlZamboniPatrolLoop 7s linear infinite!important;transform:translateX(0)}
+.liveClock.intermission .zamboniPatrol .zamboniImage{left:-44px!important;animation:none!important;transform:scaleX(-1)!important}
+@keyframes nhlZamboniPatrolLoop{from{transform:translateX(0)}to{transform:translateX(calc(100% + 44px))}}
+@media(prefers-reduced-motion:reduce){.liveClock.intermission .zamboniPatrol{animation:nhlZamboniPatrolLoop 7s linear infinite!important}.liveClock.intermission .zamboniPatrol .zamboniImage{animation:none!important}}
+
+/* Simulator feedback: slower forward-facing intermission patrol; no PP changes. */
+.liveClock.intermission .zamboniPatrol{animation-duration:24s!important}
+.liveClock.intermission .zamboniPatrol .zamboniImage{animation-duration:24s!important}
+@keyframes zamboniDirection2O{
+  0%,49.99%{transform:scaleX(1)}
+  50%,100%{transform:scaleX(-1)}
+}
+
+/* Compact simulator access: directly beneath App Updates, above Spoiler Shield. */
+.developerSettings { padding: 16px 20px; }
+.developerSettings h2 { margin: 0 0 5px; font-size: 17px; }
+.developerSettings p { margin: 0 0 10px; font-size: 12px; line-height: 1.4; }
+.developerUnlock { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.developerUnlock input { width: 128px; max-width: 100%; }
+.developerUnlock button, .developerSettings > button { white-space: nowrap; }
+
+/* Minimal Developer PIN access — between App Updates and Spoiler Shield. */
+.developerPinRow{grid-column:1/-1;padding:4px 0 6px!important;margin:0!important;background:none!important;border:0!important;box-shadow:none!important}
+.developerPinRow form{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0}
+.developerPinRow label{font-size:12px;font-weight:800;letter-spacing:.04em;color:#c8e4f4}
+.developerPinRow input{width:110px;min-height:31px;padding:5px 9px;border:1px solid #294557;border-radius:6px;background:#0c1821;color:#e8f7ff;font-size:12px}
+.developerPinRow small{color:#ff7182;font-size:11px}
+
+/* Facing fix: original PNG faces right; do not mirror during rightward patrol. */
+.liveClock.intermission .zamboniPatrol .zamboniImage{transform:scaleX(1)!important}
+
+/* Settings: three left cards fill the height of Notifications, with equal gutters. */
+@media (min-width:1051px){
+  .settingsDashboard{column-gap:18px;row-gap:12px;grid-template-rows:minmax(max-content,1.2fr) minmax(max-content,1fr) minmax(100px,.65fr)}
+  .settingsDashboard .bettingSettings{grid-column:1;grid-row:1;align-self:stretch}
+  .settingsDashboard .appUpdates{grid-column:1;grid-row:2;align-self:stretch}
+  .settingsDashboard .developerPinRow{grid-column:1;grid-row:3;align-self:stretch;box-sizing:border-box;padding:22px 28px!important;background:#0d1720!important;border:1px solid #294453!important;border-radius:9px;display:flex;align-items:flex-start}
+  .settingsDashboard .developerPinRow form{display:flex;flex-direction:column;align-items:flex-start;gap:9px}
+  .settingsDashboard .developerPinRow input{width:180px}
+  .settingsDashboard .notificationSettings{grid-column:2;grid-row:1/span 3;align-self:stretch}
+  .settingsDashboard .spoilerSettings{grid-column:1/-1;grid-row:4}
+  .settingsDashboard .dataManagement{grid-column:1/-1;grid-row:5}
+}
+@media (max-width:1050px){
+  .settingsDashboard .developerPinRow{grid-column:auto;grid-row:auto;box-sizing:border-box;padding:18px 22px!important;background:#0d1720!important;border:1px solid #294453!important;border-radius:9px}
+}
+
+/* Custom GOAL cards: team-colored glow and Canva-approved right-side art. */
+.event.goal.goalWithArt{position:relative;isolation:isolate;border:1px solid var(--goal-glow);border-left:4px solid var(--goal-glow);background:#091a25;box-shadow:0 0 7px color-mix(in srgb,var(--goal-glow) 40%,transparent),0 0 17px color-mix(in srgb,var(--goal-glow) 16%,transparent),0 8px 24px #0008;min-height:142px}
+.event.goal.goalWithArt .goalMascotArt{position:absolute;z-index:0;right:0;top:0;height:100%;width:auto;max-width:none;pointer-events:none;object-fit:fill;-webkit-mask-image:linear-gradient(90deg,transparent 0%,black 12%);mask-image:linear-gradient(90deg,transparent 0%,black 12%)}
+.event.goal.goalWithArt .eventIcon,.event.goal.goalWithArt .eventContent{position:relative;z-index:2}
+.event.goal.goalWithArt .eventContent{padding-right:clamp(110px,28%,260px)}
+.event.goal.goalWithArt .eventContent h2,.event.goal.goalWithArt .eventContent p,.event.goal.goalWithArt .eventContent footer{overflow-wrap:anywhere}
+@media(max-width:620px){.event.goal.goalWithArt .eventContent{padding-right:95px}.event.goal.goalWithArt .goalMascotArt{opacity:.85}}
+
+/* NHL BET OVERVIEW RESPONSIVE PATCH 2026-10-08 */
+
+/* Use the available width of the Today's Bets pane rather than fixed minimum columns. */
+.liveBetAccordion{container-type:inline-size;min-width:0}
+.liveBetAccordion > summary{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.6fr) minmax(0,.85fr) auto auto;align-items:center;gap:8px;min-width:0;box-sizing:border-box}
+.liveBetAccordion > summary > b,.liveBetAccordion > summary > span,.liveBetAccordion > summary > strong,.liveBetAccordion > summary > small{min-width:0;overflow-wrap:anywhere}
+.liveBetAccordion > summary > span{text-align:left}
+.liveBetAccordion > summary > strong,.liveBetAccordion > summary > small{text-align:right}
+.liveBetAccordion > summary > .rowVerifyButton{justify-self:end;max-width:100%;white-space:normal}
+.compactBet > summary{grid-template-columns:58px minmax(0,1fr) minmax(112px,max-content);min-width:0}
+.compactBetPrice{white-space:normal;overflow-wrap:anywhere;min-width:0}
+.compactBetLegs{min-width:0}
+@container (max-width: 750px){
+ .liveBetAccordion > summary{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px 12px}
+ .liveBetAccordion > summary > b{grid-column:1;grid-row:1}
+ .liveBetAccordion > summary > span{grid-column:1 / -1;grid-row:2}
+ .liveBetAccordion > summary > strong{grid-column:2;grid-row:1}
+ .liveBetAccordion > summary > small{grid-column:1;grid-row:3;text-align:left}
+ .liveBetAccordion > summary > .rowVerifyButton{grid-column:2;grid-row:3}
+}
+@container (max-width: 390px){
+ .compactBet > summary{grid-template-columns:44px minmax(0,1fr);gap:5px 8px}
+ .compactBetPrice{grid-column:2;grid-row:2;text-align:left}
+ .compactBetLegs{grid-column:2;grid-row:1}
+ .compactBetTeam{grid-column:1;grid-row:1}
+}
+
+/* NHL BET HEADER ONE-LINE-FIRST FIX 2026-10-08 */
+
+/* One row whenever the pane is wide enough; compact widths only wrap as needed. */
+.liveBetAccordion > summary{
+ grid-template-columns:minmax(90px,1fr) minmax(190px,2fr) max-content max-content max-content;
+ gap:6px; padding:9px 10px; min-height:46px;
+}
+.liveBetAccordion > summary > b{font-size:13px;white-space:nowrap}
+.liveBetAccordion > summary > span{font-size:10px;white-space:nowrap;overflow-wrap:normal}
+.liveBetAccordion > summary > strong{font-size:10px;white-space:nowrap;overflow-wrap:normal}
+.liveBetAccordion > summary > small{font-size:10px;white-space:nowrap;overflow-wrap:normal}
+.liveBetAccordion > summary > .rowVerifyButton{white-space:nowrap;font-size:9px;padding:6px 8px}
+@container (min-width: 601px){
+ .liveBetAccordion > summary{grid-template-columns:minmax(90px,1fr) minmax(190px,2fr) max-content max-content max-content;gap:6px}
+ .liveBetAccordion > summary > b,.liveBetAccordion > summary > span,.liveBetAccordion > summary > strong,.liveBetAccordion > summary > small,.liveBetAccordion > summary > .rowVerifyButton{grid-column:auto;grid-row:auto}
+}
+@container (max-width: 600px){
+ .liveBetAccordion > summary{grid-template-columns:minmax(0,1fr) max-content;gap:7px 10px}
+ .liveBetAccordion > summary > b{grid-column:1;grid-row:1}
+ .liveBetAccordion > summary > strong{grid-column:2;grid-row:1}
+ .liveBetAccordion > summary > span{grid-column:1 / -1;grid-row:2;white-space:normal}
+ .liveBetAccordion > summary > small{grid-column:1;grid-row:3;text-align:left}
+ .liveBetAccordion > summary > .rowVerifyButton{grid-column:2;grid-row:3}
+}
+
+/* NHL BET HEADER FLEX FIT FIX 2026-10-08 */
+
+/* Actual content-driven fit: no rigid minimum grid tracks or breakpoint stacking. */
+.liveBetAccordion > summary {
+  display:flex!important;
+  flex-direction:row!important;
+  flex-wrap:wrap!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  column-gap:8px!important;
+  row-gap:7px!important;
+  padding:9px 10px!important;
+  min-width:0!important;
+  box-sizing:border-box!important;
+  overflow:visible!important;
+}
+.liveBetAccordion > summary > b {
+  flex:0 0 auto!important;
+  min-width:0!important;
+  font-size:12px!important;
+  white-space:nowrap!important;
+}
+.liveBetAccordion > summary > span {
+  flex:1 1 170px!important;
+  min-width:140px!important;
+  font-size:10px!important;
+  text-align:center!important;
+  white-space:nowrap!important;
+  overflow:visible!important;
+}
+.liveBetAccordion > summary > strong {
+  flex:0 0 auto!important;
+  min-width:0!important;
+  font-size:10px!important;
+  text-align:right!important;
+  white-space:nowrap!important;
+}
+.liveBetAccordion > summary > small {
+  flex:0 0 auto!important;
+  min-width:0!important;
+  font-size:10px!important;
+  text-align:right!important;
+  white-space:nowrap!important;
+}
+.liveBetAccordion > summary > .rowVerifyButton {
+  flex:0 0 auto!important;
+  margin:0!important;
+  padding:6px 8px!important;
+  font-size:9px!important;
+  white-space:nowrap!important;
+  justify-self:auto!important;
+}
+/* Very narrow panes may wrap naturally, keeping every item visible. */
+@container (max-width: 520px) {
+  .liveBetAccordion > summary > span {
+    flex:1 1 180px!important;
+    text-align:left!important;
+  }
+}
+
+/* v1.7.4: two PIN forms in the original fixed-size Developer card. */
+.developerPinForms{display:flex;flex-direction:column;gap:15px;align-items:flex-start}
+.settingsDashboard .developerPinRow .developerPinForms form{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin:0}
+.settingsDashboard .developerPinRow{overflow:hidden}
+@media (min-width:1051px){.settingsDashboard .developerPinRow{padding:15px 28px!important}.settingsDashboard .developerPinRow .developerPinForms{gap:13px}}
+
+/* DFO wager-aware lineup comparison */
+.lineupAlertMark{display:inline-grid;place-items:center;width:17px;height:17px;border:2px solid #fbbf24;border-radius:50%;color:#fbbf24;font-size:12px;font-weight:900;line-height:1;cursor:pointer;margin-left:3px}
+.lineupAlertMark:hover,.lineupAlertMark:focus-visible{background:#fbbf24;color:#101820;outline:2px solid #fbbf24;outline-offset:2px}
+.lineupReviewBackdrop{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;padding:24px}
+.lineupReviewModal{width:min(100%,900px);max-height:90vh;overflow:auto;border:1px solid #3c6374;border-radius:12px;background:#101d28;color:#e5eef5;padding:22px;box-shadow:0 20px 80px #000a}
+.lineupReviewModal header,.lineupReviewModal footer,.lineupAffectedHead{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.lineupReviewModal header small{color:#79cde9}.lineupReviewModal h2{margin:4px 0 14px}.lineupReviewModal header button{font-size:22px;background:none;border:0;color:#fff;cursor:pointer}
+.lineupReviewColumns{display:grid;grid-template-columns:1fr 1fr;gap:14px}.lineupReviewColumns section{border:1px solid #345063;border-radius:8px;padding:12px;background:#152936}
+.lineupReviewColumns h3,.lineupBrokenPairs h3{font-size:12px;color:#8fd5f0}.lineupReviewColumns p{font-size:12px;line-height:1.6;margin:6px 0}.lineupReviewColumns p b{color:#eabf67;margin-right:8px}
+.lineupBrokenPairs{margin:16px 0}.lineupBrokenPairs>div{display:flex;justify-content:space-between;gap:12px;padding:8px;border-bottom:1px solid #304350;font-size:12px}.lineupBrokenPairs span{color:#fbbf24}
+.lineupReviewModal footer button,.lineupAffectedHead button{background:#23556a;color:white;border:1px solid #4b98b5;border-radius:6px;padding:8px 12px;font-weight:800;cursor:pointer}
+.lineupAffectedBets{margin:10px;padding:12px;border:1px solid #c9933b;border-radius:8px;background:#25251c}.lineupAffectedHead b{color:#fbbf24;font-size:12px}.lineupAffectedCard{display:flex;justify-content:space-between;gap:10px;padding:12px 6px;border-bottom:1px solid #5b4b32}.lineupAffectedCard small{color:#e8c883}
+@media(max-width:650px){.lineupReviewColumns{grid-template-columns:1fr}}
+
+
+/* v1.7.5 three-panel workspace: Combo | Live | Bets */
+.commandSplit.threePanel{
+ display:grid!important;
+ grid-template-columns:34px minmax(0,var(--combo-size)) 7px minmax(0,1fr) 34px 34px 7px minmax(0,var(--bet-size))!important;
+ gap:0!important;
+ align-items:stretch;
+ min-width:0;
+}
+.threePanel>.comboRail{grid-column:1;grid-row:1}
+.threePanel>.comboPane{grid-column:2;grid-row:1;min-width:0;min-height:520px;height:calc(100vh - 205px);overflow-y:auto;overflow-x:hidden;padding:0 9px 12px;background:#0b1219;border:1px solid #223441;border-radius:8px}
+.threePanel>.comboPane>.sectionTitle{position:sticky;top:0;background:#0b1219;z-index:4;padding:12px 2px}
+.threePanel>.panelResizeHandle{grid-column:3;grid-row:1;cursor:col-resize;background:linear-gradient(90deg,#091018,#214457,#091018);border-left:1px solid #203c4c;border-right:1px solid #203c4c}
+.threePanel>.panelResizeHandle:hover{background:#39718d}
+.threePanel>.livePane{grid-column:4;grid-row:1;padding:0 9px}
+.threePanel>.eventsRail{grid-column:5;grid-row:1}
+.threePanel>.betsRail{grid-column:6;grid-row:1}
+.threePanel>.betResizeHandle{grid-column:7;grid-row:1}.threePanel>.betsPane{grid-column:8;grid-row:1;margin-left:0}
+.threePanel.comboCollapsed>.comboPane{opacity:0;visibility:hidden;padding:0;border:0}
+.threePanel.comboCollapsed>.panelResizeHandle{visibility:hidden;pointer-events:none}
+.threePanel.eventsCollapsed{grid-template-columns:34px minmax(0,1fr) 7px 0px 34px 34px 7px minmax(0,var(--bet-size))!important}
+.threePanel.eventsCollapsed.comboCollapsed{grid-template-columns:34px 0px 0px 0px 34px 34px 7px minmax(0,1fr)!important}
+.threePanel.betsCollapsed{grid-template-columns:34px minmax(0,var(--combo-size)) 7px minmax(0,1fr) 34px 34px 0px 0px!important}
+.threePanel.eventsCollapsed.betsCollapsed{grid-template-columns:34px minmax(0,1fr) 7px 0px 34px 34px 0px 0px!important}
+.threePanel.comboCollapsed.betsCollapsed{grid-template-columns:34px 0px 0px minmax(0,1fr) 34px 34px 0px 0px!important}
+.threePanel.comboCollapsed.eventsCollapsed.betsCollapsed{grid-template-columns:34px 0px 0px minmax(0,1fr) 34px 34px 0px 0px!important}
+.threePanel .comboPane,.threePanel .livePane .feed,.threePanel .betsPane{scrollbar-width:thin;scrollbar-color:#3e7898 #0a1118}
+.threePanel .comboRail{min-height:520px}
+@media(max-width:1150px){
+ .commandSplit.threePanel,.threePanel.eventsCollapsed,.threePanel.betsCollapsed,.threePanel.comboCollapsed{display:grid!important;grid-template-columns:34px minmax(0,1fr)!important;gap:8px!important}
+ .threePanel>.comboRail{grid-column:1;grid-row:1;display:flex}
+ .threePanel>.comboPane{grid-column:2;grid-row:1;height:420px;min-height:0}
+ .threePanel>.livePane{grid-column:2;grid-row:2;height:420px;min-height:0}
+ .threePanel>.betsPane{grid-column:2;grid-row:3;height:420px;min-height:0}
+ .threePanel>.eventsRail,.threePanel>.betsRail,.threePanel>.panelResizeHandle{display:none}
+ .threePanel.comboCollapsed>.comboPane{display:none}
+}
+
+/* Three-panel labels and DFO card confirmation status */
+.comboNameStatus{display:flex;flex-direction:column;align-items:flex-start;gap:8px;min-width:0}
+.comboStatus{font-size:10px;letter-spacing:.055em;font-weight:850;border-radius:4px;padding:4px 7px;white-space:nowrap}
+.comboStatus.projected{color:#f4c46e;background:#3a2e19;border:1px solid #80602d}
+.comboStatus.confirmed{color:#69e6a4;background:#123a2d;border:1px solid #267c55}
+.panelContext{font-size:10px;color:#8aaabc;margin-left:9px}
+
+
+/* v1.7.5 — legible three-panel expand/collapse rails */
+.commandSplit.threePanel{
+  grid-template-columns:54px minmax(0,var(--combo-size)) 7px minmax(0,1fr) 54px 54px 7px minmax(0,var(--bet-size))!important;
+}
+.threePanel>.paneRail{
+  width:54px!important;min-width:54px!important;
+  background:linear-gradient(90deg,#0d1c29,#173347 50%,#0d1c29)!important;
+  border-left:1px solid #39627a!important;border-right:1px solid #39627a!important;
+  color:#d2efff!important;
+}
+.threePanel>.paneRail em{
+  opacity:1!important;color:#d2efff!important;font-size:10px!important;
+  letter-spacing:.09em!important;font-weight:900!important;
+  top:61%!important;text-shadow:0 1px 4px #000!important;
+}
+.threePanel>.paneRail span{
+  top:12%!important;left:50%!important;
+  transform:translate(-50%,-50%)!important;
+  width:38px!important;height:38px!important;
+  opacity:1!important;border:1px solid #6eb8df!important;
+  background:#173c53!important;color:#e2f6ff!important;
+  font-size:25px!important;border-radius:9px!important;
+  box-shadow:0 2px 10px #0008!important;
+}
+.threePanel>.paneRail:hover,.threePanel>.paneRail:focus-visible{
+  background:linear-gradient(90deg,#17425a,#245d7b 50%,#17425a)!important;
+  outline:2px solid #75cfff;outline-offset:-2px;
+}
+.threePanel>.paneRail:hover em,.threePanel>.paneRail:focus-visible em{opacity:1!important;color:white!important}
+.threePanel>.paneRail:hover span,.threePanel>.paneRail:focus-visible span{
+  background:#2c6e91!important;border-color:#b4e9ff!important;
+}
+.threePanel.eventsCollapsed{
+  grid-template-columns:54px minmax(0,1fr) 7px 0px 54px 54px 7px minmax(0,var(--bet-size))!important;
+}
+.threePanel.eventsCollapsed.comboCollapsed{
+  grid-template-columns:54px 0px 0px 0px 54px 54px 7px minmax(0,1fr)!important;
+}
+.threePanel.betsCollapsed{
+  grid-template-columns:54px minmax(0,var(--combo-size)) 7px minmax(0,1fr) 54px 54px 0px 0px!important;
+}
+.threePanel.eventsCollapsed.betsCollapsed{
+  grid-template-columns:54px minmax(0,1fr) 7px 0px 54px 54px 0px 0px!important;
+}
+.threePanel.comboCollapsed.betsCollapsed{
+  grid-template-columns:54px 0px 0px minmax(0,1fr) 54px 54px 0px 0px!important;
+}
+.threePanel.comboCollapsed.eventsCollapsed.betsCollapsed{
+  grid-template-columns:54px 0px 0px minmax(0,1fr) 54px 54px 0px 0px!important;
+}
+@media(max-width:1150px){
+  .commandSplit.threePanel,.threePanel.eventsCollapsed,.threePanel.betsCollapsed,.threePanel.comboCollapsed{
+    grid-template-columns:54px minmax(0,1fr)!important;
+  }
+  .threePanel>.paneRail{width:54px!important;min-width:54px!important}
+}
+
+
+/* v1.7.5 workspace grid: all collapsed rails dock left; visible panels retain order. */
+.commandSplit.threePanel,
+.commandSplit.threePanel.comboCollapsed,
+.commandSplit.threePanel.eventsCollapsed,
+.commandSplit.threePanel.betsCollapsed,
+.commandSplit.threePanel.comboCollapsed.eventsCollapsed,
+.commandSplit.threePanel.comboCollapsed.betsCollapsed,
+.commandSplit.threePanel.eventsCollapsed.betsCollapsed,
+.commandSplit.threePanel.comboCollapsed.eventsCollapsed.betsCollapsed{
+ display:grid!important;
+ grid-template-columns:var(--three-panel-columns)!important;
+ grid-template-rows:minmax(0,1fr)!important;
+ gap:0!important;
+ width:100%;
+}
+.commandSplit.threePanel>.comboRail{grid-column:var(--combo-rail-column)!important;grid-row:1!important}
+.commandSplit.threePanel>.comboPane{grid-column:var(--combo-pane-column)!important;grid-row:1!important}
+.commandSplit.threePanel>.panelResizeHandle:not(.betResizeHandle){grid-column:var(--combo-resize-column)!important;grid-row:1!important}
+.commandSplit.threePanel>.eventsRail{grid-column:var(--events-rail-column)!important;grid-row:1!important}
+.commandSplit.threePanel>.livePane{grid-column:var(--live-pane-column)!important;grid-row:1!important}
+.commandSplit.threePanel>.betsRail{grid-column:var(--bets-rail-column)!important;grid-row:1!important}
+.commandSplit.threePanel>.betResizeHandle{grid-column:var(--bet-resize-column)!important;grid-row:1!important}
+.commandSplit.threePanel>.betsPane{grid-column:var(--bets-pane-column)!important;grid-row:1!important}
+.commandSplit.threePanel.comboCollapsed>.comboPane,
+.commandSplit.threePanel.eventsCollapsed>.livePane,
+.commandSplit.threePanel.betsCollapsed>.betsPane,
+.commandSplit.threePanel.comboCollapsed>.panelResizeHandle:not(.betResizeHandle),
+.commandSplit.threePanel.betsCollapsed>.betResizeHandle{display:none!important}
+.commandSplit.threePanel>.paneRail{display:flex!important;min-height:520px}
+@media(max-width:1150px){
+ .commandSplit.threePanel{grid-template-columns:var(--three-panel-columns)!important}
+ .commandSplit.threePanel>.comboPane,.commandSplit.threePanel>.livePane,.commandSplit.threePanel>.betsPane{height:calc(100vh - 205px);min-height:520px}
+}
+
+/* Full-height docked panel rails — v1.7.5 */
+.commandSplit.threePanel{
+  min-height:max(620px,calc(100vh - 185px))!important;
+  align-items:stretch!important;
+}
+.commandSplit.threePanel>.paneRail{
+  height:100%!important;
+  min-height:inherit!important;
+  align-self:stretch!important;
+  box-sizing:border-box!important;
+}
+
+/* v1.7.5 pregame Confidence Engine */
+.scoreTeams .pregameConfidenceScore{font-size:12px!important;min-width:39px;text-align:center;padding:3px 5px;border-radius:5px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.confidenceAnalysis{border-bottom:1px solid #2b4354;background:#0b1721;padding:14px}
+.confidenceAnalysisHeading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px;color:#69d5ff;font-size:12px;letter-spacing:.06em}
+.confidenceAnalysisHeading small{color:#8aa5b9;font-size:10px}
+.confidenceCards{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.confidenceCard{background:#122331;border:1px solid #2d4657;border-radius:7px;color:#d8e8f2;text-align:left;padding:12px;cursor:pointer;display:flex;flex-direction:column;gap:5px}
+.confidenceCard.active,.confidenceCard:hover{border-color:#5bcaff;background:#172d3c}
+.confidenceCard small{font-size:10px;color:#9cb7c8;font-weight:800}
+.confidenceCard strong{font-size:27px;font-variant-numeric:tabular-nums}.confidenceCard strong span{font-size:12px;color:#91aabd}
+.confidenceCard>span{font-size:10px;color:#77cfff}
+.confidenceDetails{margin-top:12px;border:1px solid #304b5d;border-radius:7px;overflow:hidden}
+.confidenceEquation{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:center;background:#132936;padding:12px}
+.confidenceEquation b{font-size:11px;color:#b3cbd9}.confidenceEquation em{display:block;color:#70dca5;font-size:20px;font-style:normal;margin-top:3px}.confidenceEquation>strong{color:#7fd5ff;font-size:18px}
+.confidenceMetricsHeader,.confidenceMetricRow{display:grid;grid-template-columns:minmax(190px,1fr) 100px 100px;gap:10px;align-items:center;padding:9px 12px}
+.confidenceMetricsHeader{font-size:9px;color:#839eae;background:#0a141d}.confidenceMetricsHeader b{text-align:right}
+.confidenceMetricRow{width:100%;border:0;border-top:1px solid #253947;background:#101d28;color:#d7e5ef;text-align:left;cursor:pointer;font-size:11px}
+.confidenceMetricRow:hover{background:#182c3b}.confidenceMetricRow b{text-align:right;font-variant-numeric:tabular-nums}
+.confidenceMetricEvidence{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:11px 14px;background:#09141c}
+.confidenceMetricEvidence>div{display:flex;flex-direction:column;gap:4px}.confidenceMetricEvidence small{color:#8ba8ba;font-size:10px}.confidenceMetricEvidence strong{font-size:17px;color:#d8edf9}.confidenceMetricEvidence span{font-size:10px;color:#89a7b9}
+.confidenceDisclosure{font-size:10px;color:#90a8b7;line-height:1.5;margin:11px 0 0}
+@media(max-width:650px){.confidenceEquation{grid-template-columns:1fr 1fr}.confidenceEquation>strong{grid-column:1/-1}.confidenceMetricsHeader,.confidenceMetricRow{grid-template-columns:minmax(120px,1fr) 65px 65px;gap:5px;padding:8px}.confidenceCards{gap:6px}.confidenceCard{padding:8px}}
+
+/* v1.7.5: simplified matchup analysis, retaining goalie evidence */
+.matchupGoalies{padding:14px;border-top:1px solid #273e4d;background:#0b151e}
+.matchupGoaliesHeading{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:10px}
+.matchupGoaliesHeading b{font-size:12px;letter-spacing:.08em;color:#dceaf3}
+.matchupGoaliesHeading small{font-size:11px;color:#88a4b5}
+.matchupGoaliesGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.matchupGoalieCard{border:1px solid #294253;border-radius:7px;background:#101f2a;padding:12px;min-width:0}
+.matchupGoalieTeam{font-size:13px;font-weight:900;color:#e4f0f7;margin-bottom:6px}
+.matchupGoalieTeam span{font-size:10px;font-weight:500;color:#8ca8b8;margin-left:8px}
+.matchupGoalieCard>strong{display:block;font-size:15px;color:#e5f1f8;margin-bottom:12px;overflow-wrap:anywhere}
+.matchupGoalieStats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.matchupGoalieStats>div{display:flex;flex-direction:column;gap:3px}
+.matchupGoalieStats small{font-size:10px;color:#91adbe}
+.matchupGoalieStats b{font-size:18px;color:#eaf5fb;font-variant-numeric:tabular-nums}
+.matchupGoalies>p{font-size:10px;color:#7894a5;margin:10px 0 0}
+@media(max-width:700px){.matchupGoaliesGrid{grid-template-columns:1fr}}
