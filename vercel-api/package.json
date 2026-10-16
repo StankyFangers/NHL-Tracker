@@ -1,0 +1,8 @@
+{
+  "name": "nhl-tracker-readonly-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NHL Tracker development-only read-only history API",
+  "engines": { "node": ">=20" },
+  "dependencies": { "pg": "^8.13.3" }
+}
