@@ -17,11 +17,40 @@ function getPool() {
     host === `${DEVELOPMENT_ENDPOINT}-pooler.c-6.us-east-2.aws.neon.tech`
   if (!valid) throw new Error('Database safety lock: hostname is not the approved Neon DEVELOPMENT endpoint')
   if (url.pathname !== '/neondb') throw new Error('Database safety lock: unexpected database')
-  if (!pool) pool = new Pool({ connectionString: raw, ssl: { rejectUnauthorized: true }, max: 2,
-    connectionTimeoutMillis: 5000, idleTimeoutMillis: 10000,
-    options: '-c default_transaction_read_only=on -c statement_timeout=7000' })
+  if (!pool) pool = new Pool({
+    connectionString: raw,
+    ssl: { rejectUnauthorized: true },
+    max: 2,
+    connectionTimeoutMillis: 5000,
+    idleTimeoutMillis: 10000,
+    query_timeout: 8000
+  })
   return pool
 }
+
+// Run each API query in a read-only transaction. SET LOCAL avoids unsupported
+// Neon startup parameters and limits this query's server-side execution time.
+async function readOnlyQuery(text, values) {
+  const client = await getPool().connect()
+  let transactionOpen = false
+  try {
+    await client.query('BEGIN READ ONLY')
+    transactionOpen = true
+    await client.query("SET LOCAL statement_timeout = '7s'")
+    const result = await client.query(text, values)
+    await client.query('COMMIT')
+    transactionOpen = false
+    return result
+  } catch (error) {
+    if (transactionOpen) {
+      try { await client.query('ROLLBACK') } catch { /* preserve original error */ }
+    }
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
 function authorized(req) {
   const expected = process.env.NHL_READ_TOKEN
   if (!expected || expected.length < 32) return false
@@ -44,4 +73,4 @@ async function withAuth(req, res, callback) {
     return reply(res, 503, { error: 'History service unavailable' })
   }
 }
-module.exports = { getPool, reply, withAuth }
+module.exports = { getPool, readOnlyQuery, reply, withAuth }

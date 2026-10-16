@@ -1,7 +1,7 @@
 'use strict'
-const { getPool, reply, withAuth } = require('../lib/security')
+const { readOnlyQuery, reply, withAuth } = require('../lib/security')
 module.exports = async (req, res) => withAuth(req, res, async () => {
-  const result = await getPool().query(`
+  const result = await readOnlyQuery(`
     SELECT count(*)::integer AS bets,
       count(*) FILTER (WHERE b.status='WON')::integer AS won,
       count(*) FILTER (WHERE b.status='LOST')::integer AS lost,

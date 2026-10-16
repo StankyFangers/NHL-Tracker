@@ -1,5 +1,5 @@
 'use strict'
-const { getPool, reply, withAuth } = require('../lib/security')
+const { readOnlyQuery, reply, withAuth } = require('../lib/security')
 module.exports = async (req, res) => withAuth(req, res, async () => {
   const parsed = new URL(req.url, 'https://localhost')
   const limitRaw = parsed.searchParams.get('limit') || '25'
@@ -7,7 +7,7 @@ module.exports = async (req, res) => withAuth(req, res, async () => {
   if (!/^\d{1,3}$/.test(limitRaw) || !/^\d{1,6}$/.test(offsetRaw)) return reply(res, 400, { error: 'Invalid pagination' })
   const limit = Number(limitRaw), offset = Number(offsetRaw)
   if (limit < 1 || limit > 100 || offset > 100000) return reply(res, 400, { error: 'Pagination out of range' })
-  const result = await getPool().query(`
+  const result = await readOnlyQuery(`
     SELECT b.id, b.legacy_bet_id, b.bet_date, b.sportsbook, b.stake_units,
       b.unit_value_at_placement, b.american_odds, b.total_return_units,
       b.status, b.settled_return_units, b.original_placed_at, b.original_settled_at,
