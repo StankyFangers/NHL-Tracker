@@ -10,7 +10,7 @@ function db() {
  if (!raw) throw new Error('DEV authentication database not configured')
  const u = new URL(raw)
  const h = u.hostname.toLowerCase()
- if (!['postgres:','postgresql:'].includes(u.protocol) || u.pathname !== '/neondb' || ![
+ if (!['postgres:','postgresql:'].includes(u.protocol) || u.pathname !== '/neondb' || decodeURIComponent(u.username) !== 'nhl_tracker_auth' || ![
  'ep-twilight-term-b4fxjrkm.c-6.us-east-2.aws.neon.tech',
  'ep-twilight-term-b4fxjrkm-pooler.c-6.us-east-2.aws.neon.tech'
  ].includes(h)) throw new Error('Authentication database DEV safety lock failed')
@@ -47,7 +47,6 @@ async function session(req) {
  return result.rows[0]||null
 }
 function handler(fn) {return async(req,res)=>{
- res.setHeader('Access-Control-Allow-Origin','null') // Electron requests use main-process fetch; no browser credentials.
  try {await fn(req,res)} catch(e) {console.error('DEV auth failure:',e.message);reply(res,e.status||503,{error:e.status?e.message:'DEV account service unavailable'})}
 }}
 module.exports={db,reply,body,hashPassword,checkPassword,issueSession,session,handler,digest}
