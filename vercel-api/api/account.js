@@ -46,6 +46,20 @@ module.exports=handler(async(req,res)=>{
   if(!await checkPassword(password,a?.password_hash||fallback)||!a)return reply(res,401,{error:'Invalid credentials'})
   return reply(res,200,await issueSession(a))
  }
+ if(action==='rename_self') {
+  const current=await session(req)
+  if(!current||current.role!=='DEV')return reply(res,403,{error:'Authenticated TEST DEV session required'})
+  const username=String(data.username||'').trim().toLowerCase()
+  if(username!=='stankyfangerstest'||current.username!=='stankyfangers')return reply(res,403,{error:'This one-time TEST rename is not available for this account'})
+  const client=await db().connect()
+  try {
+   await client.query('BEGIN')
+   const result=await client.query('UPDATE public.nhl_dev_accounts SET username=$1 WHERE id=$2 AND username=$3 RETURNING id,username,role',[username,current.id,'stankyfangers'])
+   if(!result.rowCount){await client.query('ROLLBACK');return reply(res,409,{error:'TEST account changed; please log in again'})}
+   await client.query('COMMIT')
+   return reply(res,200,{account:{username:result.rows[0].username,role:result.rows[0].role}})
+  }catch(e){await client.query('ROLLBACK').catch(()=>{});if(e.code==='23505')return reply(res,409,{error:'TEST username already exists'});throw e}finally{client.release()}
+ }
  if(action==='logout') {
   const match=/^Bearer ([A-Za-z0-9_-]{40,100})$/.exec(String(req.headers.authorization||''))
   if(match)await db().query('DELETE FROM public.nhl_dev_sessions WHERE token_hash=$1',[digest(match[1])])
