@@ -137,3 +137,8 @@ Confidence optimizer enhancements, trio-versus-pairs improvements, and unrelated
 - Non-legacy LIVE accounts now see the cloud wager explorer embedded in their isolated workspace rather than as a fixed overlay. The explorer automatically performs an authenticated read-only load on mount, with date filtering, expandable details, and backup export available after a successful complete read.
 - The legacy owner retains the floating inspector alongside the existing local Bet Hub. Other accounts still never mount the legacy local wager store.
 - This is a read-only cloud wager workspace, not cloud Bet Hub write/sync integration. No production writes or release gates have changed. Run the renderer build and verify account switching and empty-account behavior before shipping.
+
+## Cloud wager settlement summary (2026-10-19)
+
+- The isolated LIVE cloud workspace now derives slate count and pending/won/lost/other wager counts from the authenticated complete cloud listing. It does not read legacy local wager storage or write anything to Neon.
+- This summary is a diagnostic cloud view; wager status aliases are grouped for display, and the full Bet Hub's official grading remains unchanged. Build and integration tests remain required.
