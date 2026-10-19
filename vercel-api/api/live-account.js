@@ -1,7 +1,6 @@
 'use strict'
 // Phase 2B server API only: no renderer wiring and no LIVE wager migration.
 const {getLivePool,reply,digest,validName,validEmail,hashPassword,checkPassword,session,issueSession,handler}=require('../lib/live-auth')
-const {createHash,timingSafeEqual}=require('node:crypto')
 const FALLBACK='scrypt:00000000000000000000000000000000:'+('00'.repeat(64))
 module.exports=handler(async(req,res)=>{
  if(req.method==='GET'){const a=await session(req);return a?reply(res,200,{account:{username:a.username,role:a.role}}):reply(res,401,{error:'Session expired'})}
@@ -11,15 +10,8 @@ module.exports=handler(async(req,res)=>{
  if(action==='register'){
   if(process.env.NHL_LIVE_SIGNUP_ENABLED!=='YES_LIVE_SIGNUP_APPROVED')return reply(res,403,{error:'LIVE registration disabled'})
   const username=String(req.body.username||'').trim().toLowerCase(),email=String(req.body.email||'').trim().toLowerCase(),password=String(req.body.password||'')
-  // Every invited user follows the same registration flow. Never elevate roles on signup.
-  // Registration remains disabled until the explicit LIVE signup gate is enabled.
+  // Public signup creates USER accounts only; the activation gate remains explicit.
   if(!validName(username)||!validEmail(email)||password.length<12||password.length>128)return reply(res,400,{error:'Invalid registration fields'})
-  // Compare SHA-256 digests in constant time; invitation secret is configured only on Vercel.
-  const invite=typeof req.body.invitationCode==='string'?req.body.invitationCode:''
-  const expected=String(process.env.NHL_LIVE_SIGNUP_INVITE_SHA256||'').toLowerCase()
-  if(!/^[a-f0-9]{64}$/.test(expected)||invite.length<24||invite.length>256)return reply(res,403,{error:'Invalid registration invitation'})
-  const actual=createHash('sha256').update(invite,'utf8').digest()
-  if(!timingSafeEqual(actual,Buffer.from(expected,'hex')))return reply(res,403,{error:'Invalid registration invitation'})
   const hash=await hashPassword(password)
   try{const r=await getLivePool().query("INSERT INTO public.nhl_live_accounts(username,email,password_hash,role) VALUES($1,$2,$3,'USER') RETURNING id,username,role",[username,email,hash]);return reply(res,201,await issueSession(r.rows[0]))}
   catch(e){if(e.code==='23505')return reply(res,409,{error:'Username or email already registered'});throw e}
