@@ -1670,6 +1670,9 @@ function LiveCloudInspector({username}:{username:string}){
    setComparison('READ-ONLY MIGRATION PREVIEW · Local '+localById.size+' · Cloud '+cloudById.size+' · Local-only '+localOnly+' · Identical '+identical+' · Same-ID differences '+different+' · Cloud-only '+cloudOnly+' · '+(different>0?'CONFLICTS BLOCK MIGRATION.':'No conflicts detected; migration still requires verified backups and separate approval.')+' No changes made.')
   }catch(e:any){setComparison('Comparison stopped: '+String(e?.message||e))}
  }
+ const [showDetails,setShowDetails]=useState(false)
+ const [detailId,setDetailId]=useState('')
+ const [filterDate,setFilterDate]=useState('')
  const exportSnapshot=()=>{
   if(!checked||loading)return
   const snapshot={format:'nhl-tracker-live-cloud-readonly-backup-v1',username,exportedAt:new Date().toISOString(),wagers:rows}
@@ -1685,7 +1688,7 @@ function LiveCloudInspector({username}:{username:string}){
  }
  const check=async()=>{
   if(loading)return
-  setComparison('');setChecked(false);setRows([])
+  setComparison('');setChecked(false);setRows([]);setDetailId('');setShowDetails(false)
   setLoading(true);setMessage('Reading LIVE cloud wagers...')
   try{
    const collected:any[]=[]
@@ -1719,7 +1722,7 @@ function LiveCloudInspector({username}:{username:string}){
    <div>Cloud wagers are not loaded into the Bet Hub. Local wagers are unchanged.</div>
    <button type="button" disabled={loading} onClick={()=>void check()}>{loading?'CHECKING...':'CHECK CLOUD WAGERS'}</button>
    <div role="status">{message}</div>
-   {checked&&<><div>Rows retrieved: {rows.length}. No uploads or changes performed.</div><button type="button" disabled={loading} onClick={exportSnapshot}>EXPORT MY CLOUD WAGERS (JSON BACKUP)</button>{username.toLowerCase()==='stankyfangers'&&<><button type="button" disabled={loading} onClick={compareLegacy}>COMPARE LEGACY LIVE VS CLOUD</button>{comparison&&<div role="status">{comparison}</div>}</>}<div style={{maxHeight:260,overflowY:'auto',borderTop:'1px solid #487b9a',paddingTop:6}}>{rows.length===0?'No cloud wagers yet.':rows.slice().sort((a,b)=>String(b.wager.date).localeCompare(String(a.wager.date))).slice(0,100).map(row=><div key={row.wager_id} style={{padding:'6px 0',borderBottom:'1px solid #28455c'}}><strong>{row.wager.date}</strong> · {row.wager.legs.length} leg{row.wager.legs.length===1?'':'s'}<div style={{overflowWrap:'anywhere',color:'#a7c8dd'}}>ID: {row.wager_id}</div></div>)}</div>{rows.length>100&&<small>Showing the latest 100 of {rows.length} cloud wagers.</small>}</>}
+   {checked&&<><div>Rows retrieved: {rows.length}. No uploads or changes performed.</div><button type="button" disabled={loading} onClick={exportSnapshot}>EXPORT MY CLOUD WAGERS (JSON BACKUP)</button>{username.toLowerCase()==='stankyfangers'&&<><button type="button" disabled={loading} onClick={compareLegacy}>COMPARE LEGACY LIVE VS CLOUD</button>{comparison&&<div role="status">{comparison}</div>}</>}<div style={{maxHeight:260,overflowY:'auto',borderTop:'1px solid #487b9a',paddingTop:6}}>{rows.length===0?'No cloud wagers yet.':rows.slice().sort((a,b)=>String(b.wager.date).localeCompare(String(a.wager.date))).slice(0,100).map(row=><div key={row.wager_id} style={{padding:'6px 0',borderBottom:'1px solid #28455c'}}><strong>{row.wager.date}</strong> · {row.wager.legs.length} leg{row.wager.legs.length===1?'':'s'}<div style={{overflowWrap:'anywhere',color:'#a7c8dd'}}>ID: {row.wager_id}</div></div>)}</div>{rows.length>100&&<small>Showing the latest 100 of {rows.length} cloud wagers.</small>}<label style={{display:'flex',gap:6,alignItems:'center'}}>Date filter <input type="date" value={filterDate} onChange={e=>setFilterDate(e.target.value)}/></label><button type="button" onClick={()=>{setShowDetails(v=>!v);setDetailId('')}}>{showDetails?'HIDE WAGER DETAILS':'VIEW WAGER DETAILS (READ ONLY)'}</button>{showDetails&&<div style={{maxHeight:320,overflowY:'auto',display:'grid',gap:6}}>{rows.filter(row=>!filterDate||row.wager.date===filterDate).slice().sort((a,b)=>String(b.wager.date).localeCompare(String(a.wager.date))).slice(0,100).map(row=><div key={row.wager_id} style={{border:'1px solid #31516b',borderRadius:6,padding:7}}><button type="button" onClick={()=>setDetailId(v=>v===row.wager_id?'':row.wager_id)}>{row.wager.date} · {row.wager.legs.length} legs · {row.wager.status||'PENDING'} {detailId===row.wager_id?'▲':'▼'}</button>{detailId===row.wager_id&&<pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',fontSize:11}}>{JSON.stringify(row.wager,null,2)}</pre>}</div>)}{rows.filter(row=>!filterDate||row.wager.date===filterDate).length===0&&<div>No wagers for this date.</div>}</div>}</>}
   </div>}
  </div>
 }
