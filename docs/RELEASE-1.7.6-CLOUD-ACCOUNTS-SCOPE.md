@@ -150,3 +150,11 @@ The packaged LIVE application has been built successfully, but registration curr
 Before any production activation, independently verify a dedicated Neon LIVE database (never the TEST/DEV database), least-privilege LIVE database role and required schema/unique constraints, backup and recovery, deployment environment variable host/database/role pins, and an end-to-end test plan for registration, login, logout, session expiry, duplicate usernames, and account isolation. Do not copy connection strings into tickets or chat. The LIVE database guard now also rejects explicit insecure `sslmode` query parameters.
 
 Production flags remain separately controlled: `NHL_LIVE_CLOUD_ENABLED=YES_PRODUCTION_APPROVED` and `NHL_LIVE_SIGNUP_ENABLED=YES_LIVE_SIGNUP_APPROVED` for account activation; keep `NHL_LIVE_WAGER_WRITES_ENABLED` unset for authentication-only testing. Do not enable any flag without separate explicit user approval. The packaged app also blocks LIVE wager mutations independently. No data migration is authorized.
+
+## Existing Neon infrastructure reconciliation (2026-10-19)
+
+- Reuse the existing Neon `NHL-Tracker` production/development branches and existing production tables. Do not create another database or apply a duplicate schema migration.
+- The unused draft `vercel-api/migrations/001_live_accounts.sql` was removed after the existing production schema was inspected.
+- `vercel-api/lib/live-db.js` now pins the known production endpoint, `neondb`, and `nhl_tracker_live_restricted` in code. This removes the four redundant `NHL_LIVE_APPROVED_*` / provisioning-verification environment variables; only the existing `NHL_LIVE_DATABASE_URL` is needed for the connection itself.
+- Activation remains intentionally separate: `NHL_LIVE_CLOUD_ENABLED` for LIVE API access, `NHL_LIVE_SIGNUP_ENABLED` for registration, and `NHL_LIVE_WAGER_WRITES_ENABLED` for wager mutations. Do not enable any of these without explicit approval. Wager writes must remain disabled during authentication testing.
+- The current production URL must use a working password for the existing restricted role. No secret belongs in source control or chat.
