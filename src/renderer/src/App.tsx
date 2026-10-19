@@ -1667,7 +1667,7 @@ function LiveCloudInspector({username}:{username:string}){
    let localOnly=0,identical=0,different=0,cloudOnly=0
    for(const [id,payload] of localById){if(!cloudById.has(id))localOnly++;else if(cloudById.get(id)===payload)identical++;else different++}
    for(const id of cloudById.keys())if(!localById.has(id))cloudOnly++
-   setComparison('READ-ONLY MIGRATION PREVIEW · Local '+localById.size+' · Cloud '+cloudById.size+' · Local-only '+localOnly+' · Identical '+identical+' · Same-ID differences '+different+' · Cloud-only '+cloudOnly+'. No changes made.')
+   setComparison('READ-ONLY MIGRATION PREVIEW · Local '+localById.size+' · Cloud '+cloudById.size+' · Local-only '+localOnly+' · Identical '+identical+' · Same-ID differences '+different+' · Cloud-only '+cloudOnly+' · '+(different>0?'CONFLICTS BLOCK MIGRATION.':'No conflicts detected; migration still requires verified backups and separate approval.')+' No changes made.')
   }catch(e:any){setComparison('Comparison stopped: '+String(e?.message||e))}
  }
  const exportSnapshot=()=>{
