@@ -194,6 +194,8 @@ app.whenReady().then(() => {
     // Mutation transport is deliberately locked until migration and conflict
     // handling are reviewed. Do not remove this lock as part of deployment.
     if (method!=='GET') return {error:'LIVE cloud writes are not enabled in this desktop build'}
+    if (!request || typeof request!=='object' || Array.isArray(request)) return {error:'Invalid LIVE wager request'}
+    if (Object.keys(request).some(k=>!['method','limit','cursor'].includes(k))) return {error:'Unsupported LIVE wager request fields'}
     const limit=Number.isInteger(request?.limit)?Math.max(1,Math.min(200,Number(request.limit))):100
     const cursor=typeof request?.cursor==='string'?request.cursor:''
     if (cursor.length>150) return {error:'Invalid LIVE wager cursor'}
