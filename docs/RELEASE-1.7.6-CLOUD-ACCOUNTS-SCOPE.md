@@ -76,3 +76,9 @@ Confidence optimizer enhancements, trio-versus-pairs improvements, and unrelated
 - **Future feature only, not part of 1.7.6:** user-initiated **Share to Chat** sends an explicit snapshot of a selected wager to a group chat. The shared representation is separate from the private source wager and does not confer read/write access to the original wager or other bets.
 - Future share records should preserve owner ID, shared-by ID, audience/chat ID, source wager ID, share timestamp, and a deliberately limited snapshot. Plan revocation/deletion behavior and avoid exposing private account metadata.
 - Do not implement chat UI, share endpoints, or automatic sharing in 1.7.6. Keep wager IDs and ownership stable so sharing can be added safely later.
+
+## Account isolation regression checks (2026-10-19)
+
+- Added endpoint tests proving LIVE wager GET queries use the authenticated session account ID rather than a client-supplied accountId, and anonymous GET requests do not access the database.
+- These tests are committed but not yet executed in this environment. Confirm the database has unique constraints on normalized usernames and account-scoped wager IDs before LIVE activation.
+- The renderer still uses legacy unscoped localStorage for LIVE wagers; this is a **release blocker**. Keep the existing guard that prevents other LIVE accounts from mounting TrackerApp until account-scoped cloud hydration and safe writes are implemented and tested.
