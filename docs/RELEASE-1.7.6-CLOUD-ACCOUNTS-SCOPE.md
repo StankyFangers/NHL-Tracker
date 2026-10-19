@@ -131,3 +131,9 @@ Confidence optimizer enhancements, trio-versus-pairs improvements, and unrelated
 - The authenticated read-only LIVE cloud inspector now includes a date filter and expandable JSON wager details for up to 100 matching records, in addition to the existing summary and backup export.
 - This allows checking actual cloud payload fields before implementing Bet Hub hydration. It does not change wager records, local storage, or production write gates.
 - This is a diagnostic explorer, not the full LIVE Bet Hub. Test the renderer build and verify per-account isolation before relying on it.
+
+## Embedded authenticated LIVE cloud workspace (2026-10-19)
+
+- Non-legacy LIVE accounts now see the cloud wager explorer embedded in their isolated workspace rather than as a fixed overlay. The explorer automatically performs an authenticated read-only load on mount, with date filtering, expandable details, and backup export available after a successful complete read.
+- The legacy owner retains the floating inspector alongside the existing local Bet Hub. Other accounts still never mount the legacy local wager store.
+- This is a read-only cloud wager workspace, not cloud Bet Hub write/sync integration. No production writes or release gates have changed. Run the renderer build and verify account switching and empty-account behavior before shipping.
