@@ -1651,6 +1651,25 @@ function LiveCloudInspector({username}:{username:string}){
  const [message,setMessage]=useState('Not checked yet')
  const [rows,setRows]=useState<any[]>([])
  const [checked,setChecked]=useState(false)
+ const [comparison,setComparison]=useState('')
+ const compareLegacy=()=>{
+  if(!checked||loading||username.toLowerCase()!=='stankyfangers')return
+  try{
+   const raw=localStorage.getItem('bets')
+   if(raw===null)throw new Error('No legacy LIVE wagers found')
+   const local=JSON.parse(raw)
+   if(!Array.isArray(local))throw new Error('Legacy wager data is invalid')
+   const validate=(w:any)=>w&&typeof w.id==='string'&&w.id&&typeof w.date==='string'&&Array.isArray(w.legs)
+   const localById=new Map<string,string>()
+   for(const w of local){if(!validate(w)||localById.has(w.id))throw new Error('Legacy wager IDs are invalid or duplicated');localById.set(w.id,JSON.stringify(w))}
+   const cloudById=new Map<string,string>()
+   for(const row of rows){const w=row.wager;if(!validate(w)||cloudById.has(w.id))throw new Error('Cloud wager IDs are invalid or duplicated');cloudById.set(w.id,JSON.stringify(w))}
+   let localOnly=0,identical=0,different=0,cloudOnly=0
+   for(const [id,payload] of localById){if(!cloudById.has(id))localOnly++;else if(cloudById.get(id)===payload)identical++;else different++}
+   for(const id of cloudById.keys())if(!localById.has(id))cloudOnly++
+   setComparison('READ-ONLY MIGRATION PREVIEW · Local '+localById.size+' · Cloud '+cloudById.size+' · Local-only '+localOnly+' · Identical '+identical+' · Same-ID differences '+different+' · Cloud-only '+cloudOnly+'. No changes made.')
+  }catch(e:any){setComparison('Comparison stopped: '+String(e?.message||e))}
+ }
  const exportSnapshot=()=>{
   if(!checked||loading)return
   const snapshot={format:'nhl-tracker-live-cloud-readonly-backup-v1',username,exportedAt:new Date().toISOString(),wagers:rows}
@@ -1666,6 +1685,7 @@ function LiveCloudInspector({username}:{username:string}){
  }
  const check=async()=>{
   if(loading)return
+  setComparison('');setChecked(false);setRows([])
   setLoading(true);setMessage('Reading LIVE cloud wagers...')
   try{
    const collected:any[]=[]
@@ -1697,7 +1717,7 @@ function LiveCloudInspector({username}:{username:string}){
    <div>Cloud wagers are not loaded into the Bet Hub. Local wagers are unchanged.</div>
    <button type="button" disabled={loading} onClick={()=>void check()}>{loading?'CHECKING...':'CHECK CLOUD WAGERS'}</button>
    <div role="status">{message}</div>
-   {checked&&<><div>Rows retrieved: {rows.length}. No uploads or changes performed.</div><button type="button" disabled={loading} onClick={exportSnapshot}>EXPORT MY CLOUD WAGERS (JSON BACKUP)</button><div style={{maxHeight:260,overflowY:'auto',borderTop:'1px solid #487b9a',paddingTop:6}}>{rows.length===0?'No cloud wagers yet.':rows.slice().sort((a,b)=>String(b.wager.date).localeCompare(String(a.wager.date))).slice(0,100).map(row=><div key={row.wager_id} style={{padding:'6px 0',borderBottom:'1px solid #28455c'}}><strong>{row.wager.date}</strong> · {row.wager.legs.length} leg{row.wager.legs.length===1?'':'s'}<div style={{overflowWrap:'anywhere',color:'#a7c8dd'}}>ID: {row.wager_id}</div></div>)}</div>{rows.length>100&&<small>Showing the latest 100 of {rows.length} cloud wagers.</small>}</>}
+   {checked&&<><div>Rows retrieved: {rows.length}. No uploads or changes performed.</div><button type="button" disabled={loading} onClick={exportSnapshot}>EXPORT MY CLOUD WAGERS (JSON BACKUP)</button>{username.toLowerCase()==='stankyfangers'&&<><button type="button" disabled={loading} onClick={compareLegacy}>COMPARE LEGACY LIVE VS CLOUD</button>{comparison&&<div role="status">{comparison}</div>}</>}<div style={{maxHeight:260,overflowY:'auto',borderTop:'1px solid #487b9a',paddingTop:6}}>{rows.length===0?'No cloud wagers yet.':rows.slice().sort((a,b)=>String(b.wager.date).localeCompare(String(a.wager.date))).slice(0,100).map(row=><div key={row.wager_id} style={{padding:'6px 0',borderBottom:'1px solid #28455c'}}><strong>{row.wager.date}</strong> · {row.wager.legs.length} leg{row.wager.legs.length===1?'':'s'}<div style={{overflowWrap:'anywhere',color:'#a7c8dd'}}>ID: {row.wager_id}</div></div>)}</div>{rows.length>100&&<small>Showing the latest 100 of {rows.length} cloud wagers.</small>}</>}
   </div>}
  </div>
 }
