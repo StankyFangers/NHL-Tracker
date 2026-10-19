@@ -1,7 +1,6 @@
 'use strict'
 // Phase 2B server API only: no renderer wiring and no LIVE wager migration.
 const {getLivePool,reply,digest,validName,validEmail,hashPassword,checkPassword,session,issueSession,handler}=require('../lib/live-auth')
-const {randomBytes}=require('node:crypto')
 const FALLBACK='scrypt:00000000000000000000000000000000:'+('00'.repeat(64))
 module.exports=handler(async(req,res)=>{
  if(req.method==='GET'){const a=await session(req);return a?reply(res,200,{account:{username:a.username,role:a.role}}):reply(res,401,{error:'Session expired'})}
@@ -11,6 +10,7 @@ module.exports=handler(async(req,res)=>{
  if(action==='register'){
   if(process.env.NHL_LIVE_SIGNUP_ENABLED!=='YES_LIVE_SIGNUP_APPROVED')return reply(res,403,{error:'LIVE registration disabled'})
   const username=String(req.body.username||'').trim().toLowerCase(),email=String(req.body.email||'').trim().toLowerCase(),password=String(req.body.password||'')
+  // Public signup creates USER accounts only; the activation gate remains explicit.
   if(!validName(username)||!validEmail(email)||password.length<12||password.length>128)return reply(res,400,{error:'Invalid registration fields'})
   const hash=await hashPassword(password)
   try{const r=await getLivePool().query("INSERT INTO public.nhl_live_accounts(username,email,password_hash,role) VALUES($1,$2,$3,'USER') RETURNING id,username,role",[username,email,hash]);return reply(res,201,await issueSession(r.rows[0]))}
