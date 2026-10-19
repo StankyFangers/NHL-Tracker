@@ -7,6 +7,13 @@ Two strictly separated cloud-backed account experiences:
 1. **TEST** (`npm run dev`): developer/test account; test wagers synchronize to the development cloud, survive restart/login, and never enter LIVE history.
 2. **LIVE** (installed app): users can self-register, sign in, save their own wagers to the cloud, and restore them on another device or after reinstall. Each user sees only their own wagers. Developer privileges are a role, not a shared wager account.
 
+## Owner account identities (locked)
+
+- **TEST username:** `StankyFangersTEST` — used with `npm run dev`, stored in the development cloud.
+- **LIVE username:** `StankyFangers` — used with the installed application, stored in the production cloud.
+- These are **different account identities**, not merely two modes of the same account. Credentials, tokens, roles, and wager histories remain isolated. LIVE developer/admin privileges do not confer TEST account identity.
+- Display casing is preserved in the UI where appropriate; server-side normalized login lookup may use lowercase.
+
 ## Must-pass release acceptance criteria
 
 - TEST: register/login, save a wager, restart/relogin, recover the same wager; concurrent update/conflict and offline failure cannot silently erase wagers.
