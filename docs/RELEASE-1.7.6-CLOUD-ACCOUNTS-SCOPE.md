@@ -101,3 +101,9 @@ Confidence optimizer enhancements, trio-versus-pairs improvements, and unrelated
 - The LIVE cloud inspector can now export its already-validated, account-scoped wager listing to a dated JSON backup on the user's own machine. Export is only enabled after a successful complete paginated read.
 - This export does not import, write, delete, or synchronize wagers; it is an additional safety tool ahead of migration.
 - Continue to gate cloud writes and full Bet Hub integration until conflict handling, backup-first owner migration, and multi-account testing are complete.
+
+## Authenticated LIVE migration comparison (2026-10-19)
+
+- Added a read-only `COMPARE LEGACY LIVE VS CLOUD` action to the cloud inspector for the legacy `stankyfangers` owner only, after a complete authenticated cloud read.
+- The comparison validates unique IDs and reports local-only, identical, same-ID differences, and cloud-only wagers. It never uploads, imports, deletes, or changes local wagers.
+- A new cloud check clears stale comparison results. Before any eventual migration, export the legacy local backup and cloud backup and review same-ID differences. Cloud write activation remains blocked pending full integration and testing.
