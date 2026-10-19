@@ -67,3 +67,12 @@ Confidence optimizer enhancements, trio-versus-pairs improvements, and unrelated
 - Username is normalized to lowercase before insertion; PostgreSQL duplicate-key errors are translated to HTTP 409. Verify the actual LIVE schema enforces a unique normalized username before enabling signup.
 - Updated offline API tests to cover the activation gate, ordinary USER signup, username case normalization, and duplicate rejection. **Tests have not yet been executed.**
 - LIVE renderer account-specific cloud wager workspaces and write synchronization remain release blockers. Do not open multiuser TrackerApp with shared localStorage wager state.
+
+## Privacy invariant and future group-chat sharing (locked 2026-10-19)
+
+- **Private by default:** every LIVE wager belongs to exactly one account ID; list, read, create, edit, and delete are always scoped to the authenticated owner at the database/API layer. Never rely on renderer filters for privacy.
+- Logging into a different LIVE account on the same computer must never reveal another account's local cache or cloud wager history.
+- The LIVE DEV role does not automatically grant permission to browse other users' wagers.
+- **Future feature only, not part of 1.7.6:** user-initiated **Share to Chat** sends an explicit snapshot of a selected wager to a group chat. The shared representation is separate from the private source wager and does not confer read/write access to the original wager or other bets.
+- Future share records should preserve owner ID, shared-by ID, audience/chat ID, source wager ID, share timestamp, and a deliberately limited snapshot. Plan revocation/deletion behavior and avoid exposing private account metadata.
+- Do not implement chat UI, share endpoints, or automatic sharing in 1.7.6. Keep wager IDs and ownership stable so sharing can be added safely later.
