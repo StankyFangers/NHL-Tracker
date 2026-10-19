@@ -1662,7 +1662,12 @@ function LiveCloudInspector({username}:{username:string}){
     const result=await (window.nhlTracker as any).liveWagersRequest({method:'GET',limit:200,...(cursor?{cursor}:{})})
     if(result?.error)throw new Error(String(result.error))
     if(!Array.isArray(result?.wagers))throw new Error('Unexpected cloud response')
-    collected.push(...result.wagers)
+    for(const row of result.wagers){
+     const wager=row?.wager
+     if(!wager||typeof wager.id!=='string'||!wager.id||typeof wager.date!=='string'||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(wager.date)||!Array.isArray(wager.legs)||row.wager_id!==wager.id)throw new Error('Invalid cloud wager record; preview cancelled')
+     if(collected.some(existing=>existing.wager_id===row.wager_id))throw new Error('Duplicate cloud wager ID; preview cancelled')
+     collected.push(row)
+    }
     if(collected.length>20000)throw new Error('Cloud listing exceeds safety limit')
     if(result.nextCursor===null){setRows(collected);setChecked(true);setMessage(`Cloud connected: ${collected.length} wagers for ${username}`);return}
     if(typeof result.nextCursor!=='string'||!result.nextCursor||seen.has(result.nextCursor))throw new Error('Invalid cloud pagination cursor')
@@ -1679,7 +1684,7 @@ function LiveCloudInspector({username}:{username:string}){
    <div>Cloud wagers are not loaded into the Bet Hub. Local wagers are unchanged.</div>
    <button type="button" disabled={loading} onClick={()=>void check()}>{loading?'CHECKING...':'CHECK CLOUD WAGERS'}</button>
    <div role="status">{message}</div>
-   {checked&&<div>Rows retrieved: {rows.length}. No uploads or changes performed.</div>}
+   {checked&&<><div>Rows retrieved: {rows.length}. No uploads or changes performed.</div><div style={{maxHeight:260,overflowY:'auto',borderTop:'1px solid #487b9a',paddingTop:6}}>{rows.length===0?'No cloud wagers yet.':rows.slice().sort((a,b)=>String(b.wager.date).localeCompare(String(a.wager.date))).slice(0,100).map(row=><div key={row.wager_id} style={{padding:'6px 0',borderBottom:'1px solid #28455c'}}><strong>{row.wager.date}</strong> · {row.wager.legs.length} leg{row.wager.legs.length===1?'':'s'}<div style={{overflowWrap:'anywhere',color:'#a7c8dd'}}>ID: {row.wager_id}</div></div>)}</div>{rows.length>100&&<small>Showing the latest 100 of {rows.length} cloud wagers.</small>}</>}
   </div>}
  </div>
 }
