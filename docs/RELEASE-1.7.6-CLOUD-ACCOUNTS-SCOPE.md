@@ -107,3 +107,9 @@ Confidence optimizer enhancements, trio-versus-pairs improvements, and unrelated
 - Added a read-only `COMPARE LEGACY LIVE VS CLOUD` action to the cloud inspector for the legacy `stankyfangers` owner only, after a complete authenticated cloud read.
 - The comparison validates unique IDs and reports local-only, identical, same-ID differences, and cloud-only wagers. It never uploads, imports, deletes, or changes local wagers.
 - A new cloud check clears stale comparison results. Before any eventual migration, export the legacy local backup and cloud backup and review same-ID differences. Cloud write activation remains blocked pending full integration and testing.
+
+## Pure migration planner and regression tests (2026-10-19)
+
+- Added `tools/live-wager-migration-plan.cjs`: a side-effect-free, fail-closed reconciliation planner that validates wager identity and detects local-only, identical, same-ID conflicts, and cloud-only records. It canonicalizes object-key order before comparison and explicitly returns `canAutoMerge:false`.
+- Added `tests/live-wager-migration-plan.test.cjs` covering four-way classification, key ordering, duplicate/mismatched IDs, invalid records, and non-mutation.
+- The planner is not yet wired into automatic cloud sync or uploads; no migration is performed. Run `node --test tests/live-wager-migration-plan.test.cjs` locally before integration. Existing migration backups and separate write approvals remain mandatory.
