@@ -25,5 +25,7 @@ jobs:
         run: npx tsc --noEmit -p tsconfig.web.json
       - name: Check Electron TypeScript
         run: npx tsc --noEmit -p tsconfig.node.json
+      - name: Compile Electron application (no installer or deployment)
+        run: npm run build
       - name: Run offline wager import and LIVE gate tests
         run: node --test tests/live-import-preview.test.cjs tests/live-safety-gates.test.cjs
