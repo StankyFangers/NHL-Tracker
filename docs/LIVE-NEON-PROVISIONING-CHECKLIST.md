@@ -1,55 +1,48 @@
-# LIVE Neon provisioning — approval-gated checklist
+# LIVE Neon connection and activation checklist
 
-This is a preparation checklist only. **Do not activate LIVE production flags, apply migrations to production, or import historical wagers without explicit approval.**
+## Canonical infrastructure — reuse, do not duplicate
 
-## Environment isolation
+The existing Neon `NHL-Tracker` project and its `production` / `development` branches are canonical. Production already has `neondb` and these tables: `nhl_live_accounts`, `nhl_live_import_batches`, `nhl_live_login_limits`, `nhl_live_sessions`, and `nhl_live_wagers`. Do not create another database, duplicate these tables, or apply a new schema migration.
 
-- Create a dedicated LIVE Neon database or isolated project, separate from the existing TEST/DEV database and its endpoint.
-- Record the expected hostname, database name and least-privilege application role in the deployment secret manager; never commit credentials.
-- Confirm the LIVE hostname does not match the blocked development endpoint.
-- Use verified TLS, backups and a tested restoration procedure.
+The existing production schema includes additional `created_at` columns and an import-batch table. Inspect the real schema; do not use a generated migration as a source of truth.
 
-## Database objects to inspect before activation
+## Roles
 
-The LIVE endpoints currently reference:
+- `nhl_tracker_live_api` was inspected and has excessive privileges, including CREATEDB, CREATEROLE, BYPASSRLS, and wager INSERT/UPDATE/DELETE. Do not use it for the application.
+- `nhl_tracker_live_restricted` was inspected and has no elevated role flags, public schema USAGE but no CREATE, and no wager INSERT/UPDATE/DELETE grants. This is the intended authentication-only application role, subject to final inherited-grant and connection testing.
 
-- `public.nhl_live_accounts`: `id`, `username`, `email`, `password_hash`, `role`. Enforce unique case-normalized username and email; public registration creates `USER` only.
-- `public.nhl_live_sessions`: `token_hash`, `account_id`, `expires_at`. Session rows must be tied to the owning account.
-- `public.nhl_live_login_limits`: `login_hash`, `attempts`, `locked_until`, `updated_at`. Login attempts must be rate-limited.
-- `public.nhl_live_wagers`: inspect the exact columns, account foreign key, ownership indexes, unique constraints and optimistic-concurrency behavior against `api/live-wagers.js` before writing migration SQL.
+## Runtime configuration
 
-Do not assume the existing schema is correct merely because the API builds. Compare the actual LIVE schema and its grants to every endpoint query.
+The LIVE connection guard has been simplified to use the existing `NHL_LIVE_DATABASE_URL` plus fixed, source-controlled pins for the confirmed production host, database (`neondb`), and role (`nhl_tracker_live_restricted`). Do not add the redundant `NHL_LIVE_APPROVED_HOST`, `NHL_LIVE_APPROVED_DATABASE`, `NHL_LIVE_APPROVED_ROLE`, or `NHL_LIVE_PROVISIONING_VERIFIED` environment variables.
 
-## Authentication-only rollout
+Keep the activation controls separate and disabled until explicitly approved:
+- `NHL_LIVE_CLOUD_ENABLED=YES_PRODUCTION_APPROVED` enables LIVE account API access.
+- `NHL_LIVE_SIGNUP_ENABLED=YES_LIVE_SIGNUP_APPROVED` enables public registration.
+- `NHL_LIVE_WAGER_WRITES_ENABLED` must remain unset for authentication-only testing.
 
-1. Confirm a recent backup, restoration plan, least-privilege grants and exact environment pins.
-2. Run isolated registration, duplicate username/email, login, logout, expiry and cross-account access tests.
-3. After separate approval, activate LIVE account and signup gates; **leave LIVE wager write gate disabled**.
-4. Register `StankyFangers` initially as `USER`; role promotion is separate and must not alter wager ownership.
-5. Do not migrate legacy local bets until a full owner backup and conflict-free comparison have been reviewed.
+The production connection string must contain a working password for `nhl_tracker_live_restricted`, and must use verified TLS. Never paste credentials into chat, issues, documentation, or Git.
 
-## Go/no-go
+## Safe next steps
 
-A successful Windows build proves packaging, **not** database provisioning. An activation-disabled registration response is expected until production is approved. No production connection strings should be pasted into GitHub issues, docs, or chat.
+1. Set a password for the existing restricted role through Neon role management or an approved secure database credential workflow. Do not create a replacement role.
+2. Update the existing Vercel `NHL_LIVE_DATABASE_URL` in Production with that role's complete connection string.
+3. Redeploy only after the code and environment values are aligned; verify a connection without enabling account activation.
+4. Confirm a recent backup/restore plan and effective grants/inherited privileges.
+5. Only after explicit approval, enable account API and signup gates for an authentication-only test. Keep wager writes disabled.
+6. Test registration, duplicate username/email, login, logout, session expiry, and account isolation. Register `StankyFangers` as `USER`; DEV promotion is a separate reviewed operation.
+7. Do not migrate local historical wagers until a full backup, import preview, duplicate checks, and ownership verification are complete.
 
-## Proposed schema artifact
+## Read-only schema preflight
 
-`vercel-api/migrations/001_live_accounts.sql` is a **draft, unapplied** schema matching the current API's account, session, login-limit and wager queries. Its ownership boundary is the composite wager primary key `(account_id, wager_id)` and the account-scoped source identity constraint. It must be reviewed against actual Neon role grants and any pre-existing tables before execution. No migration has been executed, and this draft does not grant any role permissions or activate signup.
+`vercel-api/migrations/002_live_preflight_readonly.sql` contains read-only queries for the connected database identity, existing columns, constraints, and table grants. It does not change data or permissions. Only run it after confirming the SQL editor is connected to the intended production branch. Do not share connection strings or passwords.
 
-## Offline contract regression test
+## Test
 
-Run `node --test tests/live-schema-contract.test.cjs` in the development checkout to verify that the proposed SQL still matches key backend table names, account ownership constraints, public registration defaults and separate activation gates. This static test is not a database migration, does not connect to Neon, and cannot establish production role permissions or schema deployment. It has not yet been run in this chat.
+Run `node --test tests/live-schema-contract.test.cjs` in the development checkout. This is an offline source-contract test; it does not connect to Neon or prove the deployed Vercel environment is configured correctly.
 
-## Read-only database preflight
+## Current status
 
-`vercel-api/migrations/002_live_preflight_readonly.sql` contains read-only inspection queries for the connected database identity, required LIVE tables, column definitions, constraints and table grants. It is not a schema migration and does not change rows or permissions. **Do not run it until you have independently confirmed the connection is to the intended isolated LIVE Neon database.** Review the results before applying any migration or setting any activation flags. In particular, ensure the application role has no unnecessary DDL privileges and cannot reach DEV tables. Database identity and grant results may contain infrastructure details; redact them before sharing publicly.
-
-## Reconciliation update — existing production infrastructure is canonical
-
-The user has confirmed that the existing Neon `NHL-Tracker` project already has `production` and `development` branches and these production tables: `nhl_live_accounts`, `nhl_live_import_batches`, `nhl_live_login_limits`, `nhl_live_sessions`, and `nhl_live_wagers`. Do not create another database, duplicate these tables, or execute `001_live_accounts.sql`. That migration is only a historical draft/reference and is not the production schema source of truth. The existing Neon production schema, including its additional `created_at` fields and import-batch table, is canonical.
-
-The two existing application roles were inspected. `nhl_tracker_live_api` has excessive privileges (CREATEDB, CREATEROLE, BYPASSRLS, and wager INSERT/UPDATE/DELETE); do not use it for the app. `nhl_tracker_live_restricted` has no elevated role flags, has public schema USAGE but not CREATE, and has no wager INSERT/UPDATE/DELETE grants. It is the intended candidate for the authentication-only connection, pending credential setup and effective inherited-grant review.
-
-The Neon Connect panel showed the restricted-role connection URL without a password component. Do not keep asking the user to re-copy the same string. Resolve how to assign a password to this existing role through Neon role management or a secure credential workflow, then set the existing Vercel `NHL_LIVE_DATABASE_URL` to that complete connection. Never put the secret in Git, chat, issue text, or documentation. The connection target is production / `neondb` / `nhl_tracker_live_restricted`.
-
-Current code still requires the explicit pins `NHL_LIVE_APPROVED_HOST`, `NHL_LIVE_APPROVED_DATABASE`, `NHL_LIVE_APPROVED_ROLE`, and `NHL_LIVE_PROVISIONING_VERIFIED` in addition to the separate `NHL_LIVE_CLOUD_ENABLED` and `NHL_LIVE_SIGNUP_ENABLED) activation gates. These are runtime safety checks, not extra database infrastructure. Do not enable cloud/signup gates until the connection and backup review are complete; keep `NHL_LIVE_WAGER_WRITES_ENABLED` unset. No production change, role change, migration, or wager migration has been performed by this documentation update.
+- Existing production schema and role grants inspected.
+- Connection code pins the existing production endpoint/database/restricted role without redundant approval variables.
+- Authentication, signup, and wager writes remain separately gated.
+- No production migration, account registration, or wager migration has been performed by these source changes.
