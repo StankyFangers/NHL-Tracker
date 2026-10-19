@@ -17,6 +17,7 @@ function getLivePool() {
   const database = decodeURIComponent(url.pathname.slice(1))
   if (!['postgres:', 'postgresql:'].includes(url.protocol) || host !== expectedHost.toLowerCase() || database !== expectedDatabase || role !== expectedRole) throw new Error('LIVE database safety lock failed')
   if (!host.endsWith('.neon.tech') || host.startsWith('ep-twilight-term-b4fxjrkm.') || host.startsWith('ep-twilight-term-b4fxjrkm-pooler.')) throw new Error('LIVE database must be distinct from DEVELOPMENT')
+  if (url.searchParams.has('sslmode') && !['require','verify-full'].includes(url.searchParams.get('sslmode'))) throw new Error('LIVE database TLS configuration invalid')
   if (process.env.NHL_LIVE_PROVISIONING_VERIFIED !== 'YES_BACKUP_AND_GRANTS_VERIFIED') throw new Error('LIVE provisioning not verified')
   if (!pool) pool = new Pool({connectionString:raw,ssl:{rejectUnauthorized:true},max:2,connectionTimeoutMillis:5000,query_timeout:7000})
   return pool
