@@ -119,3 +119,9 @@ Confidence optimizer enhancements, trio-versus-pairs improvements, and unrelated
 - `tools/live-wager-sync-plan.cjs` produces a read-only proposed create-only set; it defaults to zero operations until `ownerConfirmed` and `backupConfirmed` are explicitly true. Any same-ID conflict blocks all proposals. No automatic updates or deletes are planned.
 - `tests/live-wager-sync-plan.test.cjs` adds regression checks for default denial, approved create-only proposals, and conflict blocking. Tests have not been run in this session; run `node --test tests/live-wager-sync-plan.test.cjs` in the development checkout.
 - The legacy owner's read-only comparison now explicitly warns when conflicts block migration and reiterates backup and approval requirements even if no conflicts appear. No cloud writes or production gates were activated.
+
+## Cloud listing performance and IPC validation (2026-10-19)
+
+- Renderer cloud inspection now tracks seen wager IDs with a Set across pages instead of scanning every previously fetched row for each incoming wager; duplicate detection remains fail-closed, with the existing 20,000-wager safety ceiling.
+- Electron main-process read-only LIVE wager IPC now rejects unrecognized request fields instead of silently ignoring them. It still rejects all POST/PATCH/DELETE methods.
+- Neither change enables cloud mutations or touches production. These changes still require a local build and regression tests.
