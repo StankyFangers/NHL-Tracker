@@ -1689,6 +1689,7 @@ function LiveCloudInspector({username}:{username:string}){
   setLoading(true);setMessage('Reading LIVE cloud wagers...')
   try{
    const collected:any[]=[]
+   const wagerIds=new Set<string>()
    let cursor=''
    const seen=new Set<string>()
    for(let page=0;page<100;page++){
@@ -1698,7 +1699,8 @@ function LiveCloudInspector({username}:{username:string}){
     for(const row of result.wagers){
      const wager=row?.wager
      if(!wager||typeof wager.id!=='string'||!wager.id||typeof wager.date!=='string'||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(wager.date)||!Array.isArray(wager.legs)||row.wager_id!==wager.id)throw new Error('Invalid cloud wager record; preview cancelled')
-     if(collected.some(existing=>existing.wager_id===row.wager_id))throw new Error('Duplicate cloud wager ID; preview cancelled')
+     if(wagerIds.has(row.wager_id))throw new Error('Duplicate cloud wager ID; preview cancelled')
+     wagerIds.add(row.wager_id)
      collected.push(row)
     }
     if(collected.length>20000)throw new Error('Cloud listing exceeds safety limit')
