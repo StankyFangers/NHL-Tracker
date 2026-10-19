@@ -1,0 +1,29 @@
+name: NHL Tracker 1.7.6 Validation
+
+# Intentionally manual-only while the synchronization PR is under review.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out selected revision
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Check renderer TypeScript
+        run: npx tsc --noEmit -p tsconfig.web.json
+      - name: Check Electron TypeScript
+        run: npx tsc --noEmit -p tsconfig.node.json
+      - name: Run offline wager import and LIVE gate tests
+        run: node --test tests/live-import-preview.test.cjs tests/live-safety-gates.test.cjs
