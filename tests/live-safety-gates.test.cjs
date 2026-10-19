@@ -107,3 +107,35 @@ test('LIVE public signup normalizes usernames and enforces database duplicate er
     else process.env.NHL_LIVE_SIGNUP_ENABLED=previous
   }
 })
+
+test('LIVE wager reads use authenticated account ID, never client-supplied account ID', async () => {
+  const calls=[]
+  const endpoint=loadEndpoint('live-wagers.js',{
+    handler: fn=>fn, reply,
+    session: async()=>({id:42,username:'owner'}),
+    getLivePool:()=>({query:async(sql,params)=>{
+      calls.push({sql,params})
+      return {rows:[{wager_id:'one',wager:{id:'one',date:'2026-10-19',legs:[]}}]}
+    }})
+  })
+  const res=response()
+  await endpoint({method:'GET',query:{limit:'100',accountId:'999'},headers:{}},res)
+  assert.equal(res.status,200)
+  assert.equal(calls.length,1)
+  assert.match(calls[0].sql,/WHERE account_id=\\$1/)
+  assert.equal(calls[0].params[0],42)
+  assert.equal(res.body.wagers.length,1)
+})
+
+test('LIVE wager reads reject unauthenticated callers without database access', async () => {
+  let accessed=false
+  const endpoint=loadEndpoint('live-wagers.js',{
+    handler: fn=>fn, reply,
+    session: async()=>null,
+    getLivePool:()=>{accessed=true;throw Error('Unauthorized DB access')}
+  })
+  const res=response()
+  await endpoint({method:'GET',query:{}},res)
+  assert.equal(res.status,401)
+  assert.equal(accessed,false)
+})
