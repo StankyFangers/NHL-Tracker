@@ -125,3 +125,9 @@ Confidence optimizer enhancements, trio-versus-pairs improvements, and unrelated
 - Renderer cloud inspection now tracks seen wager IDs with a Set across pages instead of scanning every previously fetched row for each incoming wager; duplicate detection remains fail-closed, with the existing 20,000-wager safety ceiling.
 - Electron main-process read-only LIVE wager IPC now rejects unrecognized request fields instead of silently ignoring them. It still rejects all POST/PATCH/DELETE methods.
 - Neither change enables cloud mutations or touches production. These changes still require a local build and regression tests.
+
+## LIVE wager detail explorer (2026-10-19)
+
+- The authenticated read-only LIVE cloud inspector now includes a date filter and expandable JSON wager details for up to 100 matching records, in addition to the existing summary and backup export.
+- This allows checking actual cloud payload fields before implementing Bet Hub hydration. It does not change wager records, local storage, or production write gates.
+- This is a diagnostic explorer, not the full LIVE Bet Hub. Test the renderer build and verify per-account isolation before relying on it.
