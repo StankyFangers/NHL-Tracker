@@ -4,7 +4,7 @@
 
 Two strictly separated cloud-backed account experiences:
 
-1. **TEST** (`npm run dev`): developer/test account; test wagers synchronize to the development cloud, survive restart/login, and never enter LIVE history.
+1. **TEST** (`npm run dev`): **already working and cloud-synced**, per user verification. Existing `StankyFangersTEST` account restores previously placed TEST wagers. Preserve this behavior; regression-check it, but do not rebuild or migrate it.
 2. **LIVE** (installed app): users can self-register, sign in, save their own wagers to the cloud, and restore them on another device or after reinstall. Each user sees only their own wagers. Developer privileges are a role, not a shared wager account.
 
 ## Owner account identities (locked)
@@ -30,7 +30,7 @@ Two strictly separated cloud-backed account experiences:
 - `src/main/index.ts`: TEST dev-account and dev-bets transport; LIVE account transport; LIVE wager **GET only**, mutation methods deliberately blocked.
 - `src/preload/index.ts`: exposes TEST and LIVE IPC methods.
 - `src/renderer/src/App.tsx`: TEST account and bet sync UI; LIVE still says 'LOCAL WAGERS · CLOUD LOGIN NOT YET ENABLED'.
-- `vercel-api/api/live-account.js`: LIVE registration gated to one username (`stankyfangers`) and invitation secret; **friends cannot register yet**.
+- `vercel-api/api/live-account.js`: LIVE registration currently gated to one username (`stankyfangers`) and invitation secret; **this special-case registration behavior must be removed before normal-user onboarding**.
 - `vercel-api/api/live-wagers.js`: cloud write endpoints exist but require separate server approval gate.
 - LIVE cloud account and wager flows have not been end-to-end tested.
 
@@ -40,10 +40,16 @@ Confidence optimizer enhancements, trio-versus-pairs improvements, and unrelated
 
 ## Safe implementation order
 
-1. TEST sync regression tests and cloud restoration verification.
+1. Preserve the already-working TEST sync; run a focused regression check without changing its data.
 2. LIVE account UI/session integration with **read-only** cloud wager inspection, no local wager replacement.
-3. Secure friend registration design and account isolation tests.
+3. Replace the existing special-case LIVE username registration allowlist with a normal USER signup flow (subject to intentional registration controls), then test account isolation. Register `StankyFangers` exactly like any other user; **do not assign DEV during registration**. After verified USER signup, promote only this account to DEV through a separate authorized Neon administration step; preserve its account ID and wager ownership.
 4. Cloud write and conflict-safe synchronization behind explicit approvals; backups and migration previews first.
 5. End-to-end multi-account testing, Windows installer smoke test, release approval.
 
 **No production activation, database migration, user registration, or LIVE write enablement is authorized by this plan alone.**
+
+## User-confirmed progress (2026-10-19)
+
+- `StankyFangersTEST` exists and successfully loads previously saved cloud TEST wagers. This is not an outstanding build feature.
+- LIVE `StankyFangers` must be created through the exact same normal USER signup flow available to friends.
+- Promote that LIVE account to DEV **after signup** through a separately approved Neon database administration operation; never hard-code the account's role during registration.
