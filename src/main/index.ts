@@ -135,6 +135,15 @@ app.whenReady().then(() => {
   })
   ipcMain.handle('nhl:boxscore', async (_e, gameId: number) => nhlJson(`/gamecenter/${gameId}/boxscore`))
   ipcMain.handle('nhl:roster', async (_e, team: string) => nhlJson(`/roster/${encodeURIComponent(team)}/current`))
+  ipcMain.handle('nhl:playerSearch', async (_e, query: string) => {
+    const q=String(query||'').trim()
+    if(q.length<3||q.length>80||!/^[\p{L}\p{M} .'-]+$/u.test(q)) throw new Error('Enter a valid player name (3–80 characters)')
+    const url=`https://search.d3.nhle.com/api/v1/search/player?culture=en-us&limit=30&q=${encodeURIComponent(q)}`
+    const response=await fetch(url,{headers:{Accept:'application/json'},signal:AbortSignal.timeout(12000)})
+    if(!response.ok)throw new Error(`NHL player search failed: ${response.status}`)
+    const data=await response.json()
+    return (Array.isArray(data)?data:[]).map((p:any)=>({id:Number(p.playerId||p.id),name:String(p.name||p.nameInEnglish||''),team:String(p.teamAbbrev||p.team||'').toUpperCase()})).filter((p:any)=>Number.isSafeInteger(p.id)&&p.id>0&&p.name).slice(0,30)
+  })
   // Optional DEV-only registry snapshot. Token remains in Electron main process,
   // never exposed to renderer/localStorage. No endpoint or token configuration = local fallback.
   // DEV accounts: credentials sent via Electron IPC to this main-process HTTPS client.
