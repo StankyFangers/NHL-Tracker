@@ -1651,6 +1651,19 @@ function LiveCloudInspector({username}:{username:string}){
  const [message,setMessage]=useState('Not checked yet')
  const [rows,setRows]=useState<any[]>([])
  const [checked,setChecked]=useState(false)
+ const exportSnapshot=()=>{
+  if(!checked||loading)return
+  const snapshot={format:'nhl-tracker-live-cloud-readonly-backup-v1',username,exportedAt:new Date().toISOString(),wagers:rows}
+  const blob=new Blob([JSON.stringify(snapshot,null,2)],{type:'application/json'})
+  const url=URL.createObjectURL(blob)
+  const link=document.createElement('a')
+  link.href=url
+  link.download='NHL-Tracker-LIVE-'+username+'-Cloud-Backup-'+new Date().toISOString().slice(0,10)+'.json'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  setTimeout(()=>URL.revokeObjectURL(url),1000)
+ }
  const check=async()=>{
   if(loading)return
   setLoading(true);setMessage('Reading LIVE cloud wagers...')
@@ -1684,7 +1697,7 @@ function LiveCloudInspector({username}:{username:string}){
    <div>Cloud wagers are not loaded into the Bet Hub. Local wagers are unchanged.</div>
    <button type="button" disabled={loading} onClick={()=>void check()}>{loading?'CHECKING...':'CHECK CLOUD WAGERS'}</button>
    <div role="status">{message}</div>
-   {checked&&<><div>Rows retrieved: {rows.length}. No uploads or changes performed.</div><div style={{maxHeight:260,overflowY:'auto',borderTop:'1px solid #487b9a',paddingTop:6}}>{rows.length===0?'No cloud wagers yet.':rows.slice().sort((a,b)=>String(b.wager.date).localeCompare(String(a.wager.date))).slice(0,100).map(row=><div key={row.wager_id} style={{padding:'6px 0',borderBottom:'1px solid #28455c'}}><strong>{row.wager.date}</strong> · {row.wager.legs.length} leg{row.wager.legs.length===1?'':'s'}<div style={{overflowWrap:'anywhere',color:'#a7c8dd'}}>ID: {row.wager_id}</div></div>)}</div>{rows.length>100&&<small>Showing the latest 100 of {rows.length} cloud wagers.</small>}</>}
+   {checked&&<><div>Rows retrieved: {rows.length}. No uploads or changes performed.</div><button type="button" disabled={loading} onClick={exportSnapshot}>EXPORT MY CLOUD WAGERS (JSON BACKUP)</button><div style={{maxHeight:260,overflowY:'auto',borderTop:'1px solid #487b9a',paddingTop:6}}>{rows.length===0?'No cloud wagers yet.':rows.slice().sort((a,b)=>String(b.wager.date).localeCompare(String(a.wager.date))).slice(0,100).map(row=><div key={row.wager_id} style={{padding:'6px 0',borderBottom:'1px solid #28455c'}}><strong>{row.wager.date}</strong> · {row.wager.legs.length} leg{row.wager.legs.length===1?'':'s'}<div style={{overflowWrap:'anywhere',color:'#a7c8dd'}}>ID: {row.wager_id}</div></div>)}</div>{rows.length>100&&<small>Showing the latest 100 of {rows.length} cloud wagers.</small>}</>}
   </div>}
  </div>
 }
