@@ -47,38 +47,63 @@ test('LIVE wager mutations fail closed without separate approval', async () => {
   }
 })
 
-test('LIVE registration rejects missing activation and invitation configuration', async () => {
-  const keys = ['NHL_LIVE_SIGNUP_ENABLED', 'NHL_LIVE_SIGNUP_ALLOWED_USERNAME', 'NHL_LIVE_SIGNUP_INVITE_SHA256']
-  const prior = Object.fromEntries(keys.map(k => [k, process.env[k]]))
-  const handler = loadEndpoint('live-account.js', {
-    handler: fn => fn,
-    reply,
-    getLivePool: () => { throw Error('Unexpected database access') },
-    digest: () => '', validName: () => true, validEmail: () => true,
-    hashPassword: async () => 'unused',
-    checkPassword: async () => false,
-    session: async () => null,
+test('LIVE registration stays disabled until explicitly activated', async () => {
+  const previous = process.env.NHL_LIVE_SIGNUP_ENABLED
+  delete process.env.NHL_LIVE_SIGNUP_ENABLED
+  const endpoint = loadEndpoint('live-account.js', {
+    handler: fn => fn, reply,
+    getLivePool: () => { throw Error('Database must not be called') },
+    validName: () => true, validEmail: () => true,
+    hashPassword: async () => 'hash',
     issueSession: async () => ({})
   })
-  const req = { method: 'POST', body: {
-    action: 'register', username: 'stankyfangers', email: 'test@example.com',
-    password: 'a-valid-password-123', invitationCode: 'x'.repeat(32)
-  }}
   try {
-    for (const k of keys) delete process.env[k]
-    let res = response()
-    await handler(req, res)
-    assert.equal(res.status, 403)
-    process.env.NHL_LIVE_SIGNUP_ENABLED = 'YES_LIVE_SIGNUP_APPROVED'
-    process.env.NHL_LIVE_SIGNUP_ALLOWED_USERNAME = 'stankyfangers'
-    res = response()
-    await handler(req, res)
-    assert.equal(res.status, 403)
-    assert.match(res.body.error, /invitation/i)
+    const res = response()
+    await endpoint({method:'POST',body:{action:'register',username:'newfriend',email:'friend@example.com',password:'long-enough-password'}},res)
+    assert.equal(res.status,403)
+    assert.match(res.body.error,/disabled/i)
   } finally {
-    for (const k of keys) {
-      if (prior[k] === undefined) delete process.env[k]
-      else process.env[k] = prior[k]
-    }
+    if(previous === undefined) delete process.env.NHL_LIVE_SIGNUP_ENABLED
+    else process.env.NHL_LIVE_SIGNUP_ENABLED=previous
+  }
+})
+
+test('LIVE public signup normalizes usernames and enforces database duplicate errors', async () => {
+  const previous = process.env.NHL_LIVE_SIGNUP_ENABLED
+  process.env.NHL_LIVE_SIGNUP_ENABLED='YES_LIVE_SIGNUP_APPROVED'
+  const users = new Set()
+  const endpoint = loadEndpoint('live-account.js', {
+    handler: fn => fn, reply,
+    validName: v => /^[a-z0-9_]{3,24}$/.test(v),
+    validEmail: v => /^[^@]+@[^@]+\\.[^@]+$/.test(v),
+    hashPassword: async () => 'hashed',
+    getLivePool: () => ({query: async (sql,params) => {
+      assert.match(sql,/INSERT INTO public\\.nhl_live_accounts/)
+      assert.match(sql,/VALUES\\(\\$1,\\$2,\\$3,'USER'\\)/)
+      if(users.has(params[0])) {const err=new Error('unique constraint');err.code='23505';throw err}
+      users.add(params[0])
+      return {rows:[{id:users.size,username:params[0],role:'USER'}]}
+    }}),
+    issueSession: async a => ({account:{username:a.username,role:a.role},token:'mock-token'})
+  })
+  const register=async username => {
+    const res=response()
+    await endpoint({method:'POST',body:{action:'register',username,email:username.toLowerCase()+'@example.com',password:'long-enough-password'}},res)
+    return res
+  }
+  try {
+    const first=await register('StankyFangers')
+    assert.equal(first.status,201)
+    assert.deepEqual(first.body.account,{username:'stankyfangers',role:'USER'})
+    const duplicate=await register('stankyfangers')
+    assert.equal(duplicate.status,409)
+    assert.match(duplicate.body.error,/already registered/i)
+    const friend=await register('AnotherFriend')
+    assert.equal(friend.status,201)
+    assert.equal(friend.body.account.username,'anotherfriend')
+    assert.equal(users.size,2)
+  } finally {
+    if(previous === undefined) delete process.env.NHL_LIVE_SIGNUP_ENABLED
+    else process.env.NHL_LIVE_SIGNUP_ENABLED=previous
   }
 })
