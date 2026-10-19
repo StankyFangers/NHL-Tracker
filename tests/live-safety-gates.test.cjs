@@ -139,3 +139,29 @@ test('LIVE wager reads reject unauthenticated callers without database access', 
   assert.equal(res.status,401)
   assert.equal(accessed,false)
 })
+
+test('LIVE wager create is scoped to authenticated owner and never overwrites a duplicate', async () => {
+  const prior=process.env.NHL_LIVE_WAGER_WRITES_ENABLED
+  process.env.NHL_LIVE_WAGER_WRITES_ENABLED='YES_WAGER_WRITES_SEPARATELY_APPROVED'
+  const calls=[]
+  const endpoint=loadEndpoint('live-wagers.js',{
+    handler:fn=>fn,reply,
+    session:async()=>({id:17}),
+    getLivePool:()=>({query:async(sql,params)=>{
+      calls.push({sql,params})
+      return {rowCount:0,rows:[]}
+    }})
+  })
+  try{
+    const res=response()
+    await endpoint({method:'POST',body:{wager:{id:'w-123',date:'2026-10-19',legs:[]},accountId:999}},res)
+    assert.equal(res.status,409)
+    assert.equal(calls.length,1)
+    assert.ok(calls[0].sql.includes('ON CONFLICT DO NOTHING'))
+    assert.equal(calls[0].params[0],17)
+    assert.equal(calls[0].params[1],'w-123')
+  }finally{
+    if(prior===undefined)delete process.env.NHL_LIVE_WAGER_WRITES_ENABLED
+    else process.env.NHL_LIVE_WAGER_WRITES_ENABLED=prior
+  }
+})
