@@ -122,7 +122,7 @@ test('LIVE wager reads use authenticated account ID, never client-supplied accou
   await endpoint({method:'GET',query:{limit:'100',accountId:'999'},headers:{}},res)
   assert.equal(res.status,200)
   assert.equal(calls.length,1)
-  assert.match(calls[0].sql,/WHERE account_id=\\$1/)
+  assert.ok(calls[0].sql.includes('WHERE account_id=$1'))
   assert.equal(calls[0].params[0],42)
   assert.equal(res.body.wagers.length,1)
 })
