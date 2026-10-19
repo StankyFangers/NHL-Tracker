@@ -35,3 +35,7 @@ A successful Windows build proves packaging, **not** database provisioning. An a
 ## Proposed schema artifact
 
 `vercel-api/migrations/001_live_accounts.sql` is a **draft, unapplied** schema matching the current API's account, session, login-limit and wager queries. Its ownership boundary is the composite wager primary key `(account_id, wager_id)` and the account-scoped source identity constraint. It must be reviewed against actual Neon role grants and any pre-existing tables before execution. No migration has been executed, and this draft does not grant any role permissions or activate signup.
+
+## Offline contract regression test
+
+Run `node --test tests/live-schema-contract.test.cjs` in the development checkout to verify that the proposed SQL still matches key backend table names, account ownership constraints, public registration defaults and separate activation gates. This static test is not a database migration, does not connect to Neon, and cannot establish production role permissions or schema deployment. It has not yet been run in this chat.
