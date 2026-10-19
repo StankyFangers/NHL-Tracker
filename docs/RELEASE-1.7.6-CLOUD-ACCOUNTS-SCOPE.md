@@ -95,3 +95,9 @@ Confidence optimizer enhancements, trio-versus-pairs improvements, and unrelated
 - The LIVE cloud inspector now validates fetched wager IDs, dates, legs arrays, and row-to-payload ID matching; duplicate wager IDs abort preview rather than silently merge.
 - After an explicit read-only check, the inspector displays up to 100 most recent cloud wager summaries (date, leg count, wager ID). No wager import, localStorage mutation, or cloud write is performed.
 - This is a staging inspection capability, **not** full Bet Hub cloud hydration. Renderer integration and safe cloud write/sync remain the priority and are not enabled.
+
+## Read-only LIVE cloud backup export (2026-10-19)
+
+- The LIVE cloud inspector can now export its already-validated, account-scoped wager listing to a dated JSON backup on the user's own machine. Export is only enabled after a successful complete paginated read.
+- This export does not import, write, delete, or synchronize wagers; it is an additional safety tool ahead of migration.
+- Continue to gate cloud writes and full Bet Hub integration until conflict handling, backup-first owner migration, and multi-account testing are complete.
