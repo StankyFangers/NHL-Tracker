@@ -82,3 +82,10 @@ Confidence optimizer enhancements, trio-versus-pairs improvements, and unrelated
 - Added endpoint tests proving LIVE wager GET queries use the authenticated session account ID rather than a client-supplied accountId, and anonymous GET requests do not access the database.
 - These tests are committed but not yet executed in this environment. Confirm the database has unique constraints on normalized usernames and account-scoped wager IDs before LIVE activation.
 - The renderer still uses legacy unscoped localStorage for LIVE wagers; this is a **release blocker**. Keep the existing guard that prevents other LIVE accounts from mounting TrackerApp until account-scoped cloud hydration and safe writes are implemented and tested.
+
+## Isolated LIVE sign-in staging (2026-10-19)
+
+- LIVE USER accounts other than `stankyfangers` can now enter a **read-only private workspace** after successful server authentication. This is not the full Bet Hub.
+- The staging workspace can invoke only the existing account-scoped read-only cloud inspector. It does not mount `TrackerApp`, load legacy `localStorage.bets`, or enable wager mutations.
+- The legacy `stankyfangers` LIVE account retains its prior local Bet Hub while explicit backup/migration and per-account cloud persistence are developed.
+- **Not release-ready:** users cannot yet place/save bets from the staged private workspace; no build or integration tests have been run for this UI change. Keep production activation gated.
