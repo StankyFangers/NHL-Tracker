@@ -59,3 +59,11 @@ Confidence optimizer enhancements, trio-versus-pairs improvements, and unrelated
 - The renderer's top-level LIVE login currently refuses non-`stankyfangers` users even after valid authentication. This **must be replaced with account-scoped cloud workspaces** before friends can use LIVE.
 - The LIVE `TrackerApp` still mounts legacy localStorage wagers for the accepted account. **Do not remove the username restriction alone**: doing so could expose local wager history across accounts. Build an isolated cloud wager state path and verify ownership before opening the app to other users.
 - LIVE `live-wagers:request` Electron transport currently permits GET only. POST/PATCH/DELETE require conflict-safe client integration and separately authorized server activation.
+
+## Public signup update (2026-10-19)
+
+- Removed invitation-code checks from the LIVE registration API and invitation-code input from the desktop registration screen and IPC payload types.
+- Signup remains behind the explicit activation gate and creates USER roles only.
+- Username is normalized to lowercase before insertion; PostgreSQL duplicate-key errors are translated to HTTP 409. Verify the actual LIVE schema enforces a unique normalized username before enabling signup.
+- Updated offline API tests to cover the activation gate, ordinary USER signup, username case normalization, and duplicate rejection. **Tests have not yet been executed.**
+- LIVE renderer account-specific cloud wager workspaces and write synchronization remain release blockers. Do not open multiuser TrackerApp with shared localStorage wager state.
