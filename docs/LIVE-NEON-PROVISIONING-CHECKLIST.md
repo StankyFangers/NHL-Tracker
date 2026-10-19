@@ -31,3 +31,7 @@ Do not assume the existing schema is correct merely because the API builds. Comp
 ## Go/no-go
 
 A successful Windows build proves packaging, **not** database provisioning. An activation-disabled registration response is expected until production is approved. No production connection strings should be pasted into GitHub issues, docs, or chat.
+
+## Proposed schema artifact
+
+`vercel-api/migrations/001_live_accounts.sql` is a **draft, unapplied** schema matching the current API's account, session, login-limit and wager queries. Its ownership boundary is the composite wager primary key `(account_id, wager_id)` and the account-scoped source identity constraint. It must be reviewed against actual Neon role grants and any pre-existing tables before execution. No migration has been executed, and this draft does not grant any role permissions or activate signup.
