@@ -195,6 +195,24 @@ app.whenReady().then(() => {
   // Phase 2H: LIVE wager transport only. This deliberately does NOT mount cloud
   // wagers into the renderer, migrate local history, or run background sync.
   // Authentication token never leaves Electron's main process.
+  // Separate LIVE player registry transport; LIVE auth token stays in main process.
+  ipcMain.handle('live-players:request', async (_e, request: {method:'GET'|'POST';id?:number;name?:string;team?:string}) => {
+    if(testEnvironment)return {error:'LIVE player registry unavailable in TEST'}
+    if(!liveAccountToken)return {error:'Sign in to LIVE first'}
+    const method=request?.method
+    if(method!=='GET'&&method!=='POST')return {error:'Unsupported player operation'}
+    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000)
+    try{
+      const response=await fetch('https://nhl-tracker-vercel-api.vercel.app/api/live-players',{
+        method,cache:'no-store',signal:controller.signal,
+        headers:{Authorization:`Bearer ${liveAccountToken}`,Accept:'application/json',...(method==='POST'?{'Content-Type':'application/json'}:{})},
+        ...(method==='POST'?{body:JSON.stringify({id:request.id,name:request.name,team:request.team})}:{})
+      })
+      const data:any=await response.json()
+      return response.ok?data:{error:String(data.error||`Player service: ${response.status}`)}
+    }catch(e:any){return {error:'Player registry unavailable: '+String(e?.message||e)}}
+    finally{clearTimeout(timeout)}
+  })
   ipcMain.handle('live-wagers:request', async (_e, request: {method:string;limit?:number;cursor?:string;id?:string;expectedUpdatedAt?:string;wager?:unknown;source?:string;sourceExternalId?:string|null}) => {
     if (testEnvironment) return {error:'LIVE wagers are unavailable in TEST mode'}
     if (!liveAccountToken) return {error:'Sign in to LIVE before requesting cloud wagers'}

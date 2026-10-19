@@ -398,7 +398,43 @@ function TrackerApp({initialTestAccount,onTestLogout,liveAccount,onLiveLogout}:{
   setBets([]);onTestLogout?.();
   const liveUnit=Number(localStorage.getItem('unitSize')||'0');setUnitSize(Number.isFinite(liveUnit)?liveUnit:0)
  }
-  const [devRosterBusy,setDevRosterBusy]=useState(false)
+  const [devPlayerQuery,setDevPlayerQuery]=useState('')
+ const [devPlayerResults,setDevPlayerResults]=useState<{id:number;name:string;team:string}[]>([])
+ const [devPlayerSearching,setDevPlayerSearching]=useState(false)
+ const [devPlayerSelected,setDevPlayerSelected]=useState('')
+ const [devPlayerAdded,setDevPlayerAdded]=useState<Record<number,boolean>>({})
+ const [sharedPlayerRevision,setSharedPlayerRevision]=useState(0)
+ const [devPlayerTeam,setDevPlayerTeam]=useState('ANA')
+ const searchDevPlayer=async()=>{
+  if((liveAccount||account)?.role!=='DEV'||devPlayerSearching)return
+  setDevPlayerSearching(true);setDevPlayerResults([]);setDevRosterMessage('Searching NHL player index…')
+  try{const results=await (window.nhlTracker as any).playerSearch(devPlayerQuery);setDevPlayerResults(results);setDevPlayerSelected('');setDevRosterMessage(results.length?`${results.length} NHL player matches. Verify identity before adding.`:'No NHL player matches found; no identities changed.')}
+  catch(e){setDevRosterMessage(`Player lookup failed: ${String(e)}`)}finally{setDevPlayerSearching(false)}
+ }
+ const addDevPlayer=async(p:{id:number;name:string;team:string})=>{
+  if((liveAccount||account)?.role!=='DEV')return
+  const team=devPlayerTeam.trim().toUpperCase()
+  if(!ALL_TEAMS.includes(team))return setDevRosterMessage('Select a valid NHL team')
+  if(!liveAccount){setDevRosterMessage('Shared updates require a LIVE DEV account. TEST cannot modify production.');return}
+  setDevRosterMessage('Saving player to shared LIVE registry…')
+  try{
+   const result=await (window.nhlTracker as any).livePlayersRequest({method:'POST',id:p.id,name:p.name,team})
+   if(result.error){setDevRosterMessage(result.error);return}
+   if(!result.saved||Number(result.player?.id)!==p.id){setDevRosterMessage('Server did not confirm save; please retry.');return}
+   addPlayerIdentities([{id:p.id,name:p.name,team}]);setDevPlayerAdded(v=>({...v,[p.id]:true}));setSharedPlayerRevision(v=>v+1);window.dispatchEvent(new Event('nhl-shared-players-updated'))
+   setDevRosterMessage(`${p.name} saved to shared LIVE registry for ${team}. Other LIVE users receive the update on refresh or next sign-in.`)
+  }catch(e){setDevRosterMessage(`Shared player save failed: ${String(e)}`)}
+ }
+ // Pull shared players into the existing local identity index without touching wagers.
+ useEffect(()=>{if(!liveAccount)return;let active=true
+  const load=async()=>{try{const result=await (window.nhlTracker as any).livePlayersRequest({method:'GET'});if(!active||result.error||!Array.isArray(result.players))return
+   addPlayerIdentities(result.players.map((p:any)=>({id:Number(p.id),name:String(p.name),team:String(p.team)})))
+   setSharedPlayerRevision(v=>v+1);window.dispatchEvent(new Event('nhl-shared-players-updated'))
+  }catch{}}
+  void load();return()=>{active=false}
+ },[liveAccount?.username])
+
+ const [devRosterBusy,setDevRosterBusy]=useState(false)
  const [devRosterMessage,setDevRosterMessage]=useState('')
  const [devRosterLast,setDevRosterLast]=useState(()=>Number(localStorage.getItem('nhlTracker:playerIdentityDb:lastFullSync')||0))
  const refreshDevRosters=async()=>{
@@ -906,6 +942,7 @@ function TrackerApp({initialTestAccount,onTestLogout,liveAccount,onLiveLogout}:{
  <section className="devCenterCard"><div className="devCenterCardTitle"><span>♧</span><h2>Saved Combos & Odds</h2></div><p>{trackedCombos.length} qualifying combos for {date}. Open the slide-out workspace to review linked wagers and save missing prices.</p>{comboReportMessage&&<div className="devCenterNotice">{comboReportMessage}</div>}<button onClick={()=>setComboDrawerOpen(true)}>OPEN SAVED COMBOS & ODDS</button></section>
  {isTestMode&&<section className="devCenterCard"><div className="devCenterCardTitle"><span>⚗</span><h2>DEV Simulator</h2></div><p>Run an isolated simulated NHL game without affecting actual league results or bets.</p><button onClick={()=>{setDevMode(true);setTab('LIVE')}}>ENTER DEV MODE</button></section>}
  <section className="devCenterCard"><div className="devCenterCardTitle"><span>↻</span><h2>Player Roster Management</h2></div><p>Refresh the local NHL roster cache across all 32 teams. This does not write to Neon.</p><p className="devCenterMeta">Last full refresh: {devRosterLast?new Date(devRosterLast).toLocaleString():'Not recorded'}</p><button disabled={devRosterBusy} onClick={()=>void refreshDevRosters()}>{devRosterBusy?'CHECKING ALL 32 TEAMS…':'CHECK FOR ROSTER UPDATES'}</button>{devRosterMessage&&<p role="status" className="devCenterMeta">{devRosterMessage}</p>}</section>
+ <section className="devCenterCard"><div className="devCenterCardTitle"><span>⌕</span><h2>Missing Player Lookup</h2></div><p>Search NHL players by name. Verify the player and team before adding to the local identity cache. No Neon writes.</p><input aria-label="Player name" value={devPlayerQuery} onChange={e=>setDevPlayerQuery(e.target.value)} placeholder="Roger McQueen"/><select aria-label="Team" value={devPlayerTeam} onChange={e=>setDevPlayerTeam(e.target.value)}>{ALL_TEAMS.map(t=><option key={t} value={t}>{t}</option>)}</select><button disabled={devPlayerSearching||devPlayerQuery.trim().length<3} onClick={()=>void searchDevPlayer()}>{devPlayerSearching?'SEARCHING…':'SEARCH NHL PLAYERS'}</button>{devPlayerResults.length>0&&<><select size={Math.min(7,devPlayerResults.length)} aria-label="NHL player results" value={devPlayerSelected} onChange={e=>setDevPlayerSelected(e.target.value)} style={{maxHeight:185,overflowY:'auto',width:'100%'}}><option value="">Choose a player…</option>{devPlayerResults.map(p=><option key={p.id} value={String(p.id)}>{p.name} · NHL #{p.id} · {p.team||'Team unlisted'}</option>)}</select>{(()=>{const p=devPlayerResults.find(p=>String(p.id)===devPlayerSelected);return p?<button disabled={!!devPlayerAdded[p.id]} onClick={()=>void addDevPlayer(p)}>{devPlayerAdded[p.id]?'✓ ADDED':'ADD TO SHARED LIVE DATABASE'}</button>:null})()}</>}</section>
  {isTestMode&&<section className="devCenterCard"><div className="devCenterCardTitle"><span>▣</span><h2>TEST Bet Database</h2></div><p>Import an exported LIVE betting profile using Bet Entry. Imported wagers are saved only in the TEST database; they never modify LIVE wagers.</p><p className="devCenterMeta" role="status">{devSync}</p><p>Clear TEST Bets permanently deletes only this account's TEST server snapshot. It cannot access LIVE data.</p><label className="devCenterMeta">TYPE CLEAR DEV TO CONFIRM <input value={devClearText} onChange={e=>setDevClearText(e.target.value)} placeholder="CLEAR DEV" style={{display:'block',marginTop:8,padding:9,background:'#091727',border:'1px solid #45617e',color:'white',borderRadius:6}}/></label><button disabled={devClearText!=='CLEAR DEV'||devClearing||!devSyncRef.current.ready} onClick={()=>void clearDevBets()} style={{background:'#8d2534',borderColor:'#bb4254'}}>{devClearing?'CLEARING…':'CLEAR TEST BETS'}</button></section>}
  <section className="devCenterCard devCenterFuture"><div className="devCenterCardTitle"><span>＋</span><h2>More Tools</h2></div><p>Reserved for future DEV-only diagnostics, reports, and administrative actions.</p></section>
  </div></main>}
@@ -1557,7 +1594,9 @@ function BetCenter({date,setDate,unitSize,bets,setBets,games,liveStats,rebetSeed
  const playerHistory=useMemo(()=>{const frequency=new Map<string,number>(),recency=new Map<string,number>(),pairs=new Map<string,number>();const market=new Map<string,Map<string,number>>();const ordered=[...bets].sort((a,b)=>String(a.createdAt||a.date).localeCompare(String(b.createdAt||b.date)));ordered.forEach((b,idx)=>{const names=[...new Set(b.legs.filter(l=>l.kind!=='TEAM').map(l=>l.player.trim()).filter(Boolean))];for(const l of b.legs.filter(l=>l.kind!=='TEAM')){const n=l.player.trim().toLowerCase();frequency.set(n,(frequency.get(n)||0)+1);recency.set(n,idx+1);const mm=market.get(n)||new Map<string,number>();mm.set(l.stat,(mm.get(l.stat)||0)+1);market.set(n,mm)}for(let i=0;i<names.length;i++)for(let j=i+1;j<names.length;j++){const a=names[i].toLowerCase(),c=names[j].toLowerCase(),k=[a,c].sort().join('|');pairs.set(k,(pairs.get(k)||0)+1)}});return{frequency,recency,pairs,market}},[bets])
  const pairCount=(candidate:string)=>legs.filter(l=>l.kind!=='TEAM').reduce((n,l)=>n+(playerHistory.pairs.get([candidate.toLowerCase(),l.player.toLowerCase()].sort().join('|'))||0),0)
  const favoriteMarket=(candidate:string)=>{const mm=playerHistory.market.get(candidate.toLowerCase());if(!mm)return'';return[...mm.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]||''}
- const suggestions=useMemo(()=>{if(selectedPlayer)return[];const q=player.trim().toLowerCase();const used=new Set(legs.filter(l=>l.kind!=='TEAM').map(l=>l.player.toLowerCase()));const pool=roster.filter(p=>!used.has(p.name.toLowerCase())&&(!q||p.name.toLowerCase().includes(q)));return pool.map(p=>{const al=p.name.toLowerCase(),last=al.split(' ').at(-1)||'',match=q?(last.startsWith(q)?0:al.startsWith(q)?1:2):3;const pair=pairCount(p.name),freq=playerHistory.frequency.get(al)||0,recent=playerHistory.recency.get(al)||0;return{...p,_pair:pair,_freq:freq,_recent:recent,_match:match,_market:favoriteMarket(p.name)}}).filter(p=>q||p._pair>0).sort((a,b)=>q?(a._match-b._match||b._pair-a._pair||b._freq-a._freq||b._recent-a._recent||a.name.localeCompare(b.name)):(b._pair-a._pair||b._freq-a._freq||b._recent-a._recent||a.name.localeCompare(b.name))).slice(0,12)},[player,roster,selectedPlayer,legs,playerHistory])
+ const [sharedIndexTick,setSharedIndexTick]=useState(0)
+ useEffect(()=>{const fn=()=>setSharedIndexTick(v=>v+1);window.addEventListener('nhl-shared-players-updated',fn);return()=>window.removeEventListener('nhl-shared-players-updated',fn)},[])
+ const suggestions=useMemo(()=>{if(selectedPlayer)return[];const q=player.trim().toLowerCase();const used=new Set(legs.filter(l=>l.kind!=='TEAM').map(l=>l.player.toLowerCase()));const indexed=readPlayerDb().flatMap(p=>p.teams.filter(t=>teamGame.has(t)).map(t=>({id:p.id,name:p.name,team:t,position:'F',gameId:teamGame.get(t)})));const combined=[...roster,...indexed.filter(p=>!roster.some(r=>r.id===p.id||r.name.toLowerCase()===p.name.toLowerCase()))];const pool=combined.filter(p=>!used.has(p.name.toLowerCase())&&(!q||p.name.toLowerCase().includes(q)));return pool.map(p=>{const al=p.name.toLowerCase(),last=al.split(' ').at(-1)||'',match=q?(last.startsWith(q)?0:al.startsWith(q)?1:2):3;const pair=pairCount(p.name),freq=playerHistory.frequency.get(al)||0,recent=playerHistory.recency.get(al)||0;return{...p,_pair:pair,_freq:freq,_recent:recent,_match:match,_market:favoriteMarket(p.name)}}).filter(p=>q||p._pair>0).sort((a,b)=>q?(a._match-b._match||b._pair-a._pair||b._freq-a._freq||b._recent-a._recent||a.name.localeCompare(b.name)):(b._pair-a._pair||b._freq-a._freq||b._recent-a._recent||a.name.localeCompare(b.name))).slice(0,12)},[player,roster,selectedPlayer,legs,playerHistory,sharedIndexTick])
  useEffect(()=>setActiveSuggestion(0),[player,legs.length])
  const[bookCommitted,setBookCommitted]=useState(false)
  const bookSuggestions=BOOKS.filter(x=>!bookCommitted&&book.trim()&&x.toLowerCase().includes(book.trim().toLowerCase()))
