@@ -1,8 +1,7 @@
 name: NHL DEV Registry Daily Sync
 
 on:
-  schedule:
-    - cron: '17 10 * * *' # 10:17 UTC daily; UTC avoids DST ambiguity
+  # Scheduled execution requires separate approval; manual dispatch only.
   workflow_dispatch:
 
 permissions:
