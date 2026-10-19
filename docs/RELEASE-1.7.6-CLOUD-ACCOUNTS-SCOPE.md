@@ -142,3 +142,11 @@ Confidence optimizer enhancements, trio-versus-pairs improvements, and unrelated
 
 - The isolated LIVE cloud workspace now derives slate count and pending/won/lost/other wager counts from the authenticated complete cloud listing. It does not read legacy local wager storage or write anything to Neon.
 - This summary is a diagnostic cloud view; wager status aliases are grouped for display, and the full Bet Hub's official grading remains unchanged. Build and integration tests remain required.
+
+## LIVE authentication activation readiness (2026-10-19)
+
+The packaged LIVE application has been built successfully, but registration currently returns the expected activation-disabled message. The next step is backend provisioning and verification, **not** enabling the production flags prematurely.
+
+Before any production activation, independently verify a dedicated Neon LIVE database (never the TEST/DEV database), least-privilege LIVE database role and required schema/unique constraints, backup and recovery, deployment environment variable host/database/role pins, and an end-to-end test plan for registration, login, logout, session expiry, duplicate usernames, and account isolation. Do not copy connection strings into tickets or chat. The LIVE database guard now also rejects explicit insecure `sslmode` query parameters.
+
+Production flags remain separately controlled: `NHL_LIVE_CLOUD_ENABLED=YES_PRODUCTION_APPROVED` and `NHL_LIVE_SIGNUP_ENABLED=YES_LIVE_SIGNUP_APPROVED` for account activation; keep `NHL_LIVE_WAGER_WRITES_ENABLED` unset for authentication-only testing. Do not enable any flag without separate explicit user approval. The packaged app also blocks LIVE wager mutations independently. No data migration is authorized.
