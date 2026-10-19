@@ -164,7 +164,7 @@ app.whenReady().then(() => {
   })
   // LIVE auth is independent from the TEST account endpoint. Tokens stay in main-process memory.
   let liveAccountToken = ''
-  ipcMain.handle('live-account:request', async (_e, payload: {action:string;username?:string;email?:string;login?:string;password?:string;invitationCode?:string}) => {
+  ipcMain.handle('live-account:request', async (_e, payload: {action:string;username?:string;email?:string;login?:string;password?:string}) => {
     if (testEnvironment) return {error:'LIVE accounts are unavailable in TEST mode'}
     const action=String(payload?.action||'')
     if (!['login','register','logout','me'].includes(action)) return {error:'Invalid LIVE account action'}
