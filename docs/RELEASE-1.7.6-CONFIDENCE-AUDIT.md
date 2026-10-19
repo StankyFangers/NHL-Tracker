@@ -11,7 +11,7 @@ Status: **Implementation present; end-to-end validation outstanding.** This docu
 
 ## Release blockers / verification still needed
 
-1. **Source of eligible opportunities:** trace every producer of `nhlTrackerConfidenceOpportunities:v1`; confirm both placed and unplaced qualifying forward-line + PP combinations are recorded with real priced, settled outcomes. An optimizer cannot reliably grade missing or estimated-only prices.
+1. **BLOCKER — eligible opportunity collection is not wired in the inspected renderer:** `confidenceOptimizer.ts` exports `appendOpportunities`, but `App.tsx` imports only `readOpportunities`, `readActiveStrategy`, `saveActiveStrategy`, and the `Thresholds` type. No `appendOpportunities(` call exists in `App.tsx`. The Strategy Lab reads saved opportunities and can optimize them, but the inspected UI does not record new eligible priced outcomes. Trace any other producer before declaring the dataset complete. Do not manufacture prices or inferred wins/losses to fill this gap.
 2. **Profile validation:** test SAFE/BALANCED/AGGRESSIVE/MAX_RETURN on fixed historical fixtures, including insufficient samples, all-negative outcomes, and game/date boundary splits. MAX_RETURN must remain retrospective and non-applicable.
 3. **Wager shadow P/L:** verify `wagerGrades` against the actual payout representation for each sportsbook, partial voids, and multi-leg bets. Confirm the shadow ledger never changes real daily P/L.
 4. **Trio comparison:** inspect persistence of trio reference odds and the three linked pair wagers. Verify 1u trio versus 1.5u combined pairs and equal-exposure normalization, without fabricated prices.
