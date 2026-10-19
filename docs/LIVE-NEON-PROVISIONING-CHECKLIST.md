@@ -39,3 +39,7 @@ A successful Windows build proves packaging, **not** database provisioning. An a
 ## Offline contract regression test
 
 Run `node --test tests/live-schema-contract.test.cjs` in the development checkout to verify that the proposed SQL still matches key backend table names, account ownership constraints, public registration defaults and separate activation gates. This static test is not a database migration, does not connect to Neon, and cannot establish production role permissions or schema deployment. It has not yet been run in this chat.
+
+## Read-only database preflight
+
+`vercel-api/migrations/002_live_preflight_readonly.sql` contains read-only inspection queries for the connected database identity, required LIVE tables, column definitions, constraints and table grants. It is not a schema migration and does not change rows or permissions. **Do not run it until you have independently confirmed the connection is to the intended isolated LIVE Neon database.** Review the results before applying any migration or setting any activation flags. In particular, ensure the application role has no unnecessary DDL privileges and cannot reach DEV tables. Database identity and grant results may contain infrastructure details; redact them before sharing publicly.
