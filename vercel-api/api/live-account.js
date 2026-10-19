@@ -11,9 +11,8 @@ module.exports=handler(async(req,res)=>{
  if(action==='register'){
   if(process.env.NHL_LIVE_SIGNUP_ENABLED!=='YES_LIVE_SIGNUP_APPROVED')return reply(res,403,{error:'LIVE registration disabled'})
   const username=String(req.body.username||'').trim().toLowerCase(),email=String(req.body.email||'').trim().toLowerCase(),password=String(req.body.password||'')
-  // Phase 2M: first-registration window is limited to the specifically approved username.
-  // Missing/mismatched allowlist fails closed; registration still creates USER only.
-  if(process.env.NHL_LIVE_SIGNUP_ALLOWED_USERNAME!=='stankyfangers'||username!=='stankyfangers')return reply(res,403,{error:'LIVE registration not authorized for this username'})
+  // Every invited user follows the same registration flow. Never elevate roles on signup.
+  // Registration remains disabled until the explicit LIVE signup gate is enabled.
   if(!validName(username)||!validEmail(email)||password.length<12||password.length>128)return reply(res,400,{error:'Invalid registration fields'})
   // Compare SHA-256 digests in constant time; invitation secret is configured only on Vercel.
   const invite=typeof req.body.invitationCode==='string'?req.body.invitationCode:''
