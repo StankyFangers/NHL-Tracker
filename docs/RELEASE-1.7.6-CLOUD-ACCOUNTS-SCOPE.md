@@ -89,3 +89,9 @@ Confidence optimizer enhancements, trio-versus-pairs improvements, and unrelated
 - The staging workspace can invoke only the existing account-scoped read-only cloud inspector. It does not mount `TrackerApp`, load legacy `localStorage.bets`, or enable wager mutations.
 - The legacy `stankyfangers` LIVE account retains its prior local Bet Hub while explicit backup/migration and per-account cloud persistence are developed.
 - **Not release-ready:** users cannot yet place/save bets from the staged private workspace; no build or integration tests have been run for this UI change. Keep production activation gated.
+
+## Cloud wager read-only preview (2026-10-19)
+
+- The LIVE cloud inspector now validates fetched wager IDs, dates, legs arrays, and row-to-payload ID matching; duplicate wager IDs abort preview rather than silently merge.
+- After an explicit read-only check, the inspector displays up to 100 most recent cloud wager summaries (date, leg count, wager ID). No wager import, localStorage mutation, or cloud write is performed.
+- This is a staging inspection capability, **not** full Bet Hub cloud hydration. Renderer integration and safe cloud write/sync remain the priority and are not enabled.
