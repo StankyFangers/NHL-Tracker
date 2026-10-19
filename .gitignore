@@ -44,3 +44,7 @@ release/
 *.backup-*
 *.pre-*-backup
 *.bak
+migration/*.json
+
+.vercel
+.env*

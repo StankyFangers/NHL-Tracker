@@ -1,6 +1,5 @@
 import { app, BrowserWindow, ipcMain, Notification, shell, dialog } from 'electron'
 import { join } from 'path'
-import { homedir } from 'os'
 import { writeFile } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 
@@ -136,6 +135,127 @@ app.whenReady().then(() => {
   })
   ipcMain.handle('nhl:boxscore', async (_e, gameId: number) => nhlJson(`/gamecenter/${gameId}/boxscore`))
   ipcMain.handle('nhl:roster', async (_e, team: string) => nhlJson(`/roster/${encodeURIComponent(team)}/current`))
+  // Optional DEV-only registry snapshot. Token remains in Electron main process,
+  // never exposed to renderer/localStorage. No endpoint or token configuration = local fallback.
+  // DEV accounts: credentials sent via Electron IPC to this main-process HTTPS client.
+  // Tokens are kept in memory only and never written to disk or localStorage.
+  // Fail closed: the existing authentication and wager APIs target the TEST Neon branch.
+  // Never allow a packaged LIVE executable to access TEST account data.
+  const testEnvironment = !app.isPackaged
+  let devAccountToken = ''
+  ipcMain.handle('dev-account:request', async (_e, payload: {action:string;username?:string;email?:string;login?:string;password?:string;setupKey?:string}) => {
+    if (!testEnvironment) return {error:'LIVE cloud accounts are not configured yet. Your LIVE wagers remain local; TEST database access is blocked.'}
+    const action=String(payload?.action||'')
+    if(!['register','login','logout','me','bootstrap_dev','rename_self'].includes(action))return {error:'Invalid account action'}
+    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),10000)
+    try {
+      const response=await fetch('https://nhl-tracker-vercel-api.vercel.app/api/account',{
+        method:action==='me'?'GET':'POST',cache:'no-store',signal:controller.signal,
+        headers:{'Content-Type':'application/json',...(devAccountToken?{Authorization:`Bearer ${devAccountToken}`}:{})},
+        ...(action==='me'?{}:{body:JSON.stringify(payload)})
+      })
+      const data:any=await response.json()
+      if(!response.ok){if(response.status===401&&action==='me')devAccountToken='';return {error:String(data?.error||`Account service: ${response.status}`)}}
+      if(action==='logout')devAccountToken=''
+      if((action==='login'||action==='register'||action==='bootstrap_dev')&&typeof data.token==='string')devAccountToken=data.token
+      return {account:data.account||null}
+    }catch(error:any){return {error:'DEV account service unavailable: '+String(error?.message||error)}}
+    finally{clearTimeout(timeout)}
+  })
+  // LIVE auth is independent from the TEST account endpoint. Tokens stay in main-process memory.
+  let liveAccountToken = ''
+  ipcMain.handle('live-account:request', async (_e, payload: {action:string;username?:string;email?:string;login?:string;password?:string;invitationCode?:string}) => {
+    if (testEnvironment) return {error:'LIVE accounts are unavailable in TEST mode'}
+    const action=String(payload?.action||'')
+    if (!['login','register','logout','me'].includes(action)) return {error:'Invalid LIVE account action'}
+    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000)
+    try {
+      const response=await fetch('https://nhl-tracker-vercel-api.vercel.app/api/live-account',{
+        method:action==='me'?'GET':'POST',cache:'no-store',signal:controller.signal,
+        headers:{'Content-Type':'application/json',...(liveAccountToken?{Authorization:`Bearer ${liveAccountToken}`}:{})},
+        ...(action==='me'?{}:{body:JSON.stringify(payload)})
+      })
+      const data:any=await response.json()
+      if(!response.ok)return {error:String(data?.error||`LIVE account service: ${response.status}`)}
+      if(action==='logout')liveAccountToken=''
+      if((action==='login'||action==='register')&&typeof data.token==='string')liveAccountToken=data.token
+      return {account:data.account||null}
+    }catch(e:any){return {error:'LIVE account service unavailable: '+String(e?.message||e)}}
+    finally{clearTimeout(timeout)}
+  })
+  // Phase 2H: LIVE wager transport only. This deliberately does NOT mount cloud
+  // wagers into the renderer, migrate local history, or run background sync.
+  // Authentication token never leaves Electron's main process.
+  ipcMain.handle('live-wagers:request', async (_e, request: {method:string;limit?:number;cursor?:string;id?:string;expectedUpdatedAt?:string;wager?:unknown;source?:string;sourceExternalId?:string|null}) => {
+    if (testEnvironment) return {error:'LIVE wagers are unavailable in TEST mode'}
+    if (!liveAccountToken) return {error:'Sign in to LIVE before requesting cloud wagers'}
+    const method=String(request?.method||'')
+    if (!['GET','POST','PATCH','DELETE'].includes(method)) return {error:'Invalid LIVE wager operation'}
+    // Mutation transport is deliberately locked until migration and conflict
+    // handling are reviewed. Do not remove this lock as part of deployment.
+    if (method!=='GET') return {error:'LIVE cloud writes are not enabled in this desktop build'}
+    const limit=Number.isInteger(request?.limit)?Math.max(1,Math.min(200,Number(request.limit))):100
+    const cursor=typeof request?.cursor==='string'?request.cursor:''
+    if (cursor.length>150) return {error:'Invalid LIVE wager cursor'}
+    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000)
+    try {
+      const url=new URL('https://nhl-tracker-vercel-api.vercel.app/api/live-wagers')
+      url.searchParams.set('limit',String(limit))
+      if (cursor) url.searchParams.set('cursor',cursor)
+      const response=await fetch(url.toString(),{
+        method:'GET',cache:'no-store',signal:controller.signal,
+        headers:{Accept:'application/json',Authorization:`Bearer ${liveAccountToken}`}
+      })
+      const data:any=await response.json()
+      if (!response.ok) {
+        if(response.status===401) liveAccountToken=''
+        return {error:String(data?.error||`LIVE wager service: ${response.status}`),status:response.status}
+      }
+      if (!Array.isArray(data?.wagers) || !(data.nextCursor===null || typeof data.nextCursor==='string'))
+        return {error:'LIVE wager service returned an invalid response'}
+      return {wagers:data.wagers,nextCursor:data.nextCursor}
+    } catch(e:any) {return {error:'LIVE wager service unavailable: '+String(e?.message||e)}}
+    finally {clearTimeout(timeout)}
+  })
+  ipcMain.handle('dev-bets:request', async (_e, request: {method:string;bets?:unknown[];revision?:number;confirm?:string}) => {
+    if (!testEnvironment) return {error:'TEST database is unavailable in LIVE mode'}
+    if (!devAccountToken) return {error:'Sign in to DEV before syncing bets'}
+    const method=String(request?.method||'')
+    if(!['GET','PUT','DELETE'].includes(method))return {error:'Invalid DEV bet operation'}
+    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000)
+    try {
+      const response=await fetch('https://nhl-tracker-vercel-api.vercel.app/api/dev-bets',{
+        method,cache:'no-store',signal:controller.signal,
+        headers:{'Content-Type':'application/json',Authorization:`Bearer ${devAccountToken}`,...(method==='DELETE'?{'X-Dev-Confirm':String(request.confirm||'')}:{})},
+        ...(method==='PUT'?{body:JSON.stringify({bets:request.bets,revision:request.revision})}:{})
+      })
+      const data:any=await response.json()
+      return response.ok?data:{error:String(data.error||`DEV bet service: ${response.status}`),revision:data.revision}
+    }catch(e:any){return {error:'DEV bet server unavailable: '+String(e?.message||e)}}
+    finally{clearTimeout(timeout)}
+  })
+  ipcMain.handle('registry:players', async () => {
+    const token = process.env.NHL_READ_TOKEN
+    if (!token || token.length < 32) return { available:false, players:[] }
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 8000)
+    try {
+      const response = await fetch('https://nhl-tracker-vercel-api.vercel.app/api/players', {
+        headers: { Authorization: `Bearer ${token}`, Accept:'application/json' },
+        signal:controller.signal, cache:'no-store'
+      })
+      if (!response.ok) throw new Error(`Registry request failed: ${response.status}`)
+      const body:any = await response.json()
+      if (body?.environment !== 'development' || body?.readOnly !== true ||
+          !Array.isArray(body?.players) || body.players.length > 3000)
+        throw new Error('Unexpected registry response')
+      return { available:true, players:body.players }
+    } catch (error:any) {
+      console.warn('DEV player registry unavailable; keeping local cache:',error?.message)
+      return { available:false, players:[] }
+    } finally { clearTimeout(timeout) }
+  })
+
   ipcMain.handle('nhl:standings', async () => nhlJson('/standings/now'))
   ipcMain.handle('nhl:clubStats', async (_e, team: string) => nhlJson(`/club-stats/${encodeURIComponent(team)}/now`))
   ipcMain.handle('dfo:lines', async (_e, team: string) => dfoLines(team))

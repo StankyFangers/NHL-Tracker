@@ -1,0 +1,39 @@
+name: NHL DEV Registry Daily Sync
+
+on:
+  schedule:
+    - cron: '17 10 * * *' # 10:17 UTC daily; UTC avoids DST ambiguity
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nhl-dev-registry-daily-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NHL_REGISTRY_APPLY: YES_DEV_ONLY
+      NHL_DEV_REGISTRY_DATABASE_URL: ${{ secrets.NHL_DEV_REGISTRY_DATABASE_URL }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install registry dependency without app lifecycle scripts
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund pg
+      - name: Require DEV connection secret
+        shell: bash
+        run: |
+          if [ -z "$NHL_DEV_REGISTRY_DATABASE_URL" ]; then
+            echo 'Missing NHL_DEV_REGISTRY_DATABASE_URL secret' >&2
+            exit 1
+          fi
+      - name: Synchronize NHL roster identities to DEV
+        run: node scripts/sync-nhl-registry-dev.cjs
