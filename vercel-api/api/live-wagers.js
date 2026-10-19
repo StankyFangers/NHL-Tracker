@@ -8,6 +8,9 @@ module.exports=handler(async(req,res)=>{
  const account=await session(req)
  if(!account)return reply(res,401,{error:'LIVE session required'})
  if(!['GET','POST','PATCH','DELETE'].includes(req.method))return reply(res,405,{error:'Method not allowed'})
+ // Phase 2K: LIVE authentication does NOT activate cloud wager mutations.
+ // A separate explicit production approval is required for POST/PATCH/DELETE.
+ if(req.method!=='GET' && process.env.NHL_LIVE_WAGER_WRITES_ENABLED!=='YES_WAGER_WRITES_SEPARATELY_APPROVED')return reply(res,403,{error:'LIVE cloud wager writes are disabled'})
  const pool=getLivePool()
  if(req.method==='GET'){
   const limit=Math.min(200,Math.max(1,Number.parseInt(req.query?.limit,10)||100))
