@@ -30,7 +30,7 @@ Two strictly separated cloud-backed account experiences:
 - `src/main/index.ts`: TEST dev-account and dev-bets transport; LIVE account transport; LIVE wager **GET only**, mutation methods deliberately blocked.
 - `src/preload/index.ts`: exposes TEST and LIVE IPC methods.
 - `src/renderer/src/App.tsx`: TEST account and bet sync UI; LIVE still says 'LOCAL WAGERS · CLOUD LOGIN NOT YET ENABLED'.
-- `vercel-api/api/live-account.js`: LIVE registration currently gated to one username (`stankyfangers`) and invitation secret; **this special-case registration behavior must be removed before normal-user onboarding**.
+- `vercel-api/api/live-account.js`: LIVE registration accepts any valid username with a correct invitation code once the explicit LIVE signup gate is enabled; accounts are created with USER role. This source change is not deployed.
 - `vercel-api/api/live-wagers.js`: cloud write endpoints exist but require separate server approval gate.
 - LIVE cloud account and wager flows have not been end-to-end tested.
 
@@ -53,3 +53,9 @@ Confidence optimizer enhancements, trio-versus-pairs improvements, and unrelated
 - `StankyFangersTEST` exists and successfully loads previously saved cloud TEST wagers. This is not an outstanding build feature.
 - LIVE `StankyFangers` must be created through the exact same normal USER signup flow available to friends.
 - Promote that LIVE account to DEV **after signup** through a separately approved Neon database administration operation; never hard-code the account's role during registration.
+
+## Implementation finding — 2026-10-19
+
+- The renderer's top-level LIVE login currently refuses non-`stankyfangers` users even after valid authentication. This **must be replaced with account-scoped cloud workspaces** before friends can use LIVE.
+- The LIVE `TrackerApp` still mounts legacy localStorage wagers for the accepted account. **Do not remove the username restriction alone**: doing so could expose local wager history across accounts. Build an isolated cloud wager state path and verify ownership before opening the app to other users.
+- LIVE `live-wagers:request` Electron transport currently permits GET only. POST/PATCH/DELETE require conflict-safe client integration and separately authorized server activation.
