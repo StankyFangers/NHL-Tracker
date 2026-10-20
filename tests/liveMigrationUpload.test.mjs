@@ -75,3 +75,14 @@ test('653-wager migration exercises four cloud pages and verifies every ID',asyn
  assert.equal(repeat.uploaded,0)
  assert.equal(writes,653)
 })
+
+test('rejects unsuccessful cloud listings without trusting partial data',async()=>{
+ await assert.rejects(listAllCloudWagers(async()=>({ok:false,wagers:[],nextCursor:null})),/Cloud listing failed/)
+})
+test('rejects empty continuation pages',async()=>{
+ await assert.rejects(listAllCloudWagers(async()=>({wagers:[],nextCursor:'next'})),/Empty cloud page/)
+})
+test('rejects cloud pages larger than requested limit',async()=>{
+ const rows=cloud(...Array.from({length:201},(_,i)=>'id-'+i))
+ await assert.rejects(listAllCloudWagers(async()=>({wagers:rows,nextCursor:'next'})),/exceeds requested limit/)
+})
