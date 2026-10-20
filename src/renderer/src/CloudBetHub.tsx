@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useRef,useState} from 'react'
 import {listAllCloudWagers} from './liveMigrationUpload'
-import {type CloudWagerRow} from './liveMigrationPreflight'
+import {validHistoricalWager,type CloudWagerRow} from './liveMigrationPreflight'
 
 type WagerLeg={player?:string;qty?:number;stat?:string;team?:string;kind?:string;side?:string;voided?:boolean}
 type Wager={id:string;date:string;legs:WagerLeg[];book?:string;units?:number;unitSize?:number;payout?:number;odds?:number;status?:string}
@@ -53,7 +53,7 @@ export default function CloudBetHub({username}:{username:string}){
   if(saving||loading||!loaded||accountLoaded!==username)return
   const generation=requestGeneration.current
   let wager:Wager
-  try{wager=JSON.parse(draft);if(!wager||typeof wager!=='object'||Array.isArray(wager)||typeof wager.id!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(wager.date)||!Array.isArray(wager.legs)||wager.legs.length<1||wager.legs.length>12)throw Error('A wager needs an ID, YYYY-MM-DD date and 1–12 legs')}
+  try{wager=JSON.parse(draft);if(!validHistoricalWager(wager))throw Error('A wager needs a valid ID, calendar date and 1–12 legs')}
   catch(e){setError('Invalid wager JSON: '+String(e instanceof Error?e.message:e));return}
   if(editing&&wager.id!==editing.wager_id){setError('Editing cannot change a wager ID');return}
   if(editing&&!editing.updated_at){setError('This wager has no revision timestamp; refresh before editing');return}
@@ -110,7 +110,7 @@ export default function CloudBetHub({username}:{username:string}){
    </div>
    <p>{visible.length} wager{visible.length===1?'':'s'} shown · Changes require confirmation from the LIVE cloud service; server-side writes remain disabled until separately approved.</p>
    <div style={{border:'1px solid #36556d',padding:14,borderRadius:8,maxWidth:1000,marginBottom:14}}>
-    <button type="button" disabled={saving||loading} onClick={()=>{setEditing(null);setDraft(JSON.stringify({id:crypto.randomUUID(),date:new Date().toLocaleDateString('en-CA'),legs:[{player:'',stat:'P',qty:1}],units:1,unitSize:2.5,status:'PENDING'},null,2));setError('')}}>NEW CLOUD WAGER</button>
+    <button type="button" disabled={saving||loading} onClick={()=>{setEditing(null);setDraft(JSON.stringify({id:crypto.randomUUID(),date:new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10),legs:[{player:'',stat:'P',qty:1}],units:1,unitSize:2.5,status:'PENDING'},null,2));setError('')}}>NEW CLOUD WAGER</button>
     {draft&&<div style={{display:'grid',gap:8,marginTop:12}}><strong>{editing?'Edit cloud wager '+editing.wager_id:'Create cloud wager'} · JSON draft</strong><textarea aria-label="Cloud wager JSON draft" value={draft} onChange={e=>setDraft(e.target.value)} rows={12} style={{width:'100%',boxSizing:'border-box',fontFamily:'monospace',background:'#071321',color:'#e3efff'}}/><div style={{display:'flex',gap:8}}><button disabled={saving||loading} onClick={()=>void submitDraft()}>{saving?'WAITING FOR CLOUD…':editing?'SAVE CLOUD EDIT':'CREATE CLOUD WAGER'}</button><button disabled={saving} onClick={()=>{setEditing(null);setDraft('');setError('')}}>CANCEL</button></div></div>}
    </div>
    <div style={{display:'grid',gap:8,maxWidth:1000}}>
