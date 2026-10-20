@@ -8,11 +8,12 @@ const authPath=path.resolve(__dirname,'../vercel-api/lib/live-auth.js')
 const original=Module._load
 const account={id:'account-a',username:'otheruser',role:'USER'}
 let queries=[]
+let authenticated=true
 const pool={query:async(sql,args)=>{queries.push({sql,args});return {rows:[],rowCount:0}}}
 const mock={
  getLivePool:()=>pool,
  reply:(res,status,body)=>{res.status=status;res.body=body;return body},
- session:async()=>account,
+ session:async()=>authenticated?account:null,
  handler:fn=>fn
 }
 test('non-owner cannot import even when global wager writes are enabled',async()=>{
@@ -75,6 +76,24 @@ test('every LIVE wager operation is scoped to authenticated account, never clien
   assert.equal(queries[0].args[0],'account-b')
  }finally{
   account.id='account-a'
+  if(previous===undefined)delete process.env.NHL_LIVE_WAGER_WRITES_ENABLED
+  else process.env.NHL_LIVE_WAGER_WRITES_ENABLED=previous
+ }
+})
+
+test('unauthenticated requests cannot list or mutate private wagers',async()=>{
+ authenticated=false
+ const previous=process.env.NHL_LIVE_WAGER_WRITES_ENABLED
+ process.env.NHL_LIVE_WAGER_WRITES_ENABLED='YES_WAGER_WRITES_SEPARATELY_APPROVED'
+ try{
+  for(const method of ['GET','POST','PATCH','DELETE']){
+   queries=[];const res={}
+   await handler({method,query:{},body:{wager:{id:'w1',date:'2026-10-19',legs:[{}]}}},res)
+   assert.equal(res.status,401)
+   assert.equal(queries.length,0)
+  }
+ }finally{
+  authenticated=true
   if(previous===undefined)delete process.env.NHL_LIVE_WAGER_WRITES_ENABLED
   else process.env.NHL_LIVE_WAGER_WRITES_ENABLED=previous
  }
