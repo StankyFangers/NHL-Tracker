@@ -353,6 +353,10 @@ function TrackerApp({initialTestAccount,onTestLogout,liveAccount,onLiveLogout}:{
  const isTestMode=import.meta.env.DEV;
 
  const[devMode,setDevMode]=useState(false),[reportBusy,setReportBusy]=useState(false),[eodBusy,setEodBusy]=useState(false);const[tab,setTab]=useState('LIVE'),[selectedGame,setSelectedGame]=useState<string>('ALL'),[addBetOpen,setAddBetOpen]=useState(false),[date,setDate]=useState(()=>{const today=localDate();const held=localStorage.getItem('activeSlateDate');const verified:VerifiedDay[]=JSON.parse(localStorage.getItem('verifiedDays')||'[]');const verifiedDates=new Set(verified.map(v=>v.date));const storedBets:Bet[]=JSON.parse(localStorage.getItem('bets')||'[]');const unverifiedBetDates=[...new Set(storedBets.map(b=>b.date).filter(d=>d&&d<=today&&!verifiedDates.has(d)))].sort();const latestUnverified=unverifiedBetDates.at(-1);if(latestUnverified&&(!held||held>latestUnverified||!storedBets.some(b=>b.date===held)))return latestUnverified;if(held&&!verifiedDates.has(held))return held;return today}),[games,setGames]=useState<Game[]>([]),[events,setEvents]=useState<FeedEvent[]>([]),[liveStats,setLiveStats]=useState<LiveStats>({}),[hidden,setHidden]=useState<string[]>(()=>JSON.parse(localStorage.getItem('hiddenTeams')||'["TBL"]')),[status,setStatus]=useState('Connecting to NHL…')
+ const [liveCloudStatus,setLiveCloudStatus]=useState<'loading'|'ready'|'error'>(liveAccount?'loading':'ready')
+ const [liveCloudMessage,setLiveCloudMessage]=useState('Loading private LIVE wagers…')
+ const liveCloudRef=useRef<{ready:boolean;busy:boolean;account:string;last:string;rows:Map<string,string>}>({ready:false,busy:false,account:'',last:'',rows:new Map()})
+ const [liveCloudTick,setLiveCloudTick]=useState(0)
  const [devSync,setDevSync]=useState('Sign in to load TEST bets')
  const [devSyncTick,setDevSyncTick]=useState(0)
  const devPendingRef=useRef(false)
@@ -546,7 +550,7 @@ function TrackerApp({initialTestAccount,onTestLogout,liveAccount,onLiveLogout}:{
  const nightReminderEligible=!nightVerified&&(nightAllFinal||date<localDate());
  const nightReminderVisible=nightReminderEligible&&!nightReminderDismissed.includes(date);
 
- const[splitPairUnits,setSplitPairUnits]=useState(()=>{const n=Number(localStorage.getItem('splitPairUnits')??'1');return Number.isFinite(n)&&n>0?n:1}),[unitSize,setUnitSize]=useState(()=>Number(localStorage.getItem('unitSize')??'0')),[bets,setBets]=useState<Bet[]>(()=>{const raw:Bet[]=isTestMode?[]:JSON.parse(localStorage.getItem('bets')||'[]');
+ const[splitPairUnits,setSplitPairUnits]=useState(()=>{const n=Number(localStorage.getItem('splitPairUnits')??'1');return Number.isFinite(n)&&n>0?n:1}),[unitSize,setUnitSize]=useState(()=>Number(localStorage.getItem('unitSize')??'0')),[bets,setBets]=useState<Bet[]>(()=>{const raw:Bet[]=isTestMode||!!liveAccount?[]:JSON.parse(localStorage.getItem('bets')||'[]');
  // One-time cleanup explicitly requested by the user. Preserve both September
  // wagers and their historical financial settlement; remove only bad 27 legs.
  // Preserve a full pre-cleanup localStorage snapshot before changing anything.
@@ -779,6 +783,74 @@ function TrackerApp({initialTestAccount,onTestLogout,liveAccount,onLiveLogout}:{
  useEffect(()=>{
   addPlayerIdentities(bets.flatMap(b=>b.legs.filter(l=>l.kind!=='TEAM'&&Number(l.playerId)>0).map(l=>({id:Number(l.playerId),name:l.player,team:l.team||''}))));
  },[bets]);
+ // LIVE server is authoritative. Never import the legacy local bets collection into a new account.
+ useEffect(()=>{
+  if(!liveAccount)return
+  let cancelled=false
+  const state=liveCloudRef.current
+  state.ready=false;state.busy=false;state.account=liveAccount.username;state.rows=new Map();state.last=''
+  setLiveCloudStatus('loading');setLiveCloudMessage('Loading private LIVE wagers…')
+  ;(async()=>{
+   try{
+    const rows=await listAllCloudWagers((window.nhlTracker as any).liveWagersRequest)
+    if(cancelled)return
+    const loaded=rows.map(row=>row.wager as Bet)
+    state.rows=new Map(rows.map(row=>[row.wager_id,String(row.updated_at)]))
+    state.last=JSON.stringify(loaded);state.ready=true
+    setBets(loaded)
+    setLiveCloudStatus('ready');setLiveCloudMessage('Cloud connected · '+loaded.length+' wagers')
+   }catch(e){if(!cancelled){state.ready=false;setLiveCloudStatus('error');setLiveCloudMessage('Unable to load private LIVE wagers: '+String(e))}}
+  })()
+  return()=>{cancelled=true;state.ready=false}
+ },[liveAccount?.username])
+ useEffect(()=>{
+  if(!liveAccount||liveCloudStatus!=='ready')return
+  const state=liveCloudRef.current
+  if(!state.ready||state.account!==liveAccount.username||state.busy)return
+  const snapshot=JSON.stringify(bets)
+  if(snapshot===state.last)return
+  const timer=setTimeout(async()=>{
+   if(!state.ready||state.busy||state.account!==liveAccount.username)return
+   state.busy=true
+   try{
+    const previous:Bet[]=JSON.parse(state.last)
+    const prior=new Map(previous.map(b=>[b.id,b]))
+    const next=new Map(bets.map(b=>[b.id,b]))
+    const requests:any[]=[]
+    for(const b of bets){
+     const p=prior.get(b.id)
+     if(!p)requests.push({method:'POST',source:'manual',wager:b})
+     else if(JSON.stringify(p)!==JSON.stringify(b)){
+      const revision=state.rows.get(b.id)
+      if(!revision)throw Error('Missing cloud revision for '+b.id)
+      requests.push({method:'PATCH',id:b.id,expectedUpdatedAt:revision,wager:b})
+     }
+    }
+    for(const p of previous)if(!next.has(p.id)){
+     const revision=state.rows.get(p.id)
+     if(!revision)throw Error('Missing cloud revision for '+p.id)
+     requests.push({method:'DELETE',id:p.id,expectedUpdatedAt:revision})
+    }
+    for(const payload of requests){
+     const result=await (window.nhlTracker as any).liveWagersRequest(payload)
+     if(result?.error||result?.ok!==true)throw Error(String(result?.error||'Cloud did not confirm wager change'))
+     if(payload.method==='DELETE')state.rows.delete(payload.id)
+     else state.rows.set(payload.wager.id,String(result.updatedAt))
+     const index=previous.findIndex(b=>b.id===(payload.id||payload.wager.id))
+     if(payload.method==='DELETE'){if(index>=0)previous.splice(index,1)}
+     else if(index>=0)previous[index]=payload.wager
+     else previous.push(payload.wager)
+     state.last=JSON.stringify(previous)
+    }
+    setLiveCloudMessage('Cloud saved · '+requests.length+' changes')
+    setLiveCloudTick(n=>n+1)
+   }catch(e){
+    state.ready=false;setLiveCloudStatus('error')
+    setLiveCloudMessage('Cloud sync stopped: '+String(e)+'. Do not sign out; changes may be unsaved.')
+   }finally{state.busy=false}
+  },650)
+  return()=>clearTimeout(timer)
+ },[bets,liveAccount?.username,liveCloudStatus,liveCloudTick])
  // Never implicitly upload a previous account's localStorage data. TEST server is authoritative.
  useEffect(()=>{
   if(account?.role!=='DEV'){devSyncRef.current.ready=false;return}
@@ -1858,7 +1930,7 @@ function App(){
  const logout=async()=>{try{await request({action:'logout'})}finally{setAccount(null);setPassword('')}}
  if(account)return isTest
   ? <TrackerApp key={'test:'+account.username} initialTestAccount={account} onTestLogout={()=>{setAccount(null);setPassword('')}}/>
-  : <div>{account.username.toLowerCase()==='stankyfangers'?<><TrackerApp liveAccount={account} onLiveLogout={()=>void logout()}/><LiveCloudInspector key={account.username} username={account.username}/></>:<main style={{minHeight:'100vh',background:'#070e1a',color:'#edf6ff',padding:24}}><section style={{maxWidth:1100,margin:'0 auto',background:'#122137',border:'1px solid #3d617b',borderRadius:14,padding:28}}><h2>Private LIVE workspace</h2><p>Signed in as <strong>{account.username}</strong>. Your account is isolated from other users' local wagers.</p><p>Your cloud wager history is isolated to this LIVE account. Editing and new wager placement are not enabled here yet; no legacy local wagers are loaded.</p><CloudBetHub key={account.username} username={account.username}/><LiveCloudInspector key={account.username} username={account.username} embedded/></section></main>}</div>
+  : <TrackerApp key={'live:'+account.username} liveAccount={account} onLiveLogout={()=>void logout()}/>
  return <main style={{minHeight:'100vh',display:'grid',placeItems:'center',background:'#070e1a',color:'#edf6ff',padding:24}}><section style={{width:'min(420px,100%)',background:'#122137',padding:30,borderRadius:16,border:'1px solid #3d617b',boxShadow:'0 20px 65px #0009'}}><h1 style={{marginTop:0}}>🏒 NHL TRACKER</h1><p style={{color:isTest?'#f3c478':'#91b3ce'}}>{isTest?'TEST MODE · DEVELOPMENT DATABASE':'LIVE MODE · ACCOUNT LOGIN REQUIRED'}</p><div role="tablist" aria-label="Account action" style={{display:'flex',gap:8,marginBottom:14}}>{(['login','register'] as const).map(tab=><button key={tab} type="button" role="tab" aria-selected={mode===tab} onClick={()=>{setMode(tab);setError('')}} style={{padding:'9px 14px',borderRadius:6,border:mode===tab?'1px solid #78b9e4':'1px solid #46617a',background:mode===tab?'#dcefff':'#1b3048',color:mode===tab?'#10243b':'#c7d9e9',fontWeight:mode===tab?800:600,cursor:'pointer',opacity:1}}>{tab==='login'?'LOG IN':'CREATE ACCOUNT'}</button>)}</div><form onSubmit={signIn} style={{display:'grid',gap:14}}><label>USERNAME OR EMAIL<input required autoComplete="username" value={name} onChange={e=>setName(e.target.value)} style={{display:'block',width:'100%',padding:12,boxSizing:'border-box'}}/></label>{mode==='register'&&<label>EMAIL<input required type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} style={{display:'block',width:'100%',padding:12,boxSizing:'border-box'}}/></label>}<label>PASSWORD<input required type="password" minLength={mode==='register'?12:undefined} autoComplete={mode==='register'?'new-password':'current-password'} value={password} onChange={e=>setPassword(e.target.value)} style={{display:'block',width:'100%',padding:12,boxSizing:'border-box'}}/></label>{error&&<p role="alert" style={{color:'#ffacac'}}>{error}</p>}<button type="submit" disabled={busy} style={{padding:13,cursor:'pointer'}}>{busy?'AUTHENTICATING…':mode==='login'?'LOG IN TO NHL TRACKER':'CREATE ACCOUNT'}</button></form><p style={{fontSize:12,color:'#9ab1c8'}}>{isTest?'Sign in with your existing TEST credentials to retain your TEST history. Changing the TEST username requires a separate server-side account migration.':'Your original LIVE wagers remain on this computer. Cloud wager migration is not active.'}</p></section></main>
 }
 
