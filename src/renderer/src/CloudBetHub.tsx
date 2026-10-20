@@ -1,4 +1,4 @@
-import {useEffect,useMemo,useState} from 'react'
+import {useEffect,useMemo,useRef,useState} from 'react'
 import {listAllCloudWagers} from './liveMigrationUpload'
 import type {CloudWagerRow} from './liveMigrationPreflight'
 
@@ -29,17 +29,18 @@ export default function CloudBetHub({username}:{username:string}){
  const [date,setDate]=useState('')
  const [status,setStatus]=useState('ALL')
  const [expanded,setExpanded]=useState<string|null>(null)
+ const requestGeneration=useRef(0)
  const refresh=async()=>{
-  if(loading)return
+  const generation=++requestGeneration.current
   setLoading(true);setError('');setLoaded(false)
   try{
    const cloud=await listAllCloudWagers((window.nhlTracker as any).liveWagersRequest)
    if(cloud.some(r=>!isWager(r.wager)))throw new Error('Cloud returned an invalid wager; display stopped')
-   setRows(cloud);setLoaded(true)
-  }catch(e:unknown){setRows([]);setError(String(e instanceof Error?e.message:e))}
-  finally{setLoading(false)}
+   if(generation===requestGeneration.current){setRows(cloud);setLoaded(true)}
+  }catch(e:unknown){if(generation===requestGeneration.current){setRows([]);setError(String(e instanceof Error?e.message:e))}}
+  finally{if(generation===requestGeneration.current)setLoading(false)}
  }
- useEffect(()=>{void refresh()},[username])
+ useEffect(()=>{void refresh();return ()=>{requestGeneration.current++}},[username])
  const wagers=useMemo(()=>rows.map(r=>r.wager as Wager),[rows])
  const dates=useMemo(()=>[...new Set(wagers.map(w=>w.date))].sort().reverse(),[wagers])
  const visible=useMemo(()=>wagers.filter(w=>(!date||w.date===date)&&(status==='ALL'||(w.status||'PENDING')===status)).sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id)),[wagers,date,status])
