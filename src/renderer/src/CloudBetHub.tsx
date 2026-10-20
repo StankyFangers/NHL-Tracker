@@ -53,7 +53,7 @@ export default function CloudBetHub({username}:{username:string}){
   if(saving||loading||!loaded||accountLoaded!==username)return
   const generation=requestGeneration.current
   let wager:Wager
-  try{wager=JSON.parse(draft);if(!wager||typeof wager!=='object'||Array.isArray(wager)||typeof wager.id!=='string'||!/^\\d{4}-\\d{2}-\\d{2}$/.test(wager.date)||!Array.isArray(wager.legs)||wager.legs.length<1||wager.legs.length>12)throw Error('A wager needs an ID, YYYY-MM-DD date and 1–12 legs')}
+  try{wager=JSON.parse(draft);if(!wager||typeof wager!=='object'||Array.isArray(wager)||typeof wager.id!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(wager.date)||!Array.isArray(wager.legs)||wager.legs.length<1||wager.legs.length>12)throw Error('A wager needs an ID, YYYY-MM-DD date and 1–12 legs')}
   catch(e){setError('Invalid wager JSON: '+String(e instanceof Error?e.message:e));return}
   if(editing&&wager.id!==editing.wager_id){setError('Editing cannot change a wager ID');return}
   if(editing&&!editing.updated_at){setError('This wager has no revision timestamp; refresh before editing');return}
