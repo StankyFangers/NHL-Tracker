@@ -20,6 +20,8 @@ jobs:
           cache: npm
       - name: Install exact locked dependencies
         run: npm ci
+      - name: Test historical migration safeguards
+        run: node --experimental-strip-types --test tests/liveMigrationPreflight.test.mjs
       - name: Build Electron renderer and main process
         run: npm run build
       - name: Type-check renderer
