@@ -3,7 +3,8 @@
 const {getLivePool,reply,session,handler}=require('../lib/live-auth')
 const MAX_BYTES=256*1024
 const validId=id=>typeof id==='string'&&id.length>=1&&id.length<=150
-const validWager=w=>w&&typeof w==='object'&&!Array.isArray(w)&&validId(w.id)&&typeof w.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(w.date)&&Array.isArray(w.legs)&&w.legs.length<=12
+const validDate=d=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&Number.isFinite(Date.parse(d+'T00:00:00Z'))&&new Date(d+'T00:00:00Z').toISOString().slice(0,10)===d
+const validWager=w=>w&&typeof w==='object'&&!Array.isArray(w)&&validId(w.id)&&validDate(w.date)&&Array.isArray(w.legs)&&w.legs.length>0&&w.legs.length<=12
 module.exports=handler(async(req,res)=>{
  const account=await session(req)
  if(!account)return reply(res,401,{error:'LIVE session required'})
@@ -13,9 +14,12 @@ module.exports=handler(async(req,res)=>{
  if(req.method!=='GET' && process.env.NHL_LIVE_WAGER_WRITES_ENABLED!=='YES_WAGER_WRITES_SEPARATELY_APPROVED')return reply(res,403,{error:'LIVE cloud wager writes are disabled'})
  const pool=getLivePool()
  if(req.method==='GET'){
-  const limit=Math.min(200,Math.max(1,Number.parseInt(req.query?.limit,10)||100))
-  const cursor=String(req.query?.cursor||'')
-  if(cursor.length>150)return reply(res,400,{error:'Invalid cursor'})
+  const rawLimit=req.query?.limit
+  if(rawLimit!==undefined&&(!/^\d+$/.test(String(rawLimit))||Number(rawLimit)<1||Number(rawLimit)>200))return reply(res,400,{error:'Invalid page limit'})
+  const limit=rawLimit===undefined?100:Number(rawLimit)
+  const rawCursor=req.query?.cursor
+  if(rawCursor!==undefined&&(typeof rawCursor!=='string'||rawCursor.length>150))return reply(res,400,{error:'Invalid cursor'})
+  const cursor=rawCursor||''
   const r=await pool.query('SELECT wager_id,wager,source,source_external_id,updated_at FROM public.nhl_live_wagers WHERE account_id=$1 AND ($2::text=\'\' OR wager_id>$2) ORDER BY wager_id LIMIT $3',[account.id,cursor,limit+1])
   const more=r.rows.length>limit,rows=r.rows.slice(0,limit)
   return reply(res,200,{wagers:rows,nextCursor:more?rows[rows.length-1].wager_id:null})
@@ -39,6 +43,7 @@ module.exports=handler(async(req,res)=>{
   return reply(res,found.rowCount?409:404,{error:found.rowCount?'Wager changed since last read; refresh and retry':'Wager not found'})
  }
  const {wager,source='manual',sourceExternalId=null}=req.body
+ if(source==='import'&&String(account.username||'').toLowerCase()!=='stankyfangers')return reply(res,403,{error:'Historical LIVE migration is restricted to the owner account'})
  if(!validWager(wager)||!['manual','kalshi','import'].includes(source)||!(sourceExternalId===null||(typeof sourceExternalId==='string'&&sourceExternalId.length>0&&sourceExternalId.length<=250)))return reply(res,400,{error:'Invalid wager'})
  // Create-only. An existing wager is never silently overwritten, including across devices.
  try{

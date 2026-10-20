@@ -1,3 +1,6 @@
+import CloudBetHub from './CloudBetHub'
+import { importHistoricalWagers, listAllCloudWagers } from './liveMigrationUpload'
+import { parseMigrationBackup, compareMigration, type HistoricalWager } from './liveMigrationPreflight'
 import { addPlayerIdentities, resolvePlayerId, rosterEntries, syncPlayerDb, readPlayerDb } from './playerIdentityDb'
 import { optimizeProfiles, type ProfileReport } from './confidenceProfiles'
 import { readOpportunities, readActiveStrategy, saveActiveStrategy, type Thresholds } from './confidenceOptimizer'
@@ -403,7 +406,7 @@ function TrackerApp({initialTestAccount,onTestLogout,liveAccount,onLiveLogout}:{
  const [devPlayerSearching,setDevPlayerSearching]=useState(false)
  const [devPlayerSelected,setDevPlayerSelected]=useState('')
  const [devPlayerAdded,setDevPlayerAdded]=useState<Record<number,boolean>>({})
- const [sharedPlayerRevision,setSharedPlayerRevision]=useState(0)
+ const [,setSharedPlayerRevision]=useState(0)
  const [devPlayerTeam,setDevPlayerTeam]=useState('ANA')
  const searchDevPlayer=async()=>{
   if((liveAccount||account)?.role!=='DEV'||devPlayerSearching)return
@@ -1686,11 +1689,17 @@ function TeamChips({hidden,setHidden}:{hidden:string[],setHidden:any}){return <d
 // Phase 2I: isolated read-only cloud inspector. It never touches TrackerApp bets.
 function LiveCloudInspector({username,embedded=false}:{username:string;embedded?:boolean}){
  const [open,setOpen]=useState(false)
+ const [showCloudHub,setShowCloudHub]=useState(false)
  const [loading,setLoading]=useState(false)
  const [message,setMessage]=useState('Not checked yet')
  const [rows,setRows]=useState<any[]>([])
  const [checked,setChecked]=useState(false)
  const [comparison,setComparison]=useState('')
+ const [importSource,setImportSource]=useState<HistoricalWager[]|null>(null)
+ const [importReport,setImportReport]=useState('No backup selected')
+ const [importConfirm,setImportConfirm]=useState('')
+ const [importing,setImporting]=useState(false)
+ const [previewApproved,setPreviewApproved]=useState(false)
  const cloudSummary=useMemo(()=>{
   const counts={pending:0,won:0,lost:0,other:0}
   const dates=new Set<string>()
@@ -1723,6 +1732,29 @@ function LiveCloudInspector({username,embedded=false}:{username:string;embedded?
    setComparison('READ-ONLY MIGRATION PREVIEW · Local '+localById.size+' · Cloud '+cloudById.size+' · Local-only '+localOnly+' · Identical '+identical+' · Same-ID differences '+different+' · Cloud-only '+cloudOnly+' · '+(different>0?'CONFLICTS BLOCK MIGRATION.':'No conflicts detected; migration still requires verified backups and separate approval.')+' No changes made.')
   }catch(e:any){setComparison('Comparison stopped: '+String(e?.message||e))}
  }
+ const previewImport=(file:File)=>{
+  setImportSource(null);setPreviewApproved(false);setImportConfirm('');setImportReport('Validating backup...')
+  if(file.size>25*1024*1024){setImportReport('File exceeds 25 MB');return}
+  void file.text().then(raw=>{const source=parseMigrationBackup(JSON.parse(raw));setImportSource(source);setImportReport('Validated '+source.length+' unique wagers. Check cloud and compare below.')}).catch((e:unknown)=>setImportReport('Preview failed: '+String(e instanceof Error?e.message:e)))
+ }
+ const previewAgainstCloud=()=>{
+  if(!checked||!importSource)return
+  setPreviewApproved(false);setImportConfirm('')
+  try{const x=compareMigration(importSource,rows);setPreviewApproved(x.conflicts.length===0);setImportReport('READ ONLY · Source '+x.sourceCount+' · Cloud '+x.cloudCount+' · Missing '+x.missing.length+' · Identical '+x.identical.length+' · Conflicts '+x.conflicts.length+' · Cloud-only '+x.cloudOnly.length+'. NO WRITES PERFORMED.')}
+  catch(e:unknown){setImportReport('Comparison failed: '+String(e instanceof Error?e.message:e))}
+ }
+ const runImport=async()=>{
+  if(!checked||!importSource||!previewApproved||importConfirm!=='IMPORT '+username||importing||loading)return
+  setImporting(true);setImportReport('Rechecking cloud for conflicts before import...')
+  try{
+    const result=await importHistoricalWagers(importSource,(window.nhlTracker as any).liveWagersRequest,(progress)=>setImportReport('Uploaded '+progress.uploaded+' · Remaining '+progress.remaining))
+    setImportReport('VERIFIED · '+result.identical+' source wagers match cloud exactly · '+result.uploaded+' newly created · '+result.cloudOnly+' other cloud wagers preserved.')
+    setPreviewApproved(false);setImportConfirm('')
+    const refreshed=await listAllCloudWagers((window.nhlTracker as any).liveWagersRequest)
+    setRows(refreshed);setChecked(true);setMessage('Cloud verified: '+refreshed.length+' wagers for '+username)
+  }catch(e:unknown){setImportReport('IMPORT STOPPED: '+String(e instanceof Error?e.message:e))}
+  finally{setImporting(false)}
+ }
  const [showDetails,setShowDetails]=useState(false)
  const [detailId,setDetailId]=useState('')
  const [filterDate,setFilterDate]=useState('')
@@ -1740,8 +1772,8 @@ function LiveCloudInspector({username,embedded=false}:{username:string;embedded?
   setTimeout(()=>URL.revokeObjectURL(url),1000)
  }
  const check=async()=>{
-  if(loading)return
-  setComparison('');setChecked(false);setRows([]);setDetailId('');setShowDetails(false)
+  if(loading||importing)return
+  setPreviewApproved(false);setImportConfirm('');setComparison('');setChecked(false);setRows([]);setDetailId('');setShowDetails(false)
   setLoading(true);setMessage('Reading LIVE cloud wagers...')
   try{
    const collected:any[]=[]
@@ -1770,13 +1802,31 @@ function LiveCloudInspector({username,embedded=false}:{username:string;embedded?
  }
  useEffect(()=>{if(embedded)void check()},[embedded,username])
  return <div style={{position:embedded?'relative':'fixed',right:embedded?undefined:16,bottom:embedded?undefined:16,zIndex:embedded?undefined:20001,width:embedded?'100%':open?350:'auto',maxWidth:embedded?'100%':'calc(100vw - 32px)',background:'#10263a',color:'#d8ecff',border:'1px solid #487b9a',borderRadius:10,padding:10,boxShadow:'0 8px 28px #0009',fontSize:12}}>
-  {!embedded&&<button type="button" onClick={()=>setOpen(v=>!v)}>{open?'CLOSE CLOUD INSPECTOR':'LIVE CLOUD INSPECTOR'}</button>}{embedded&&<h3 style={{margin:'0 0 8px'}}>Your cloud wagers · read only</h3>}
+  {!embedded&&<button type="button" onClick={()=>setOpen(v=>!v)}>{open?'CLOSE CLOUD INSPECTOR':'LIVE CLOUD INSPECTOR'}</button>}
+  {!embedded&&open&&<button type="button" onClick={()=>setShowCloudHub(true)} style={{marginLeft:8}}>OPEN MY CLOUD BET HUB</button>}{embedded&&<h3 style={{margin:'0 0 8px'}}>Your cloud wagers · read only</h3>}
   {(open||embedded)&&<div style={{marginTop:10,display:'grid',gap:8}}>
    <strong>READ ONLY - {username}</strong>
+   <section style={{border:'1px solid #668ba4',borderRadius:8,padding:8,display:'grid',gap:6}}>
+    <strong>HISTORICAL MIGRATION · DRY RUN</strong>
+    <label>Choose LIVE migration JSON <input type="file" accept=".json,application/json" onChange={e=>{const f=e.target.files?.[0];if(f)previewImport(f)}}/></label>
+    <div role="status">{importReport}</div>
+    <button type="button" disabled={!checked||!importSource||loading} onClick={previewAgainstCloud}>COMPARE IMPORT TO MY CLOUD WAGERS</button>
+    <small>Preview never uploads. Cloud importing requires explicit confirmation and a separately enabled server-side write gate. No local wager changes are made.</small>
+    {previewApproved&&<div style={{borderTop:'1px solid #668ba4',paddingTop:8,display:'grid',gap:6}}>
+      <strong>CONTROLLED CLOUD IMPORT</strong>
+      <div>Back up your existing cloud wagers before importing. Only missing wager IDs are created; conflicts stop the operation. Source JSON remains unchanged.</div>
+      <label>Type IMPORT {username} to authorize cloud writes<input value={importConfirm} onChange={e=>setImportConfirm(e.target.value)} autoComplete="off"/></label>
+      <button type="button" disabled={importing||loading||importConfirm!=='IMPORT '+username} onClick={()=>void runImport()}>{importing?'IMPORTING...':'IMPORT MISSING WAGERS AND VERIFY'}</button>
+    </div>}
+   </section>
    <div>Cloud wagers are not loaded into the Bet Hub. Local wagers are unchanged.</div>
    <button type="button" disabled={loading} onClick={()=>void check()}>{loading?'CHECKING...':'CHECK CLOUD WAGERS'}</button>
    <div role="status">{message}</div>
    {checked&&<><div>Rows retrieved: {rows.length}. No uploads or changes performed.</div><div style={{display:'flex',gap:10,flexWrap:'wrap',fontWeight:700}}><span>Slates: {cloudSummary.slates}</span><span>Pending: {cloudSummary.pending}</span><span>Won: {cloudSummary.won}</span><span>Lost: {cloudSummary.lost}</span>{cloudSummary.other>0&&<span>Other: {cloudSummary.other}</span>}</div><button type="button" disabled={loading} onClick={exportSnapshot}>EXPORT MY CLOUD WAGERS (JSON BACKUP)</button>{username.toLowerCase()==='stankyfangers'&&<><button type="button" disabled={loading} onClick={compareLegacy}>COMPARE LEGACY LIVE VS CLOUD</button>{comparison&&<div role="status">{comparison}</div>}</>}<div style={{maxHeight:260,overflowY:'auto',borderTop:'1px solid #487b9a',paddingTop:6}}>{rows.length===0?'No cloud wagers yet.':rows.slice().sort((a,b)=>String(b.wager.date).localeCompare(String(a.wager.date))).slice(0,100).map(row=><div key={row.wager_id} style={{padding:'6px 0',borderBottom:'1px solid #28455c'}}><strong>{row.wager.date}</strong> · {row.wager.legs.length} leg{row.wager.legs.length===1?'':'s'}<div style={{overflowWrap:'anywhere',color:'#a7c8dd'}}>ID: {row.wager_id}</div></div>)}</div>{rows.length>100&&<small>Showing the latest 100 of {rows.length} cloud wagers.</small>}<label style={{display:'flex',gap:6,alignItems:'center'}}>Date filter <input type="date" value={filterDate} onChange={e=>setFilterDate(e.target.value)}/></label><button type="button" onClick={()=>{setShowDetails(v=>!v);setDetailId('')}}>{showDetails?'HIDE WAGER DETAILS':'VIEW WAGER DETAILS (READ ONLY)'}</button>{showDetails&&<div style={{maxHeight:320,overflowY:'auto',display:'grid',gap:6}}>{rows.filter(row=>!filterDate||row.wager.date===filterDate).slice().sort((a,b)=>String(b.wager.date).localeCompare(String(a.wager.date))).slice(0,100).map(row=><div key={row.wager_id} style={{border:'1px solid #31516b',borderRadius:6,padding:7}}><button type="button" onClick={()=>setDetailId(v=>v===row.wager_id?'':row.wager_id)}>{row.wager.date} · {row.wager.legs.length} legs · {row.wager.status||'PENDING'} {detailId===row.wager_id?'▲':'▼'}</button>{detailId===row.wager_id&&<pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',fontSize:11}}>{JSON.stringify(row.wager,null,2)}</pre>}</div>)}{rows.filter(row=>!filterDate||row.wager.date===filterDate).length===0&&<div>No wagers for this date.</div>}</div>}</>}
+  </div>}
+  {showCloudHub&&<div role="dialog" aria-modal="true" aria-label="Private cloud Bet Hub" style={{position:'fixed',inset:0,zIndex:21000,overflowY:'auto',background:'#070e1a'}}>
+    <div style={{position:'sticky',top:0,zIndex:1,background:'#10263a',padding:12,textAlign:'right'}}><button type="button" onClick={()=>setShowCloudHub(false)}>RETURN TO LIVE TRACKER</button></div>
+    <CloudBetHub key={username} username={username}/>
   </div>}
  </div>
 }
@@ -1808,7 +1858,7 @@ function App(){
  const logout=async()=>{try{await request({action:'logout'})}finally{setAccount(null);setPassword('')}}
  if(account)return isTest
   ? <TrackerApp key={'test:'+account.username} initialTestAccount={account} onTestLogout={()=>{setAccount(null);setPassword('')}}/>
-  : <div>{account.username.toLowerCase()==='stankyfangers'?<><TrackerApp liveAccount={account} onLiveLogout={()=>void logout()}/><LiveCloudInspector key={account.username} username={account.username}/></>:<main style={{minHeight:'100vh',display:'grid',placeItems:'center',background:'#070e1a',color:'#edf6ff',padding:24}}><section style={{maxWidth:540,background:'#122137',border:'1px solid #3d617b',borderRadius:14,padding:28}}><h2>Private LIVE workspace</h2><p>Signed in as <strong>{account.username}</strong>. Your account is isolated from other users' local wagers.</p><p>Cloud wager saving and the full Bet Hub are not enabled for this account yet. No local wagers will be loaded or modified.</p><LiveCloudInspector key={account.username} username={account.username} embedded/></section></main>}</div>
+  : <div>{account.username.toLowerCase()==='stankyfangers'?<><TrackerApp liveAccount={account} onLiveLogout={()=>void logout()}/><LiveCloudInspector key={account.username} username={account.username}/></>:<main style={{minHeight:'100vh',background:'#070e1a',color:'#edf6ff',padding:24}}><section style={{maxWidth:1100,margin:'0 auto',background:'#122137',border:'1px solid #3d617b',borderRadius:14,padding:28}}><h2>Private LIVE workspace</h2><p>Signed in as <strong>{account.username}</strong>. Your account is isolated from other users' local wagers.</p><p>Your cloud wager history is isolated to this LIVE account. Editing and new wager placement are not enabled here yet; no legacy local wagers are loaded.</p><CloudBetHub key={account.username} username={account.username}/><LiveCloudInspector key={account.username} username={account.username} embedded/></section></main>}</div>
  return <main style={{minHeight:'100vh',display:'grid',placeItems:'center',background:'#070e1a',color:'#edf6ff',padding:24}}><section style={{width:'min(420px,100%)',background:'#122137',padding:30,borderRadius:16,border:'1px solid #3d617b',boxShadow:'0 20px 65px #0009'}}><h1 style={{marginTop:0}}>🏒 NHL TRACKER</h1><p style={{color:isTest?'#f3c478':'#91b3ce'}}>{isTest?'TEST MODE · DEVELOPMENT DATABASE':'LIVE MODE · ACCOUNT LOGIN REQUIRED'}</p><div role="tablist" aria-label="Account action" style={{display:'flex',gap:8,marginBottom:14}}>{(['login','register'] as const).map(tab=><button key={tab} type="button" role="tab" aria-selected={mode===tab} onClick={()=>{setMode(tab);setError('')}} style={{padding:'9px 14px',borderRadius:6,border:mode===tab?'1px solid #78b9e4':'1px solid #46617a',background:mode===tab?'#dcefff':'#1b3048',color:mode===tab?'#10243b':'#c7d9e9',fontWeight:mode===tab?800:600,cursor:'pointer',opacity:1}}>{tab==='login'?'LOG IN':'CREATE ACCOUNT'}</button>)}</div><form onSubmit={signIn} style={{display:'grid',gap:14}}><label>USERNAME OR EMAIL<input required autoComplete="username" value={name} onChange={e=>setName(e.target.value)} style={{display:'block',width:'100%',padding:12,boxSizing:'border-box'}}/></label>{mode==='register'&&<label>EMAIL<input required type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} style={{display:'block',width:'100%',padding:12,boxSizing:'border-box'}}/></label>}<label>PASSWORD<input required type="password" minLength={mode==='register'?12:undefined} autoComplete={mode==='register'?'new-password':'current-password'} value={password} onChange={e=>setPassword(e.target.value)} style={{display:'block',width:'100%',padding:12,boxSizing:'border-box'}}/></label>{error&&<p role="alert" style={{color:'#ffacac'}}>{error}</p>}<button type="submit" disabled={busy} style={{padding:13,cursor:'pointer'}}>{busy?'AUTHENTICATING…':mode==='login'?'LOG IN TO NHL TRACKER':'CREATE ACCOUNT'}</button></form><p style={{fontSize:12,color:'#9ab1c8'}}>{isTest?'Sign in with your existing TEST credentials to retain your TEST history. Changing the TEST username requires a separate server-side account migration.':'Your original LIVE wagers remain on this computer. Cloud wager migration is not active.'}</p></section></main>
 }
 

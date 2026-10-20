@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Notification, shell, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, Notification, shell, dialog, net } from 'electron'
 import { join } from 'path'
 import { writeFile } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -179,7 +179,9 @@ app.whenReady().then(() => {
     if (!['login','register','logout','me'].includes(action)) return {error:'Invalid LIVE account action'}
     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000)
     try {
-      const response=await fetch('https://nhl-tracker-vercel-api.vercel.app/api/live-account',{
+      // Electron's Chromium network stack honors Windows proxy/certificate settings.
+      // Node's built-in fetch can fail on systems where Chrome works.
+      const response=await net.fetch('https://nhl-tracker-vercel-api.vercel.app/api/live-account',{
         method:action==='me'?'GET':'POST',cache:'no-store',signal:controller.signal,
         headers:{'Content-Type':'application/json',...(liveAccountToken?{Authorization:`Bearer ${liveAccountToken}`}:{})},
         ...(action==='me'?{}:{body:JSON.stringify(payload)})
@@ -189,7 +191,7 @@ app.whenReady().then(() => {
       if(action==='logout')liveAccountToken=''
       if((action==='login'||action==='register')&&typeof data.token==='string')liveAccountToken=data.token
       return {account:data.account||null}
-    }catch(e:any){return {error:'LIVE account service unavailable: '+String(e?.message||e)}}
+    }catch(e:any){const cause=e?.cause;return {error:'LIVE account service unavailable: '+String(e?.message||e)+(cause?.code?' ['+String(cause.code)+']':'')}}
     finally{clearTimeout(timeout)}
   })
   // Phase 2H: LIVE wager transport only. This deliberately does NOT mount cloud
@@ -213,36 +215,67 @@ app.whenReady().then(() => {
     }catch(e:any){return {error:'Player registry unavailable: '+String(e?.message||e)}}
     finally{clearTimeout(timeout)}
   })
+  // LIVE wager transport: authenticated, account-scoped requests only.
+  // Production mutations remain independently gated by NHL_LIVE_WAGER_WRITES_ENABLED
+  // on the server. The renderer must explicitly handle 409 conflicts.
   ipcMain.handle('live-wagers:request', async (_e, request: {method:string;limit?:number;cursor?:string;id?:string;expectedUpdatedAt?:string;wager?:unknown;source?:string;sourceExternalId?:string|null}) => {
     if (testEnvironment) return {error:'LIVE wagers are unavailable in TEST mode'}
     if (!liveAccountToken) return {error:'Sign in to LIVE before requesting cloud wagers'}
-    const method=String(request?.method||'')
-    if (!['GET','POST','PATCH','DELETE'].includes(method)) return {error:'Invalid LIVE wager operation'}
-    // Mutation transport is deliberately locked until migration and conflict
-    // handling are reviewed. Do not remove this lock as part of deployment.
-    if (method!=='GET') return {error:'LIVE cloud writes are not enabled in this desktop build'}
     if (!request || typeof request!=='object' || Array.isArray(request)) return {error:'Invalid LIVE wager request'}
-    if (Object.keys(request).some(k=>!['method','limit','cursor'].includes(k))) return {error:'Unsupported LIVE wager request fields'}
-    const limit=Number.isInteger(request?.limit)?Math.max(1,Math.min(200,Number(request.limit))):100
-    const cursor=typeof request?.cursor==='string'?request.cursor:''
-    if (cursor.length>150) return {error:'Invalid LIVE wager cursor'}
+    const method=String(request.method||'')
+    if (!['GET','POST','PATCH','DELETE'].includes(method)) return {error:'Invalid LIVE wager operation'}
+    const allowed=method==='GET'?['method','limit','cursor']:method==='POST'?['method','wager','source','sourceExternalId']:method==='PATCH'?['method','id','expectedUpdatedAt','wager']:['method','id','expectedUpdatedAt']
+    if (Object.keys(request).some(k=>!allowed.includes(k))) return {error:'Unsupported LIVE wager request fields'}
+    const validId=(v:unknown)=>typeof v==='string'&&v.length>=1&&v.length<=150
+    const validWager=(v:unknown):v is {id:string;date:string;legs:unknown[]}=>!!v&&typeof v==='object'&&!Array.isArray(v)&&validId((v as any).id)&&typeof (v as any).date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test((v as any).date)&&Number.isFinite(Date.parse((v as any).date+'T00:00:00Z'))&&new Date((v as any).date+'T00:00:00Z').toISOString().slice(0,10)===(v as any).date&&Array.isArray((v as any).legs)&&(v as any).legs.length>0&&(v as any).legs.length<=12
+    const payload:Record<string,unknown>={}
+    if (method==='POST'||method==='PATCH') {
+      if (!validWager(request.wager)) return {error:'Invalid LIVE wager'}
+      payload.wager=request.wager
+    }
+    if (method==='POST') {
+      if (request.source!==undefined&&!['manual','kalshi','import'].includes(request.source)) return {error:'Invalid wager source'}
+      if (request.sourceExternalId!==undefined&&request.sourceExternalId!==null&&(typeof request.sourceExternalId!=='string'||request.sourceExternalId.length<1||request.sourceExternalId.length>250)) return {error:'Invalid external wager ID'}
+      payload.source=request.source||'manual'
+      payload.sourceExternalId=request.sourceExternalId??null
+    }
+    if (method==='PATCH'||method==='DELETE') {
+      if (!validId(request.id)||typeof request.expectedUpdatedAt!=='string'||!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z$/.test(request.expectedUpdatedAt)||!Number.isFinite(Date.parse(request.expectedUpdatedAt))) return {error:'Invalid wager revision'}
+      if (method==='PATCH'&&(request.wager as {id?:string}|undefined)?.id!==request.id) return {error:'Cannot change wager ID'}
+      payload.id=request.id
+      payload.expectedUpdatedAt=request.expectedUpdatedAt
+    }
+    const limit=Number.isInteger(request.limit)?Math.max(1,Math.min(200,Number(request.limit))):100
+    const cursor=typeof request.cursor==='string'?request.cursor:''
+    if (method==='GET'&&cursor.length>150) return {error:'Invalid LIVE wager cursor'}
+    const body=method==='GET'?undefined:JSON.stringify(payload)
+    if (body&&Buffer.byteLength(body)>256*1024) return {error:'LIVE wager request exceeds size limit'}
+    const sessionToken=liveAccountToken
     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000)
     try {
       const url=new URL('https://nhl-tracker-vercel-api.vercel.app/api/live-wagers')
-      url.searchParams.set('limit',String(limit))
-      if (cursor) url.searchParams.set('cursor',cursor)
+      if (method==='GET') {
+        url.searchParams.set('limit',String(limit))
+        if (cursor) url.searchParams.set('cursor',cursor)
+      }
       const response=await fetch(url.toString(),{
-        method:'GET',cache:'no-store',signal:controller.signal,
-        headers:{Accept:'application/json',Authorization:`Bearer ${liveAccountToken}`}
+        method,cache:'no-store',signal:controller.signal,
+        headers:{Accept:'application/json',Authorization:`Bearer ${sessionToken}`,...(body?{'Content-Type':'application/json'}:{})},
+        ...(body?{body}:{})
       })
       const data:any=await response.json()
+      if(sessionToken!==liveAccountToken)return {error:'LIVE account changed during request; refresh after signing in'}
       if (!response.ok) {
         if(response.status===401) liveAccountToken=''
         return {error:String(data?.error||`LIVE wager service: ${response.status}`),status:response.status}
       }
-      if (!Array.isArray(data?.wagers) || !(data.nextCursor===null || typeof data.nextCursor==='string'))
-        return {error:'LIVE wager service returned an invalid response'}
-      return {wagers:data.wagers,nextCursor:data.nextCursor}
+      if(method==='GET') {
+        if (!Array.isArray(data?.wagers) || !(data.nextCursor===null || typeof data.nextCursor==='string'))
+          return {error:'LIVE wager service returned an invalid response'}
+        return {wagers:data.wagers,nextCursor:data.nextCursor}
+      }
+      if(data?.ok!==true||typeof data.id!=='string') return {error:'LIVE wager service returned an invalid mutation response'}
+      return data
     } catch(e:any) {return {error:'LIVE wager service unavailable: '+String(e?.message||e)}}
     finally {clearTimeout(timeout)}
   })
