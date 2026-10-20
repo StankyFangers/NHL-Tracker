@@ -86,3 +86,8 @@ test('rejects cloud pages larger than requested limit',async()=>{
  const rows=cloud(...Array.from({length:201},(_,i)=>'id-'+i))
  await assert.rejects(listAllCloudWagers(async()=>({wagers:rows,nextCursor:'next'})),/exceeds requested limit/)
 })
+
+test('rejects oversized terminal cloud pages',async()=>{
+ const rows=cloud(...Array.from({length:201},(_,i)=>'terminal-'+i))
+ await assert.rejects(listAllCloudWagers(async()=>({wagers:rows,nextCursor:null})),/exceeds requested limit/)
+})
