@@ -24,6 +24,7 @@ export async function listAllCloudWagers(request:CloudRequest):Promise<CloudWage
     }
     if(result.length>20000)throw new Error('Cloud listing safety limit exceeded')
     if(response.nextCursor===null)return result
+    if(response.nextCursor===undefined)throw new Error('Cloud listing response missing nextCursor')
     if(response.wagers.length===0)throw new Error('Empty cloud page with continuation cursor')
     if(typeof response.nextCursor!=='string'||!response.nextCursor||cursors.has(response.nextCursor))throw new Error('Invalid or repeated cloud cursor')
     if(response.nextCursor!==lastId)throw new Error('Cloud cursor does not match last wager ID')
