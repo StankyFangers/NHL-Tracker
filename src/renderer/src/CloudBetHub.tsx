@@ -32,7 +32,7 @@ export default function CloudBetHub({username}:{username:string}){
  const requestGeneration=useRef(0)
  const refresh=async()=>{
   const generation=++requestGeneration.current
-  setLoading(true);setError('');setLoaded(false)
+  setLoading(true);setError('');setLoaded(false);setRows([]);setExpanded(null)
   try{
    const cloud=await listAllCloudWagers((window.nhlTracker as any).liveWagersRequest)
    if(cloud.some(r=>!isWager(r.wager)))throw new Error('Cloud returned an invalid wager; display stopped')
