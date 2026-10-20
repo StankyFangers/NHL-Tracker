@@ -9,6 +9,7 @@ const original=Module._load
 const account={id:'account-a',username:'otheruser',role:'USER'}
 let queries=[]
 let authenticated=true
+let handler
 const pool={query:async(sql,args)=>{queries.push({sql,args});return {rows:[],rowCount:0}}}
 const mock={
  getLivePool:()=>pool,
@@ -21,7 +22,6 @@ test('non-owner cannot import even when global wager writes are enabled',async()
   if(parent?.filename===apiPath&&request==='../lib/live-auth')return mock
   return original.apply(this,arguments)
  }
- let handler
  try{delete require.cache[apiPath];handler=require(apiPath)}
  finally{Module._load=original}
  const old=process.env.NHL_LIVE_WAGER_WRITES_ENABLED
