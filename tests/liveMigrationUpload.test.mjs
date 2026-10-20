@@ -108,3 +108,7 @@ test('rejects malformed cloud wager payloads before reconciliation',async()=>{
   await assert.rejects(listAllCloudWagers(async()=>({wagers:[{wager_id:'a',wager:bad}],nextCursor:null})),/Invalid cloud wager payload/)
  }
 })
+
+test('rejects cloud listing responses without an explicit terminal cursor',async()=>{
+ await assert.rejects(listAllCloudWagers(async()=>({wagers:cloud('a')})),/missing nextCursor/)
+})
