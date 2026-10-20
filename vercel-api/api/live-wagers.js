@@ -3,7 +3,8 @@
 const {getLivePool,reply,session,handler}=require('../lib/live-auth')
 const MAX_BYTES=256*1024
 const validId=id=>typeof id==='string'&&id.length>=1&&id.length<=150
-const validWager=w=>w&&typeof w==='object'&&!Array.isArray(w)&&validId(w.id)&&typeof w.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(w.date)&&Array.isArray(w.legs)&&w.legs.length<=12
+const validDate=d=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&Number.isFinite(Date.parse(d+'T00:00:00Z'))&&new Date(d+'T00:00:00Z').toISOString().slice(0,10)===d
+const validWager=w=>w&&typeof w==='object'&&!Array.isArray(w)&&validId(w.id)&&validDate(w.date)&&Array.isArray(w.legs)&&w.legs.length>0&&w.legs.length<=12
 module.exports=handler(async(req,res)=>{
  const account=await session(req)
  if(!account)return reply(res,401,{error:'LIVE session required'})
