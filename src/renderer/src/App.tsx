@@ -406,7 +406,7 @@ function TrackerApp({initialTestAccount,onTestLogout,liveAccount,onLiveLogout}:{
  const [devPlayerSearching,setDevPlayerSearching]=useState(false)
  const [devPlayerSelected,setDevPlayerSelected]=useState('')
  const [devPlayerAdded,setDevPlayerAdded]=useState<Record<number,boolean>>({})
- const [sharedPlayerRevision,setSharedPlayerRevision]=useState(0)
+ const [,setSharedPlayerRevision]=useState(0)
  const [devPlayerTeam,setDevPlayerTeam]=useState('ANA')
  const searchDevPlayer=async()=>{
   if((liveAccount||account)?.role!=='DEV'||devPlayerSearching)return
