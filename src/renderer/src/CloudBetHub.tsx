@@ -7,6 +7,7 @@ type Wager={id:string;date:string;legs:WagerLeg[];book?:string;units?:number;uni
 const isWager=(v:unknown):v is Wager=>validHistoricalWager(v)
 const money=(n:number)=>'$'+n.toFixed(2)
 const validPrice=(v:unknown)=>typeof v==='number'&&Number.isFinite(v)
+const hasSettledPricing=(w:Wager)=>validPrice(w.units)&&w.units!>=0&&validPrice(w.unitSize)&&w.unitSize!>0&&(w.status!=='WON'||(validPrice(w.payout)&&w.payout!>=0)||(validPrice(w.odds)&&w.odds!==0))
 const net=(w:Wager)=>{
  const stake=(w as Wager & {bonusBet?:boolean}).bonusBet?0:Number(w.units||0)*Number(w.unitSize||0)
  if(w.status==='VOID')return 0
@@ -45,7 +46,7 @@ export default function CloudBetHub({username}:{username:string}){
  const visible=useMemo(()=>wagers.filter(w=>(!date||w.date===date)&&(status==='ALL'||(w.status||'PENDING')===status)).sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id)),[wagers,date,status])
  const settled=useMemo(()=>wagers.filter(w=>w.status==='WON'||w.status==='LOST'||w.status==='VOID'),[wagers])
  const pnl=useMemo(()=>settled.reduce((sum,w)=>sum+net(w),0),[settled])
- const financialComplete=settled.every(w=>validPrice(w.units)&&Number(w.units)>=0&&validPrice(w.unitSize)&&Number(w.unitSize)>0&&(w.status!=='WON'||(validPrice(w.payout)&&Number(w.payout)>=0)||(validPrice(w.odds)&&Number(w.odds)!==0)))
+ const financialComplete=settled.every(hasSettledPricing)
  return <section style={{background:'#0c192a',color:'#e3efff',minHeight:'100vh',padding:24}}>
   <header style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:16,flexWrap:'wrap'}}>
    <div><h1 style={{margin:0}}>NHL Tracker · Cloud Bet Hub</h1><p style={{color:'#a8c6df'}}>LIVE account: <strong>{username}</strong> · Account-specific Neon wagers</p></div>
