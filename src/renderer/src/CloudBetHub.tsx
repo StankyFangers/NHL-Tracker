@@ -1,10 +1,9 @@
 import {useEffect,useMemo,useRef,useState} from 'react'
 import {listAllCloudWagers} from './liveMigrationUpload'
-import {validHistoricalWager, type CloudWagerRow} from './liveMigrationPreflight'
+import {type CloudWagerRow} from './liveMigrationPreflight'
 
 type WagerLeg={player?:string;qty?:number;stat?:string;team?:string;kind?:string;side?:string;voided?:boolean}
 type Wager={id:string;date:string;legs:WagerLeg[];book?:string;units?:number;unitSize?:number;payout?:number;odds?:number;status?:string}
-const isWager=(v:unknown):v is Wager=>validHistoricalWager(v)
 const money=(n:number)=>'$'+n.toFixed(2)
 const validPrice=(v:unknown)=>typeof v==='number'&&Number.isFinite(v)
 const hasSettledPricing=(w:Wager)=>{
@@ -41,7 +40,6 @@ export default function CloudBetHub({username}:{username:string}){
   setLoading(true);setError('');setLoaded(false);setRows([]);setExpanded(null)
   try{
    const cloud=await listAllCloudWagers((window.nhlTracker as any).liveWagersRequest)
-   if(cloud.some(r=>!isWager(r.wager)))throw new Error('Cloud returned an invalid wager; display stopped')
    if(generation===requestGeneration.current){setRows(cloud);setAccountLoaded(username);setLoaded(true)}
   }catch(e:unknown){if(generation===requestGeneration.current){setRows([]);setError(String(e instanceof Error?e.message:e))}}
   finally{if(generation===requestGeneration.current)setLoading(false)}
