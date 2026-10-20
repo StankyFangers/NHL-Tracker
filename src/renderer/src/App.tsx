@@ -1689,6 +1689,7 @@ function TeamChips({hidden,setHidden}:{hidden:string[],setHidden:any}){return <d
 // Phase 2I: isolated read-only cloud inspector. It never touches TrackerApp bets.
 function LiveCloudInspector({username,embedded=false}:{username:string;embedded?:boolean}){
  const [open,setOpen]=useState(false)
+ const [showCloudHub,setShowCloudHub]=useState(false)
  const [loading,setLoading]=useState(false)
  const [message,setMessage]=useState('Not checked yet')
  const [rows,setRows]=useState<any[]>([])
@@ -1801,7 +1802,8 @@ function LiveCloudInspector({username,embedded=false}:{username:string;embedded?
  }
  useEffect(()=>{if(embedded)void check()},[embedded,username])
  return <div style={{position:embedded?'relative':'fixed',right:embedded?undefined:16,bottom:embedded?undefined:16,zIndex:embedded?undefined:20001,width:embedded?'100%':open?350:'auto',maxWidth:embedded?'100%':'calc(100vw - 32px)',background:'#10263a',color:'#d8ecff',border:'1px solid #487b9a',borderRadius:10,padding:10,boxShadow:'0 8px 28px #0009',fontSize:12}}>
-  {!embedded&&<button type="button" onClick={()=>setOpen(v=>!v)}>{open?'CLOSE CLOUD INSPECTOR':'LIVE CLOUD INSPECTOR'}</button>}{embedded&&<h3 style={{margin:'0 0 8px'}}>Your cloud wagers · read only</h3>}
+  {!embedded&&<button type="button" onClick={()=>setOpen(v=>!v)}>{open?'CLOSE CLOUD INSPECTOR':'LIVE CLOUD INSPECTOR'}</button>}
+  {!embedded&&open&&<button type="button" onClick={()=>setShowCloudHub(true)} style={{marginLeft:8}}>OPEN MY CLOUD BET HUB</button>}{embedded&&<h3 style={{margin:'0 0 8px'}}>Your cloud wagers · read only</h3>}
   {(open||embedded)&&<div style={{marginTop:10,display:'grid',gap:8}}>
    <strong>READ ONLY - {username}</strong>
    <section style={{border:'1px solid #668ba4',borderRadius:8,padding:8,display:'grid',gap:6}}>
@@ -1821,6 +1823,10 @@ function LiveCloudInspector({username,embedded=false}:{username:string;embedded?
    <button type="button" disabled={loading} onClick={()=>void check()}>{loading?'CHECKING...':'CHECK CLOUD WAGERS'}</button>
    <div role="status">{message}</div>
    {checked&&<><div>Rows retrieved: {rows.length}. No uploads or changes performed.</div><div style={{display:'flex',gap:10,flexWrap:'wrap',fontWeight:700}}><span>Slates: {cloudSummary.slates}</span><span>Pending: {cloudSummary.pending}</span><span>Won: {cloudSummary.won}</span><span>Lost: {cloudSummary.lost}</span>{cloudSummary.other>0&&<span>Other: {cloudSummary.other}</span>}</div><button type="button" disabled={loading} onClick={exportSnapshot}>EXPORT MY CLOUD WAGERS (JSON BACKUP)</button>{username.toLowerCase()==='stankyfangers'&&<><button type="button" disabled={loading} onClick={compareLegacy}>COMPARE LEGACY LIVE VS CLOUD</button>{comparison&&<div role="status">{comparison}</div>}</>}<div style={{maxHeight:260,overflowY:'auto',borderTop:'1px solid #487b9a',paddingTop:6}}>{rows.length===0?'No cloud wagers yet.':rows.slice().sort((a,b)=>String(b.wager.date).localeCompare(String(a.wager.date))).slice(0,100).map(row=><div key={row.wager_id} style={{padding:'6px 0',borderBottom:'1px solid #28455c'}}><strong>{row.wager.date}</strong> · {row.wager.legs.length} leg{row.wager.legs.length===1?'':'s'}<div style={{overflowWrap:'anywhere',color:'#a7c8dd'}}>ID: {row.wager_id}</div></div>)}</div>{rows.length>100&&<small>Showing the latest 100 of {rows.length} cloud wagers.</small>}<label style={{display:'flex',gap:6,alignItems:'center'}}>Date filter <input type="date" value={filterDate} onChange={e=>setFilterDate(e.target.value)}/></label><button type="button" onClick={()=>{setShowDetails(v=>!v);setDetailId('')}}>{showDetails?'HIDE WAGER DETAILS':'VIEW WAGER DETAILS (READ ONLY)'}</button>{showDetails&&<div style={{maxHeight:320,overflowY:'auto',display:'grid',gap:6}}>{rows.filter(row=>!filterDate||row.wager.date===filterDate).slice().sort((a,b)=>String(b.wager.date).localeCompare(String(a.wager.date))).slice(0,100).map(row=><div key={row.wager_id} style={{border:'1px solid #31516b',borderRadius:6,padding:7}}><button type="button" onClick={()=>setDetailId(v=>v===row.wager_id?'':row.wager_id)}>{row.wager.date} · {row.wager.legs.length} legs · {row.wager.status||'PENDING'} {detailId===row.wager_id?'▲':'▼'}</button>{detailId===row.wager_id&&<pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',fontSize:11}}>{JSON.stringify(row.wager,null,2)}</pre>}</div>)}{rows.filter(row=>!filterDate||row.wager.date===filterDate).length===0&&<div>No wagers for this date.</div>}</div>}</>}
+  </div>}
+  {showCloudHub&&<div role="dialog" aria-modal="true" aria-label="Private cloud Bet Hub" style={{position:'fixed',inset:0,zIndex:21000,overflowY:'auto',background:'#070e1a'}}>
+    <div style={{position:'sticky',top:0,zIndex:1,background:'#10263a',padding:12,textAlign:'right'}}><button type="button" onClick={()=>setShowCloudHub(false)}>RETURN TO LIVE TRACKER</button></div>
+    <CloudBetHub key={username} username={username}/>
   </div>}
  </div>
 }
