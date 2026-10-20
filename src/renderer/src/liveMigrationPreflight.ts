@@ -18,7 +18,7 @@ const isRecord=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'
 export const validHistoricalWager=(v:unknown):v is HistoricalWager=>
   isRecord(v)&&typeof v.id==='string'&&v.id.length>0&&v.id.length<=150&&
   typeof v.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v.date)&&
-  new Date(v.date+'T00:00:00Z').toISOString().slice(0,10)===v.date&&
+  Number.isFinite(Date.parse(v.date+'T00:00:00Z'))&&new Date(v.date+'T00:00:00Z').toISOString().slice(0,10)===v.date&&
   Array.isArray(v.legs)&&v.legs.length>0&&v.legs.length<=12
 
 // Compare JSON semantics, not property insertion order. Array order is preserved.
