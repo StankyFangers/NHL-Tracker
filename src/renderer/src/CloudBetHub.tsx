@@ -10,12 +10,14 @@ const isWager=(v:unknown):v is Wager=>{
 }
 const money=(n:number)=>'$'+n.toFixed(2)
 const net=(w:Wager)=>{
- const stake=Number(w.units||0)*Number(w.unitSize||0)
+ const stake=(w as Wager & {bonusBet?:boolean}).bonusBet?0:Number(w.units||0)*Number(w.unitSize||0)
  if(w.status==='VOID')return 0
  if(w.status==='LOST')return -stake
  if(w.status==='WON'){
-  const gross=w.payout!==undefined?Number(w.payout):w.odds!==undefined?stake*(1+(w.odds>0?w.odds/100:100/Math.abs(w.odds))):0
-  return gross-stake
+  const fullStake=Number(w.units||0)*Number(w.unitSize||0)
+  const gross=w.payout!==undefined?Number(w.payout):w.odds!==undefined?fullStake*(1+(w.odds>0?w.odds/100:100/Math.abs(w.odds))):0
+  const adjustedGross=(w as Wager & {bonusBet?:boolean}).bonusBet?Math.max(0,gross-fullStake):gross
+  return adjustedGross-stake
  }
  return -stake
 }
@@ -43,6 +45,7 @@ export default function CloudBetHub({username}:{username:string}){
  const visible=useMemo(()=>wagers.filter(w=>(!date||w.date===date)&&(status==='ALL'||(w.status||'PENDING')===status)).sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id)),[wagers,date,status])
  const settled=useMemo(()=>wagers.filter(w=>w.status==='WON'||w.status==='LOST'||w.status==='VOID'),[wagers])
  const pnl=useMemo(()=>settled.reduce((sum,w)=>sum+net(w),0),[settled])
+ const financialComplete=settled.every(w=>Number(w.unitSize)>0&&(w.status!=='WON'||w.payout!==undefined||w.odds!==undefined))
  return <section style={{background:'#0c192a',color:'#e3efff',minHeight:'100vh',padding:24}}>
   <header style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:16,flexWrap:'wrap'}}>
    <div><h1 style={{margin:0}}>NHL Tracker · Cloud Bet Hub</h1><p style={{color:'#a8c6df'}}>LIVE account: <strong>{username}</strong> · Account-specific Neon wagers</p></div>
@@ -55,7 +58,7 @@ export default function CloudBetHub({username}:{username:string}){
     <span>Total: <strong>{wagers.length}</strong></span>
     <span>Pending: <strong>{wagers.filter(w=>!w.status||w.status==='PENDING').length}</strong></span>
     <span>Settled: <strong>{settled.length}</strong></span>
-    <span>Settled P/L: <strong>{money(pnl)}</strong></span>
+    <span>Settled P/L: <strong>{financialComplete?money(pnl):'Unavailable — missing wager pricing'}</strong></span>
    </div>
    <div style={{display:'flex',gap:12,margin:'18px 0',flexWrap:'wrap'}}>
     <label>Slate <select value={date} onChange={e=>setDate(e.target.value)}><option value="">All dates</option>{dates.map(d=><option key={d} value={d}>{d}</option>)}</select></label>
