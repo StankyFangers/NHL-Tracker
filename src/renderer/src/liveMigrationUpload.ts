@@ -18,10 +18,7 @@ export async function listAllCloudWagers(request:CloudRequest):Promise<CloudWage
       seen.add(row.wager_id);result.push(row)
     }
     if(result.length>20000)throw new Error('Cloud listing safety limit exceeded')
-    if(response.nextCursor===null){
-      if(response.wagers.length===0&&page===0)return result
-      return result
-    }
+    if(response.nextCursor===null)return result
     if(response.wagers.length===0)throw new Error('Empty cloud page with continuation cursor')
     if(typeof response.nextCursor!=='string'||!response.nextCursor||cursors.has(response.nextCursor))throw new Error('Invalid or repeated cloud cursor')
     if(response.wagers.length>200)throw new Error('Cloud page exceeds requested limit')
