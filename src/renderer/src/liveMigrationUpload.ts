@@ -1,4 +1,4 @@
-import {compareMigration, type HistoricalWager, type CloudWagerRow} from './liveMigrationPreflight'
+import {compareMigration, validHistoricalWager, type HistoricalWager, type CloudWagerRow} from './liveMigrationPreflight'
 
 export type CloudRequest = (payload:{
   method:'GET'|'POST';limit?:number;cursor?:string;wager?:HistoricalWager;source?:'import'
@@ -17,7 +17,8 @@ export async function listAllCloudWagers(request:CloudRequest):Promise<CloudWage
     for(const row of response.wagers){
       if(!row||typeof row.wager_id!=='string'||seen.has(row.wager_id))throw new Error('Duplicate or invalid cloud ID')
       if(row.wager_id<=lastId)throw new Error('Cloud wager page is not strictly ordered')
-      if(!row.wager||row.wager.id!==row.wager_id)throw new Error('Cloud wager identity mismatch')
+      if(!validHistoricalWager(row.wager))throw new Error('Invalid cloud wager payload')
+      if(row.wager.id!==row.wager_id)throw new Error('Cloud wager identity mismatch')
       lastId=row.wager_id
       seen.add(row.wager_id);result.push(row)
     }
