@@ -91,3 +91,14 @@ test('rejects oversized terminal cloud pages',async()=>{
  const rows=cloud(...Array.from({length:201},(_,i)=>'terminal-'+i))
  await assert.rejects(listAllCloudWagers(async()=>({wagers:rows,nextCursor:null})),/exceeds requested limit/)
 })
+
+test('rejects unordered wager IDs even on final page',async()=>{
+ await assert.rejects(listAllCloudWagers(async()=>({wagers:cloud('b','a'),nextCursor:null})),/strictly ordered/)
+})
+test('rejects cursor that does not match final ID',async()=>{
+ await assert.rejects(listAllCloudWagers(async()=>({wagers:cloud('a'),nextCursor:'different'})),/does not match/)
+})
+test('rejects backwards pagination across pages',async()=>{
+ let calls=0
+ await assert.rejects(listAllCloudWagers(async()=>++calls===1?{wagers:cloud('b'),nextCursor:'b'}:{wagers:cloud('a'),nextCursor:null}),/strictly ordered/)
+})
