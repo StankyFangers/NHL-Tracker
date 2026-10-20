@@ -21,7 +21,9 @@ jobs:
       - name: Install exact locked dependencies
         run: npm ci
       - name: Test historical migration safeguards
-        run: node --experimental-strip-types --test tests/liveMigrationPreflight.test.mjs tests/liveMigrationUpload.test.mjs
+        run: |
+          npx esbuild tests/liveMigrationPreflight.test.mjs tests/liveMigrationUpload.test.mjs --bundle --platform=node --format=esm --outdir=/tmp/nhl-migration-tests
+          node --test /tmp/nhl-migration-tests/*.test.js
       - name: Build Electron renderer and main process
         run: npm run build
       - name: Type-check renderer
