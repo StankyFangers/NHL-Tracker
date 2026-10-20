@@ -1,12 +1,12 @@
 import {useEffect,useMemo,useRef,useState} from 'react'
 import {listAllCloudWagers} from './liveMigrationUpload'
-import type {CloudWagerRow} from './liveMigrationPreflight'
+import {validHistoricalWager, type CloudWagerRow} from './liveMigrationPreflight'
 
 type WagerLeg={player?:string;qty?:number;stat?:string;team?:string;kind?:string;side?:string;voided?:boolean}
 type Wager={id:string;date:string;legs:WagerLeg[];book?:string;units?:number;unitSize?:number;payout?:number;odds?:number;status?:string}
 const isWager=(v:unknown):v is Wager=>{
  const w=v as Wager|null
- return !!w&&typeof w.id==='string'&&typeof w.date==='string'&&/^\d{4}-\d\d-\d\d$/.test(w.date)&&Array.isArray(w.legs)&&w.legs.length>0
+ return validHistoricalWager(w)
 }
 const money=(n:number)=>'$'+n.toFixed(2)
 const net=(w:Wager)=>{
