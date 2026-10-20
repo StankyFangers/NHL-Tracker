@@ -2,22 +2,25 @@ import {compareMigration, type HistoricalWager, type CloudWagerRow} from './live
 
 export type CloudRequest = (payload:{
   method:'GET'|'POST';limit?:number;cursor?:string;wager?:HistoricalWager;source?:'import'
-})=>Promise<{wagers?:CloudWagerRow[];nextCursor?:string|null;ok?:boolean;id?:string;error?:string;status?:number}>
+})=>Promise<{wagers?:CloudWagerRow[];nextCursor?:string|null;ok?:boolean;id?:string;created?:boolean;error?:string;status?:number}>
 
 export async function listAllCloudWagers(request:CloudRequest):Promise<CloudWagerRow[]>{
   const result:CloudWagerRow[]=[],seen=new Set<string>()
   let cursor=''
+  const cursors=new Set<string>()
   for(let page=0;page<100;page++){
     const response=await request({method:'GET',limit:200,...(cursor?{cursor}:{})})
     if(response.error)throw new Error(response.error)
     if(!Array.isArray(response.wagers))throw new Error('Invalid cloud response')
     for(const row of response.wagers){
       if(!row||typeof row.wager_id!=='string'||seen.has(row.wager_id))throw new Error('Duplicate or invalid cloud ID')
+      if(!row.wager||row.wager.id!==row.wager_id)throw new Error('Cloud wager identity mismatch')
       seen.add(row.wager_id);result.push(row)
     }
     if(result.length>20000)throw new Error('Cloud listing safety limit exceeded')
     if(response.nextCursor===null)return result
-    if(typeof response.nextCursor!=='string'||!response.nextCursor||response.nextCursor===cursor)throw new Error('Invalid cloud cursor')
+    if(typeof response.nextCursor!=='string'||!response.nextCursor||cursors.has(response.nextCursor))throw new Error('Invalid or repeated cloud cursor')
+    cursors.add(response.nextCursor)
     cursor=response.nextCursor
   }
   throw new Error('Cloud pagination safety limit exceeded')
@@ -36,7 +39,7 @@ export async function importHistoricalWagers(
   let uploaded=0
   for(const wager of initial.missing){
     const response=await request({method:'POST',wager,source:'import'})
-    if(response.error||response.ok!==true||response.id!==wager.id){
+    if(response.error||response.ok!==true||response.id!==wager.id||response.created!==true){
       throw new Error('Import stopped after '+uploaded+' creates at wager '+wager.id+': '+(response.error||'Unexpected server response')+'. Re-run preview before retrying.')
     }
     uploaded++
