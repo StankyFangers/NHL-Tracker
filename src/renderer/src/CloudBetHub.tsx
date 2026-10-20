@@ -4,10 +4,7 @@ import {validHistoricalWager, type CloudWagerRow} from './liveMigrationPreflight
 
 type WagerLeg={player?:string;qty?:number;stat?:string;team?:string;kind?:string;side?:string;voided?:boolean}
 type Wager={id:string;date:string;legs:WagerLeg[];book?:string;units?:number;unitSize?:number;payout?:number;odds?:number;status?:string}
-const isWager=(v:unknown):v is Wager=>{
- const w=v as Wager|null
- return validHistoricalWager(w)
-}
+const isWager=(v:unknown):v is Wager=>validHistoricalWager(v)
 const money=(n:number)=>'$'+n.toFixed(2)
 const net=(w:Wager)=>{
  const stake=(w as Wager & {bonusBet?:boolean}).bonusBet?0:Number(w.units||0)*Number(w.unitSize||0)
