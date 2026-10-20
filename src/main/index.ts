@@ -225,7 +225,7 @@ app.whenReady().then(() => {
     const allowed=method==='GET'?['method','limit','cursor']:method==='POST'?['method','wager','source','sourceExternalId']:method==='PATCH'?['method','id','expectedUpdatedAt','wager']:['method','id','expectedUpdatedAt']
     if (Object.keys(request).some(k=>!allowed.includes(k))) return {error:'Unsupported LIVE wager request fields'}
     const validId=(v:unknown)=>typeof v==='string'&&v.length>=1&&v.length<=150
-    const validWager=(v:unknown):v is {id:string;date:string;legs:unknown[]}=>!!v&&typeof v==='object'&&!Array.isArray(v)&&validId((v as any).id)&&typeof (v as any).date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test((v as any).date)&&Array.isArray((v as any).legs)&&(v as any).legs.length<=12
+    const validWager=(v:unknown):v is {id:string;date:string;legs:unknown[]}=>!!v&&typeof v==='object'&&!Array.isArray(v)&&validId((v as any).id)&&typeof (v as any).date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test((v as any).date)&&Number.isFinite(Date.parse((v as any).date+'T00:00:00Z'))&&new Date((v as any).date+'T00:00:00Z').toISOString().slice(0,10)===(v as any).date&&Array.isArray((v as any).legs)&&(v as any).legs.length>0&&(v as any).legs.length<=12
     const payload:Record<string,unknown>={}
     if (method==='POST'||method==='PATCH') {
       if (!validWager(request.wager)) return {error:'Invalid LIVE wager'}
