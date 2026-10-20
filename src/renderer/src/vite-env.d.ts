@@ -8,7 +8,7 @@ interface Window {
     shiftcharts: (gameId: number) => Promise<any>
     boxscore: (gameId: number) => Promise<any>
     roster: (team: string) => Promise<any>
-    liveWagersRequest: (payload: {method:'GET';limit?:number;cursor?:string}) => Promise<{wagers?:Array<{wager_id:string;wager:unknown;updated_at:string}>;nextCursor?:string|null;error?:string;status?:number}>
+    liveWagersRequest: (payload: {method:'GET'|'POST'|'PATCH'|'DELETE';limit?:number;cursor?:string;id?:string;expectedUpdatedAt?:string;wager?:unknown;source?:'manual'|'kalshi'|'import';sourceExternalId?:string|null}) => Promise<{wagers?:Array<{wager_id:string;wager:unknown;updated_at:string}>;nextCursor?:string|null;error?:string;status?:number;ok?:boolean;id?:string;created?:boolean;deleted?:boolean;updatedAt?:string}>
     registryPlayers: () => Promise<{available:boolean;players:Array<{id:string;name:string;team?:string;teams?:string[]}>}>
     standings: () => Promise<any>
     clubStats: (team: string) => Promise<any>
