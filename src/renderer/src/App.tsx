@@ -1749,7 +1749,8 @@ function LiveCloudInspector({username,embedded=false}:{username:string;embedded?
     const result=await importHistoricalWagers(importSource,(window.nhlTracker as any).liveWagersRequest,(progress)=>setImportReport('Uploaded '+progress.uploaded+' · Remaining '+progress.remaining))
     setImportReport('VERIFIED · '+result.identical+' source wagers match cloud exactly · '+result.uploaded+' newly created · '+result.cloudOnly+' other cloud wagers preserved.')
     setPreviewApproved(false);setImportConfirm('')
-    await check()
+    const refreshed=await listAllCloudWagers((window.nhlTracker as any).liveWagersRequest)
+    setRows(refreshed);setChecked(true);setMessage('Cloud verified: '+refreshed.length+' wagers for '+username)
   }catch(e:unknown){setImportReport('IMPORT STOPPED: '+String(e instanceof Error?e.message:e))}
   finally{setImporting(false)}
  }
