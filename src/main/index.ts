@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Notification, shell, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, Notification, shell, dialog, net } from 'electron'
 import { join } from 'path'
 import { writeFile } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -179,7 +179,9 @@ app.whenReady().then(() => {
     if (!['login','register','logout','me'].includes(action)) return {error:'Invalid LIVE account action'}
     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000)
     try {
-      const response=await fetch('https://nhl-tracker-vercel-api.vercel.app/api/live-account',{
+      // Electron's Chromium network stack honors Windows proxy/certificate settings.
+      // Node's built-in fetch can fail on systems where Chrome works.
+      const response=await net.fetch('https://nhl-tracker-vercel-api.vercel.app/api/live-account',{
         method:action==='me'?'GET':'POST',cache:'no-store',signal:controller.signal,
         headers:{'Content-Type':'application/json',...(liveAccountToken?{Authorization:`Bearer ${liveAccountToken}`}:{})},
         ...(action==='me'?{}:{body:JSON.stringify(payload)})
@@ -189,7 +191,7 @@ app.whenReady().then(() => {
       if(action==='logout')liveAccountToken=''
       if((action==='login'||action==='register')&&typeof data.token==='string')liveAccountToken=data.token
       return {account:data.account||null}
-    }catch(e:any){return {error:'LIVE account service unavailable: '+String(e?.message||e)}}
+    }catch(e:any){const cause=e?.cause;return {error:'LIVE account service unavailable: '+String(e?.message||e)+(cause?.code?' ['+String(cause.code)+']':'')}}
     finally{clearTimeout(timeout)}
   })
   // Phase 2H: LIVE wager transport only. This deliberately does NOT mount cloud
