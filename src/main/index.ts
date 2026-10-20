@@ -248,6 +248,7 @@ app.whenReady().then(() => {
     if (method==='GET'&&cursor.length>150) return {error:'Invalid LIVE wager cursor'}
     const body=method==='GET'?undefined:JSON.stringify(payload)
     if (body&&Buffer.byteLength(body)>256*1024) return {error:'LIVE wager request exceeds size limit'}
+    const sessionToken=liveAccountToken
     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000)
     try {
       const url=new URL('https://nhl-tracker-vercel-api.vercel.app/api/live-wagers')
@@ -257,10 +258,11 @@ app.whenReady().then(() => {
       }
       const response=await fetch(url.toString(),{
         method,cache:'no-store',signal:controller.signal,
-        headers:{Accept:'application/json',Authorization:`Bearer ${liveAccountToken}`,...(body?{'Content-Type':'application/json'}:{})},
+        headers:{Accept:'application/json',Authorization:`Bearer ${sessionToken}`,...(body?{'Content-Type':'application/json'}:{})},
         ...(body?{body}:{})
       })
       const data:any=await response.json()
+      if(sessionToken!==liveAccountToken)return {error:'LIVE account changed during request; refresh after signing in'}
       if (!response.ok) {
         if(response.status===401) liveAccountToken=''
         return {error:String(data?.error||`LIVE wager service: ${response.status}`),status:response.status}
