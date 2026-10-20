@@ -22,8 +22,8 @@ jobs:
         run: npm ci
       - name: Test historical migration safeguards
         run: |
-          npx esbuild tests/liveMigrationPreflight.test.mjs tests/liveMigrationUpload.test.mjs --bundle --platform=node --format=esm --outdir=/tmp/nhl-migration-tests
-          node --test /tmp/nhl-migration-tests/*.test.js
+          npx esbuild tests/liveMigrationPreflight.test.mjs tests/liveMigrationUpload.test.mjs --bundle --platform=node --format=esm --out-extension:.js=.mjs --outdir=/tmp/nhl-migration-tests
+          node --test /tmp/nhl-migration-tests/*.test.mjs
       - name: Build Electron renderer and main process
         run: npm run build
       - name: Type-check renderer
