@@ -102,3 +102,9 @@ test('rejects backwards pagination across pages',async()=>{
  let calls=0
  await assert.rejects(listAllCloudWagers(async()=>++calls===1?{wagers:cloud('b'),nextCursor:'b'}:{wagers:cloud('a'),nextCursor:null}),/strictly ordered/)
 })
+
+test('rejects malformed cloud wager payloads before reconciliation',async()=>{
+ for(const bad of [{id:'a',date:'2026-02-30',legs:[{}]},{id:'a',date:'2026-10-19',legs:[]},{id:'a',date:'2026-10-19',legs:Array(13).fill({})}]){
+  await assert.rejects(listAllCloudWagers(async()=>({wagers:[{wager_id:'a',wager:bad}],nextCursor:null})),/Invalid cloud wager payload/)
+ }
+})
