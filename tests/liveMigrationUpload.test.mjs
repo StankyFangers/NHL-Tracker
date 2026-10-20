@@ -50,3 +50,28 @@ test('interrupted import can be resumed without duplicates',async()=>{
  assert.equal(result.uploaded,1)
  assert.equal(result.identical,2)
 })
+
+test('653-wager migration exercises four cloud pages and verifies every ID',async()=>{
+ const source=Array.from({length:653},(_,i)=>wager('historic-'+String(i+1).padStart(4,'0')))
+ const store=new Map(),progress=[]
+ let writes=0
+ const request=async p=>{
+  if(p.method==='POST'){
+   assert.equal(p.source,'import')
+   assert.equal(store.has(p.wager.id),false)
+   store.set(p.wager.id,p.wager);writes++
+   return {ok:true,id:p.wager.id,created:true}
+  }
+  const ids=[...store.keys()].sort().filter(id=>!p.cursor||id>p.cursor)
+  const selected=ids.slice(0,p.limit||200)
+  return {wagers:selected.map(id=>({wager_id:id,wager:store.get(id)})),nextCursor:ids.length>selected.length?selected.at(-1):null}
+ }
+ const result=await importHistoricalWagers(source,request,p=>progress.push(p))
+ assert.equal(writes,653)
+ assert.equal(result.uploaded,653)
+ assert.equal(result.identical,653)
+ assert.equal(progress.at(-1).remaining,0)
+ const repeat=await importHistoricalWagers(source,request,()=>{throw Error('unexpected upload')})
+ assert.equal(repeat.uploaded,0)
+ assert.equal(writes,653)
+})
