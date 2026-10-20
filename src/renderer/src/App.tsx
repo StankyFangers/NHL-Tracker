@@ -1,3 +1,4 @@
+import { importHistoricalWagers, listAllCloudWagers } from './liveMigrationUpload'
 import { parseMigrationBackup, compareMigration, type HistoricalWager } from './liveMigrationPreflight'
 import { addPlayerIdentities, resolvePlayerId, rosterEntries, syncPlayerDb, readPlayerDb } from './playerIdentityDb'
 import { optimizeProfiles, type ProfileReport } from './confidenceProfiles'
@@ -1694,6 +1695,9 @@ function LiveCloudInspector({username,embedded=false}:{username:string;embedded?
  const [comparison,setComparison]=useState('')
  const [importSource,setImportSource]=useState<HistoricalWager[]|null>(null)
  const [importReport,setImportReport]=useState('No backup selected')
+ const [importConfirm,setImportConfirm]=useState('')
+ const [importing,setImporting]=useState(false)
+ const [previewApproved,setPreviewApproved]=useState(false)
  const cloudSummary=useMemo(()=>{
   const counts={pending:0,won:0,lost:0,other:0}
   const dates=new Set<string>()
@@ -1727,14 +1731,25 @@ function LiveCloudInspector({username,embedded=false}:{username:string;embedded?
   }catch(e:any){setComparison('Comparison stopped: '+String(e?.message||e))}
  }
  const previewImport=(file:File)=>{
-  setImportSource(null);setImportReport('Validating backup...')
+  setImportSource(null);setPreviewApproved(false);setImportConfirm('');setImportReport('Validating backup...')
   if(file.size>25*1024*1024){setImportReport('File exceeds 25 MB');return}
   void file.text().then(raw=>{const source=parseMigrationBackup(JSON.parse(raw));setImportSource(source);setImportReport('Validated '+source.length+' unique wagers. Check cloud and compare below.')}).catch((e:unknown)=>setImportReport('Preview failed: '+String(e instanceof Error?e.message:e)))
  }
  const previewAgainstCloud=()=>{
   if(!checked||!importSource)return
-  try{const x=compareMigration(importSource,rows);setImportReport('READ ONLY · Source '+x.sourceCount+' · Cloud '+x.cloudCount+' · Missing '+x.missing.length+' · Identical '+x.identical.length+' · Conflicts '+x.conflicts.length+' · Cloud-only '+x.cloudOnly.length+'. NO WRITES PERFORMED.')}
+  try{const x=compareMigration(importSource,rows);setPreviewApproved(x.conflicts.length===0);setImportReport('READ ONLY · Source '+x.sourceCount+' · Cloud '+x.cloudCount+' · Missing '+x.missing.length+' · Identical '+x.identical.length+' · Conflicts '+x.conflicts.length+' · Cloud-only '+x.cloudOnly.length+'. NO WRITES PERFORMED.')}
   catch(e:unknown){setImportReport('Comparison failed: '+String(e instanceof Error?e.message:e))}
+ }
+ const runImport=async()=>{
+  if(!importSource||!previewApproved||importConfirm!=='IMPORT '+username||importing||loading)return
+  setImporting(true);setImportReport('Rechecking cloud for conflicts before import...')
+  try{
+    const result=await importHistoricalWagers(importSource,(window.nhlTracker as any).liveWagersRequest,(progress)=>setImportReport('Uploaded '+progress.uploaded+' · Remaining '+progress.remaining))
+    setImportReport('VERIFIED · '+result.identical+' source wagers match cloud exactly · '+result.uploaded+' newly created · '+result.cloudOnly+' other cloud wagers preserved.')
+    setPreviewApproved(false);setImportConfirm('')
+    await check()
+  }catch(e:unknown){setImportReport('IMPORT STOPPED: '+String(e instanceof Error?e.message:e))}
+  finally{setImporting(false)}
  }
  const [showDetails,setShowDetails]=useState(false)
  const [detailId,setDetailId]=useState('')
@@ -1791,7 +1806,13 @@ function LiveCloudInspector({username,embedded=false}:{username:string;embedded?
     <label>Choose LIVE migration JSON <input type="file" accept=".json,application/json" onChange={e=>{const f=e.target.files?.[0];if(f)previewImport(f)}}/></label>
     <div role="status">{importReport}</div>
     <button type="button" disabled={!checked||!importSource||loading} onClick={previewAgainstCloud}>COMPARE IMPORT TO MY CLOUD WAGERS</button>
-    <small>No cloud uploads or local wager changes are performed.</small>
+    <small>Preview never uploads. Cloud importing requires explicit confirmation and a separately enabled server-side write gate. No local wager changes are made.</small>
+    {previewApproved&&<div style={{borderTop:'1px solid #668ba4',paddingTop:8,display:'grid',gap:6}}>
+      <strong>CONTROLLED CLOUD IMPORT</strong>
+      <div>Back up your existing cloud wagers before importing. Only missing wager IDs are created; conflicts stop the operation. Source JSON remains unchanged.</div>
+      <label>Type IMPORT {username} to authorize cloud writes<input value={importConfirm} onChange={e=>setImportConfirm(e.target.value)} autoComplete="off"/></label>
+      <button type="button" disabled={importing||loading||importConfirm!=='IMPORT '+username} onClick={()=>void runImport()}>{importing?'IMPORTING...':'IMPORT MISSING WAGERS AND VERIFY'}</button>
+    </div>}
    </section>
    <div>Cloud wagers are not loaded into the Bet Hub. Local wagers are unchanged.</div>
    <button type="button" disabled={loading} onClick={()=>void check()}>{loading?'CHECKING...':'CHECK CLOUD WAGERS'}</button>
