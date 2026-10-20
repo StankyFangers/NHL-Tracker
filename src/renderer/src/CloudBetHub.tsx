@@ -26,6 +26,7 @@ export default function CloudBetHub({username}:{username:string}){
  const [date,setDate]=useState('')
  const [status,setStatus]=useState('ALL')
  const [expanded,setExpanded]=useState<string|null>(null)
+ const [accountLoaded,setAccountLoaded]=useState('')
  const requestGeneration=useRef(0)
  const refresh=async()=>{
   const generation=++requestGeneration.current
@@ -33,7 +34,7 @@ export default function CloudBetHub({username}:{username:string}){
   try{
    const cloud=await listAllCloudWagers((window.nhlTracker as any).liveWagersRequest)
    if(cloud.some(r=>!isWager(r.wager)))throw new Error('Cloud returned an invalid wager; display stopped')
-   if(generation===requestGeneration.current){setRows(cloud);setLoaded(true)}
+   if(generation===requestGeneration.current){setRows(cloud);setAccountLoaded(username);setLoaded(true)}
   }catch(e:unknown){if(generation===requestGeneration.current){setRows([]);setError(String(e instanceof Error?e.message:e))}}
   finally{if(generation===requestGeneration.current)setLoading(false)}
  }
@@ -50,8 +51,8 @@ export default function CloudBetHub({username}:{username:string}){
    <button disabled={loading} onClick={()=>void refresh()}>{loading?'SYNCING…':'REFRESH MY CLOUD WAGERS'}</button>
   </header>
   {error&&<p role="alert" style={{color:'#ffb6b6'}}>{error}</p>}
-  {!loaded&&!error&&<p role="status">Loading private cloud wagers…</p>}
-  {loaded&&<>
+  {(!loaded||accountLoaded!==username)&&!error&&<p role="status">Loading private cloud wagers…</p>}
+  {loaded&&accountLoaded===username&&<>
    <div style={{display:'flex',gap:20,flexWrap:'wrap',padding:'12px 0',borderTop:'1px solid #38546b',borderBottom:'1px solid #38546b'}}>
     <span>Total: <strong>{wagers.length}</strong></span>
     <span>Pending: <strong>{wagers.filter(w=>!w.status||w.status==='PENDING').length}</strong></span>
