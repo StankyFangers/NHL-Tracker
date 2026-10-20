@@ -6,7 +6,7 @@ type WagerLeg={player?:string;qty?:number;stat?:string;team?:string;kind?:string
 type Wager={id:string;date:string;legs:WagerLeg[];book?:string;units?:number;unitSize?:number;payout?:number;odds?:number;status?:string}
 const isWager=(v:unknown):v is Wager=>{
  const w=v as Wager|null
- return !!w&&typeof w.id==='string'&&/^\d{4}-\d\d-\d\d$/.test(w.date)&&Array.isArray(w.legs)
+ return !!w&&typeof w.id==='string'&&typeof w.date==='string'&&/^\d{4}-\d\d-\d\d$/.test(w.date)&&Array.isArray(w.legs)&&w.legs.length>0
 }
 const money=(n:number)=>'$'+n.toFixed(2)
 const net=(w:Wager)=>{
@@ -46,7 +46,7 @@ export default function CloudBetHub({username}:{username:string}){
  const visible=useMemo(()=>wagers.filter(w=>(!date||w.date===date)&&(status==='ALL'||(w.status||'PENDING')===status)).sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id)),[wagers,date,status])
  const settled=useMemo(()=>wagers.filter(w=>w.status==='WON'||w.status==='LOST'||w.status==='VOID'),[wagers])
  const pnl=useMemo(()=>settled.reduce((sum,w)=>sum+net(w),0),[settled])
- const financialComplete=settled.every(w=>Number(w.unitSize)>0&&(w.status!=='WON'||w.payout!==undefined||w.odds!==undefined))
+ const financialComplete=settled.every(w=>Number.isFinite(Number(w.units))&&Number(w.units)>=0&&Number.isFinite(Number(w.unitSize))&&Number(w.unitSize)>0&&(w.status!=='WON'||(w.payout!==undefined&&Number.isFinite(Number(w.payout))&&Number(w.payout)>=0)||(w.odds!==undefined&&Number.isFinite(Number(w.odds))&&Number(w.odds)!==0)))
  return <section style={{background:'#0c192a',color:'#e3efff',minHeight:'100vh',padding:24}}>
   <header style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:16,flexWrap:'wrap'}}>
    <div><h1 style={{margin:0}}>NHL Tracker · Cloud Bet Hub</h1><p style={{color:'#a8c6df'}}>LIVE account: <strong>{username}</strong> · Account-specific Neon wagers</p></div>
