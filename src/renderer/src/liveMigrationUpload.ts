@@ -10,7 +10,7 @@ export async function listAllCloudWagers(request:CloudRequest):Promise<CloudWage
   const cursors=new Set<string>()
   for(let page=0;page<100;page++){
     const response=await request({method:'GET',limit:200,...(cursor?{cursor}:{})})
-    if(response.error)throw new Error(response.error)
+    if(response.error||response.ok===false)throw new Error(response.error||'Cloud listing failed')
     if(!Array.isArray(response.wagers))throw new Error('Invalid cloud response')
     for(const row of response.wagers){
       if(!row||typeof row.wager_id!=='string'||seen.has(row.wager_id))throw new Error('Duplicate or invalid cloud ID')
@@ -18,8 +18,13 @@ export async function listAllCloudWagers(request:CloudRequest):Promise<CloudWage
       seen.add(row.wager_id);result.push(row)
     }
     if(result.length>20000)throw new Error('Cloud listing safety limit exceeded')
-    if(response.nextCursor===null)return result
+    if(response.nextCursor===null){
+      if(response.wagers.length===0&&page===0)return result
+      return result
+    }
+    if(response.wagers.length===0)throw new Error('Empty cloud page with continuation cursor')
     if(typeof response.nextCursor!=='string'||!response.nextCursor||cursors.has(response.nextCursor))throw new Error('Invalid or repeated cloud cursor')
+    if(response.wagers.length>200)throw new Error('Cloud page exceeds requested limit')
     cursors.add(response.nextCursor)
     cursor=response.nextCursor
   }
