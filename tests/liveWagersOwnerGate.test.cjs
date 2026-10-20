@@ -98,3 +98,12 @@ test('unauthenticated requests cannot list or mutate private wagers',async()=>{
   else process.env.NHL_LIVE_WAGER_WRITES_ENABLED=previous
  }
 })
+
+test('invalid pagination parameters fail before database access',async()=>{
+ for(const query of [{limit:'0'},{limit:'201'},{limit:'2oops'},{limit:'-1'},{limit:'1.5'},{limit:['1','2']},{cursor:['a','b']},{cursor:'x'.repeat(151)}]){
+  queries=[];const res={}
+  await handler({method:'GET',query},res)
+  assert.equal(res.status,400,JSON.stringify(query))
+  assert.equal(queries.length,0)
+ }
+})
