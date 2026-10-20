@@ -1737,11 +1737,12 @@ function LiveCloudInspector({username,embedded=false}:{username:string;embedded?
  }
  const previewAgainstCloud=()=>{
   if(!checked||!importSource)return
+  setPreviewApproved(false);setImportConfirm('')
   try{const x=compareMigration(importSource,rows);setPreviewApproved(x.conflicts.length===0);setImportReport('READ ONLY · Source '+x.sourceCount+' · Cloud '+x.cloudCount+' · Missing '+x.missing.length+' · Identical '+x.identical.length+' · Conflicts '+x.conflicts.length+' · Cloud-only '+x.cloudOnly.length+'. NO WRITES PERFORMED.')}
   catch(e:unknown){setImportReport('Comparison failed: '+String(e instanceof Error?e.message:e))}
  }
  const runImport=async()=>{
-  if(!importSource||!previewApproved||importConfirm!=='IMPORT '+username||importing||loading)return
+  if(!checked||!importSource||!previewApproved||importConfirm!=='IMPORT '+username||importing||loading)return
   setImporting(true);setImportReport('Rechecking cloud for conflicts before import...')
   try{
     const result=await importHistoricalWagers(importSource,(window.nhlTracker as any).liveWagersRequest,(progress)=>setImportReport('Uploaded '+progress.uploaded+' · Remaining '+progress.remaining))
@@ -1768,8 +1769,8 @@ function LiveCloudInspector({username,embedded=false}:{username:string;embedded?
   setTimeout(()=>URL.revokeObjectURL(url),1000)
  }
  const check=async()=>{
-  if(loading)return
-  setComparison('');setChecked(false);setRows([]);setDetailId('');setShowDetails(false)
+  if(loading||importing)return
+  setPreviewApproved(false);setImportConfirm('');setComparison('');setChecked(false);setRows([]);setDetailId('');setShowDetails(false)
   setLoading(true);setMessage('Reading LIVE cloud wagers...')
   try{
    const collected:any[]=[]
