@@ -14,9 +14,12 @@ module.exports=handler(async(req,res)=>{
  if(req.method!=='GET' && process.env.NHL_LIVE_WAGER_WRITES_ENABLED!=='YES_WAGER_WRITES_SEPARATELY_APPROVED')return reply(res,403,{error:'LIVE cloud wager writes are disabled'})
  const pool=getLivePool()
  if(req.method==='GET'){
-  const limit=Math.min(200,Math.max(1,Number.parseInt(req.query?.limit,10)||100))
-  const cursor=String(req.query?.cursor||'')
-  if(cursor.length>150)return reply(res,400,{error:'Invalid cursor'})
+  const rawLimit=req.query?.limit
+  if(rawLimit!==undefined&&(!/^\d+$/.test(String(rawLimit))||Number(rawLimit)<1||Number(rawLimit)>200))return reply(res,400,{error:'Invalid page limit'})
+  const limit=rawLimit===undefined?100:Number(rawLimit)
+  const rawCursor=req.query?.cursor
+  if(rawCursor!==undefined&&(typeof rawCursor!=='string'||rawCursor.length>150))return reply(res,400,{error:'Invalid cursor'})
+  const cursor=rawCursor||''
   const r=await pool.query('SELECT wager_id,wager,source,source_external_id,updated_at FROM public.nhl_live_wagers WHERE account_id=$1 AND ($2::text=\'\' OR wager_id>$2) ORDER BY wager_id LIMIT $3',[account.id,cursor,limit+1])
   const more=r.rows.length>limit,rows=r.rows.slice(0,limit)
   return reply(res,200,{wagers:rows,nextCursor:more?rows[rows.length-1].wager_id:null})
