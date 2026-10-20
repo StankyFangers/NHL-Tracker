@@ -43,7 +43,6 @@ module.exports=handler(async(req,res)=>{
   return reply(res,found.rowCount?409:404,{error:found.rowCount?'Wager changed since last read; refresh and retry':'Wager not found'})
  }
  const {wager,source='manual',sourceExternalId=null}=req.body
- if(source==='import'&&String(account.username||'').toLowerCase()!=='stankyfangers')return reply(res,403,{error:'Historical LIVE migration is restricted to the owner account'})
  if(!validWager(wager)||!['manual','kalshi','import'].includes(source)||!(sourceExternalId===null||(typeof sourceExternalId==='string'&&sourceExternalId.length>0&&sourceExternalId.length<=250)))return reply(res,400,{error:'Invalid wager'})
  // Create-only. An existing wager is never silently overwritten, including across devices.
  try{
