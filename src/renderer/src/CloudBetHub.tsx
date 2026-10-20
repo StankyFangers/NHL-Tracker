@@ -10,9 +10,9 @@ const validPrice=(v:unknown)=>typeof v==='number'&&Number.isFinite(v)
 const hasSettledPricing=(w:Wager)=>{
  const units=w.units,unitSize=w.unitSize,payout=w.payout,odds=w.odds
  if(!validPrice(units)||!validPrice(unitSize))return false
- if(units<0||unitSize<=0)return false
+ if(Number(units)<0||Number(unitSize)<=0)return false
  if(w.status!=='WON')return true
- return (validPrice(payout)&&payout>=0)||(validPrice(odds)&&odds!==0)
+ return (validPrice(payout)&&Number(payout)>=0)||(validPrice(odds)&&odds!==0)
 }
 const net=(w:Wager)=>{
  const stake=(w as Wager & {bonusBet?:boolean}).bonusBet?0:Number(w.units||0)*Number(w.unitSize||0)
