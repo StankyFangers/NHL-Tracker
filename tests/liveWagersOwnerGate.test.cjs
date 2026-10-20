@@ -38,6 +38,16 @@ test('non-owner cannot import even when global wager writes are enabled',async()
   await handler(req,ownerRes)
   assert.equal(queries.length,1)
   assert.equal(ownerRes.status,409)
+  for(const invalid of [
+   {id:'w2',date:'2026-02-30',legs:[{player:'Crosby'}]},
+   {id:'w3',date:'2026-10-19',legs:[]},
+   {id:'w4',date:'2026-13-01',legs:[{player:'Crosby'}]}
+  ]){
+   const count=queries.length,res={}
+   await handler({method:'POST',body:{source:'import',wager:invalid}},res)
+   assert.equal(res.status,400)
+   assert.equal(queries.length,count)
+  }
  }finally{
   if(old===undefined)delete process.env.NHL_LIVE_WAGER_WRITES_ENABLED
   else process.env.NHL_LIVE_WAGER_WRITES_ENABLED=old
