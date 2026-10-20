@@ -33,17 +33,16 @@ module.exports=handler(async(req,res)=>{
   if(req.method==='PATCH'){
    const {wager}=req.body
    if(!validWager(wager)||wager.id!==id)return reply(res,400,{error:'Invalid wager or wager ID changed'})
-   const r=await pool.query(`UPDATE public.nhl_live_wagers SET wager=$3::jsonb,updated_at=GREATEST(clock_timestamp(),updated_at+interval '1 microsecond') WHERE account_id=$1 AND wager_id=$2 AND updated_at=$4::timestamptz RETURNING wager_id,updated_at`,[account.id,id,JSON.stringify(wager),expectedUpdatedAt])
+   const r=await pool.query(`UPDATE public.nhl_live_wagers SET wager=$3::jsonb,updated_at=GREATEST(date_trunc('milliseconds',clock_timestamp())+interval '1 millisecond',date_trunc('milliseconds',updated_at)+interval '1 millisecond') WHERE account_id=$1 AND wager_id=$2 AND updated_at >= date_trunc('milliseconds',$4::timestamptz) AND updated_at < date_trunc('milliseconds',$4::timestamptz)+interval '1 millisecond' RETURNING wager_id,updated_at`,[account.id,id,JSON.stringify(wager),expectedUpdatedAt])
    if(r.rowCount)return reply(res,200,{ok:true,id,updatedAt:r.rows[0].updated_at})
   }else{
-   const r=await pool.query('DELETE FROM public.nhl_live_wagers WHERE account_id=$1 AND wager_id=$2 AND updated_at=$3::timestamptz RETURNING wager_id,updated_at',[account.id,id,expectedUpdatedAt])
+   const r=await pool.query(`DELETE FROM public.nhl_live_wagers WHERE account_id=$1 AND wager_id=$2 AND updated_at >= date_trunc('milliseconds',$3::timestamptz) AND updated_at < date_trunc('milliseconds',$3::timestamptz)+interval '1 millisecond' RETURNING wager_id,updated_at`,[account.id,id,expectedUpdatedAt])
    if(r.rowCount)return reply(res,200,{ok:true,id,deleted:true})
   }
   const found=await pool.query('SELECT 1 FROM public.nhl_live_wagers WHERE account_id=$1 AND wager_id=$2',[account.id,id])
   return reply(res,found.rowCount?409:404,{error:found.rowCount?'Wager changed since last read; refresh and retry':'Wager not found'})
  }
  const {wager,source='manual',sourceExternalId=null}=req.body
- if(source==='import'&&String(account.username||'').toLowerCase()!=='stankyfangers')return reply(res,403,{error:'Historical LIVE migration is restricted to the owner account'})
  if(!validWager(wager)||!['manual','kalshi','import'].includes(source)||!(sourceExternalId===null||(typeof sourceExternalId==='string'&&sourceExternalId.length>0&&sourceExternalId.length<=250)))return reply(res,400,{error:'Invalid wager'})
  // Create-only. An existing wager is never silently overwritten, including across devices.
  try{
