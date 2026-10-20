@@ -7,7 +7,13 @@ type Wager={id:string;date:string;legs:WagerLeg[];book?:string;units?:number;uni
 const isWager=(v:unknown):v is Wager=>validHistoricalWager(v)
 const money=(n:number)=>'$'+n.toFixed(2)
 const validPrice=(v:unknown)=>typeof v==='number'&&Number.isFinite(v)
-const hasSettledPricing=(w:Wager)=>validPrice(w.units)&&w.units!>=0&&validPrice(w.unitSize)&&w.unitSize!>0&&(w.status!=='WON'||(validPrice(w.payout)&&w.payout!>=0)||(validPrice(w.odds)&&w.odds!==0))
+const hasSettledPricing=(w:Wager)=>{
+ const units=w.units,unitSize=w.unitSize,payout=w.payout,odds=w.odds
+ if(!validPrice(units)||!validPrice(unitSize))return false
+ if(units<0||unitSize<=0)return false
+ if(w.status!=='WON')return true
+ return (validPrice(payout)&&payout>=0)||(validPrice(odds)&&odds!==0)
+}
 const net=(w:Wager)=>{
  const stake=(w as Wager & {bonusBet?:boolean}).bonusBet?0:Number(w.units||0)*Number(w.unitSize||0)
  if(w.status==='VOID')return 0
