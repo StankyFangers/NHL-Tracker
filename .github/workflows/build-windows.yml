@@ -5,6 +5,7 @@ on:
     paths:
       - 'src/**'
       - 'resources/**'
+      - 'tests/**'
       - 'package*.json'
       - 'electron.vite.config.ts'
       - 'tsconfig*.json'
@@ -30,8 +31,8 @@ jobs:
         run: npx tsc --noEmit -p tsconfig.web.json
       - name: Check Electron types
         run: npx tsc --noEmit -p tsconfig.node.json
-      - name: Test daily report access
-        run: node --test tests/dailyComboReportAccess.test.cjs
+      - name: Test daily report access and automatic combos
+        run: node --test tests/dailyComboReportAccess.test.cjs tests/automaticCombos.test.cjs
       - name: Bundle focused tests
         run: npx esbuild tests/betSlipDraft.test.mjs tests/liveCloudSync.test.mjs tests/liveMigrationUpload.test.mjs tests/liveMigrationPreflight.test.mjs --bundle --platform=node --format=esm --out-extension:.js=.mjs --outdir=qa-tests
       - name: Run focused tests
@@ -49,3 +50,45 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  approved-177-release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[publish-v1.7.7]')
+    needs: windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: NHL-Tracker-Windows-${{ github.run_number }}
+          path: installer
+      - name: Preserve previous installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p previous-installer
+          gh release download v1.7.7 --pattern '*.exe' --dir previous-installer
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NHL-Tracker-Previous-1.7.7-${{ github.run_number }}
+          path: previous-installer/*.exe
+          if-no-files-found: error
+          retention-days: 90
+      - name: Publish explicitly approved 1.7.7 update
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node -p "require('./package.json').version")" = "1.7.7"
+          old_sha="$(git rev-parse 'v1.7.7^{commit}')"
+          archive="archive/v1.7.7-initial-20261021"
+          if ! gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$archive" >/dev/null 2>&1; then
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/heads/$archive" -f sha="$old_sha" >/dev/null
+          fi
+          (cd installer && sha256sum *.exe > SHA256SUMS.txt)
+          gh release upload v1.7.7 installer/*.exe installer/SHA256SUMS.txt --clobber
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/v1.7.7" -f sha="$GITHUB_SHA" -F force=true >/dev/null
+          gh release edit v1.7.7 --target "$GITHUB_SHA" --title "NHL Tracker v1.7.7" --notes-file docs/releases/v1.7.7.md --latest
