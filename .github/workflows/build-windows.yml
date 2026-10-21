@@ -1,0 +1,77 @@
+name: Build Windows installer
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'resources/**'
+      - 'package*.json'
+      - 'electron.vite.config.ts'
+      - 'tsconfig*.json'
+      - '.github/workflows/build-windows.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Check renderer types
+        run: npx tsc --noEmit -p tsconfig.web.json
+      - name: Check Electron types
+        run: npx tsc --noEmit -p tsconfig.node.json
+      - name: Test daily report access
+        run: node --test tests/dailyComboReportAccess.test.cjs
+      - name: Bundle focused tests
+        run: npx esbuild tests/betSlipDraft.test.mjs tests/liveCloudSync.test.mjs tests/liveMigrationUpload.test.mjs tests/liveMigrationPreflight.test.mjs --bundle --platform=node --format=esm --out-extension:.js=.mjs --outdir=qa-tests
+      - name: Run focused tests
+        run: node --test qa-tests/betSlipDraft.test.mjs qa-tests/liveCloudSync.test.mjs qa-tests/liveMigrationUpload.test.mjs qa-tests/liveMigrationPreflight.test.mjs
+      - name: Build application
+        run: npm run build
+      - name: Package installer
+        run: npx electron-builder --win nsis --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NHL-Tracker-Windows-${{ github.run_number }}
+          path: release/*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: NHL-Tracker-Windows-${{ github.run_number }}
+          path: installer
+      - name: Publish new version after successful Windows build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          tag="v$version"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "$tag already exists; leaving the published release unchanged."
+            exit 0
+          fi
+          test -f "docs/releases/$tag.md"
+          gh release create "$tag" installer/*.exe --target "$GITHUB_SHA" --title "NHL Tracker $tag" --notes-file "docs/releases/$tag.md"

@@ -6,3 +6,19 @@
 
 /* DFO goalie source and NHL TOI */
 .dfoGoalieStrip{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 12px;margin:8px 0;background:rgba(12,30,42,.7);border:1px solid rgba(93,181,220,.25);border-radius:8px}.dfoGoalieStrip>b{font-size:11px;letter-spacing:.08em;color:#9bdcf5}.dfoGoalieStrip>span{display:flex;flex-direction:column;gap:2px;border-left:1px solid rgba(255,255,255,.16);padding-left:12px}.dfoGoalieStrip strong{font-size:12px}.dfoGoalieStrip em{font-style:normal;font-size:10px;color:#f3ca76}.dfoGoalieStrip small{font-size:10px;color:#acbbc9}
+
+.comboDrawerFields select{width:100%;min-width:0;background:#0c1b2d;color:#e9f3ff;border:1px solid #405b77;border-radius:5px;padding:9px 10px;height:37px;font:inherit}
+.comboDrawerCalculated{font-size:12px;color:#77e2bd;margin:8px 0 0 0}
+
+/* Combo Odds drawer: uniform controls and roomier fixed header */
+.comboDrawer .comboDrawerFields select,.comboDrawer .comboDrawerFields input{display:block;width:100%;min-width:0;box-sizing:border-box;height:38px;padding:9px 11px;background:#0e1a2a;color:#edf5ff;border:1px solid #46607d;border-radius:6px;font-family:inherit;font-size:13px;line-height:18px;outline:none}
+.comboDrawer .comboDrawerFields select{color-scheme:dark;cursor:pointer}
+.comboDrawer .comboDrawerFields select:focus,.comboDrawer .comboDrawerFields input:focus{border-color:#5da7e5;box-shadow:0 0 0 2px #3b8dd329}
+.comboDrawer .comboDrawerHeader{align-items:center;gap:22px;min-height:112px;padding:25px 28px 22px;box-sizing:border-box;flex-shrink:0;background:#0d1929}
+.comboDrawer .comboDrawerHeaderContent{min-width:0;flex:1}
+.comboDrawer .comboDrawerEyebrow{display:block;font-size:10px;letter-spacing:.12em;font-weight:800;color:#73b9ec;margin-bottom:9px}
+.comboDrawer .comboDrawerHeader h2{font-size:20px;line-height:1.25;letter-spacing:.015em}
+.comboDrawer .comboDrawerHeader p{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin:10px 0 0;font-size:12px;line-height:1.5}
+.comboDrawer .comboDrawerHeaderDot{color:#5e7893}
+.comboDrawer .comboDrawerClose{align-self:flex-start;flex-shrink:0;width:38px;height:38px;padding:0;font-size:17px}
+@media(max-width:520px){.comboDrawer .comboDrawerHeader{padding:20px 17px;min-height:110px}.comboDrawer .comboDrawerHeader h2{font-size:17px}.comboDrawer .comboDrawerHeader p{gap:5px}}
