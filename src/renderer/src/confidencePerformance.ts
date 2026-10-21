@@ -6,7 +6,7 @@ export type WagerGrade = {id:string;date:string;betId:string;predictionId?:strin
 const KEY='nhlTrackerConfidencePredictions:v1'
 const BETKEY='nhlTrackerConfidenceWagerLinks:v1'
 const safeRead=<T,>(key:string,fallback:T):T=>{try{return JSON.parse(localStorage.getItem(key)||'null')||fallback}catch{return fallback}}
-export const confidenceSignal=(n:number):Signal=>n<60?'SKIP':n<65?'FADE':n>=85?'BOOST':'NEUTRAL'
+export const confidenceSignal=(n:number):Signal=>n<67.5?'SKIP':n<72.5?'FADE':n>=85?'BOOST':'NEUTRAL'
 export const readPredictions=():Prediction[]=>safeRead(KEY,[])
 export const readWagerLinks=():Record<string,string|null>=>safeRead(BETKEY,{})
 export function capturePredictions(date:string,games:any[],abbr:(team:any)=>string):boolean{

@@ -1,0 +1,19 @@
+.bettingSettings .bigField select{display:block;width:100%;box-sizing:border-box;margin-top:10px;padding:12px 14px;min-height:46px;border:1px solid #315064;border-radius:6px;background:#0d1823;color:#e4f0fa;font:inherit;font-size:15px;color-scheme:dark}
+.dataManagement button,.dataManagement input,.dataManagement select{font:inherit;color-scheme:dark}
+.dataManagement button{background:#112532;color:#8cdaff;border:1px solid #315468;border-radius:7px;padding:11px 16px;cursor:pointer;font-size:12px;font-weight:700;text-align:left;min-height:40px}
+.dataManagement button:hover:not(:disabled){background:#1a3547;border-color:#65b5db}
+.dataManagement button:disabled{opacity:.45;cursor:not-allowed}
+.dataManagement input:not([type=checkbox]){box-sizing:border-box;background:#0c1721;color:#e2edf5;border:1px solid #365164;border-radius:6px;padding:10px;max-width:100%}
+.dataManagement input[type=file]{display:block;margin:10px 0;width:100%}
+.dataManagement input::file-selector-button{background:#193548;color:#a8e1ff;border:1px solid #3c6178;border-radius:4px;padding:8px 12px;margin-right:12px;cursor:pointer}
+.cloudSettings{box-sizing:border-box;box-shadow:none!important;background:#0d1c28!important;padding:20px!important;border-color:#2c4d60!important;font-size:13px!important;line-height:1.6}
+.cloudSettings h3{font-size:18px}.cloudSettings p{margin:8px 0;color:#9cb4c6}
+.cloudSettings label{display:grid;gap:6px;font-size:12px;color:#a9c0d0}
+.cloudSettings summary,.cloudLegacyTools summary{cursor:pointer;font-weight:700;color:#9bdfff;padding:8px 0;list-style-position:inside}
+.cloudSettings details{padding:12px!important;background:#0b1721;border:1px solid #2e4d60!important;border-radius:8px}
+.cloudSettings details>*:not(summary){margin-top:10px}
+.cloudLegacyTools{margin-top:20px!important;border-color:#2e4d60!important;font-size:12px}
+.cloudLegacyTools small{display:block;color:#9cb4c6;margin:10px 0}
+.cloudTestNotice{border:1px solid #365164;border-radius:8px;padding:18px;margin:16px 0;background:#0d1c28}
+.cloudTestNotice h3{margin:0 0 8px;color:#e7bf7d}.cloudTestNotice p{margin:0}
+.dataManagement :is(button,input,select,summary):focus-visible,.bettingSettings select:focus-visible{outline:2px solid #6bd5ff;outline-offset:3px}
