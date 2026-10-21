@@ -49,29 +49,3 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  release:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: windows
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: NHL-Tracker-Windows-${{ github.run_number }}
-          path: installer
-      - name: Publish new version after successful Windows build
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          version="$(node -p "require('./package.json').version")"
-          tag="v$version"
-          if gh release view "$tag" >/dev/null 2>&1; then
-            echo "$tag already exists; leaving the published release unchanged."
-            exit 0
-          fi
-          test -f "docs/releases/$tag.md"
-          gh release create "$tag" installer/*.exe --target "$GITHUB_SHA" --title "NHL Tracker $tag" --notes-file "docs/releases/$tag.md"
