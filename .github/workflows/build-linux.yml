@@ -1,34 +1,112 @@
-name: Build NHL Tracker Linux
+name: Build Chromebook installers
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-linux.yml'
+      - 'docs/releases/Chromebook-Install-1.7.8.txt'
+
+permissions:
+  contents: read
 
 jobs:
   build-linux:
     runs-on: ubuntu-22.04
-
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            deb_arch: amd64
+            machine: 'Advanced Micro Devices X86-64'
+          - arch: arm64
+            deb_arch: arm64
+            machine: AArch64
     steps:
-      - name: Checkout repository
+      - name: Checkout released 1.7.8 source
         uses: actions/checkout@v4
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          ref: 14d858db2a43ec1eb8f8a500fd0325b6e707f9f9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build application
-        run: npx electron-vite build
-
-      - name: Package Chromebook installer
-        run: npx electron-builder --linux deb --x64 --config.directories.output=release-linux --publish never
-
-      - name: Upload installer
-        uses: actions/upload-artifact@v4
+      - run: npm ci
+      - name: Check source version and types
+        run: |
+          test "$(node -p "require('./package.json').version")" = "1.7.8"
+          npx tsc --noEmit -p tsconfig.web.json
+          npx tsc --noEmit -p tsconfig.node.json
+      - run: npm run build
+      - name: Package Linux beta installer
+        run: >-
+          npx electron-builder --linux deb --${{ matrix.arch }}
+          --config.directories.output=release-linux
+          --config.artifactName=NHL-Tracker-1.7.8-Chromebook-Beta-${{ matrix.arch }}.deb
+          --config.linux.category=Utility
+          --config.linux.icon=resources/money-puck.png
+          --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Verify Debian package and executable architecture
+        env:
+          EXPECTED_ARCH: ${{ matrix.deb_arch }}
+          EXPECTED_MACHINE: ${{ matrix.machine }}
+        run: |
+          set -euo pipefail
+          package="$(find release-linux -maxdepth 1 -name '*.deb' -print -quit)"
+          test -n "$package"
+          test "$(dpkg-deb -f "$package" Architecture)" = "$EXPECTED_ARCH"
+          test "$(dpkg-deb -f "$package" Version)" = "1.7.8"
+          dpkg-deb -x "$package" extracted
+          executable="$(find extracted/opt -type f -name 'NHL Tracker' -print -quit)"
+          test -n "$executable"
+          readelf -h "$executable" | grep -F "$EXPECTED_MACHINE"
+          desktop="$(find extracted/usr/share/applications -name '*.desktop' -print -quit)"
+          test -n "$desktop"
+          dpkg-deb --info "$package"
+      - uses: actions/upload-artifact@v4
         with:
-          name: NHL-Tracker-Chromebook-Beta
+          name: NHL-Tracker-Chromebook-1.7.8-${{ matrix.arch }}
           path: release-linux/*.deb
           if-no-files-found: error
+          retention-days: 30
+
+  publish-chromebook:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[publish-chromebook-v1.7.8]'))
+    needs: build-linux
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: NHL-Tracker-Chromebook-1.7.8-*
+          path: installers
+          merge-multiple: true
+      - name: Add both packages to the existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(find installers -maxdepth 1 -name '*.deb' | wc -l)" -eq 2
+          gh release view v1.7.8 --json isDraft -q '.isDraft' | grep -x false
+          cp docs/releases/Chromebook-Install-1.7.8.txt installers/
+          (cd installers && sha256sum *.deb > SHA256SUMS-Chromebook.txt)
+          gh release upload v1.7.8 installers/*.deb installers/SHA256SUMS-Chromebook.txt installers/Chromebook-Install-1.7.8.txt --clobber
+          gh release view v1.7.8 --json body -q '.body' > release-notes.md
+          if ! grep -q '## Chromebook / Linux beta downloads' release-notes.md; then
+            cat >> release-notes.md <<'NOTES'
+
+          ## Chromebook / Linux beta downloads
+          - Intel/AMD Chromebook: download `NHL-Tracker-1.7.8-Chromebook-Beta-x64.deb`.
+          - ARM Chromebook: download `NHL-Tracker-1.7.8-Chromebook-Beta-arm64.deb`.
+          - Enable Linux development environment first. In its Terminal, run `uname -m`: `x86_64` means x64; `aarch64` means ARM64.
+          - See the attached `Chromebook-Install-1.7.8.txt` for installation steps.
+          - Packages and executable architectures are verified in CI; actual Chromebook operation has not yet been tested.
+          NOTES
+            gh release edit v1.7.8 --notes-file release-notes.md
+          fi

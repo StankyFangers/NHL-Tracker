@@ -1,0 +1,23 @@
+NHL TRACKER 1.7.8 - CHROMEBOOK / LINUX BETA
+
+1. Enable Linux development environment in your Chromebook settings.
+   If Linux is unavailable or administrator-blocked, these installers cannot be used.
+2. Open the Linux Terminal and run:
+   uname -m
+   x86_64: download NHL-Tracker-1.7.8-Chromebook-Beta-x64.deb
+   aarch64: download NHL-Tracker-1.7.8-Chromebook-Beta-arm64.deb
+   Other architectures are not covered by these downloads.
+3. Download your matching package from the GitHub v1.7.8 release.
+4. In the Files app, right-click the .deb and choose Install with Linux.
+   Alternatively, move the .deb to Linux files, then run in Terminal:
+   sudo apt install ./NHL-Tracker-1.7.8-Chromebook-Beta-x64.deb
+   Use the arm64 filename instead on ARM models.
+5. Launch NHL Tracker from the Linux apps folder and sign in to your LIVE account.
+
+These packages use the same application source as the Windows 1.7.8 release.
+Package metadata and executable architectures are verified during the build.
+Actual Chromebook operation, sounds, notifications and secure remembered login
+have not yet been verified on a physical Chromebook. Please report the model
+and any error if installation or startup fails.
+
+Do not run the tracker using sudo or disable its sandbox to work around errors.
