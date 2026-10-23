@@ -1,3 +1,4 @@
+import {trackedConfidenceRows,CONFIDENCE_TRACKING_START} from './confidenceTracking'
 import { CONFIDENCE_AS_OF, CONFIDENCE_STATUS, CONFIDENCE_TEAMS, matchupConfidence } from './confidenceEngine'
 
 export type Signal = 'SKIP'|'FADE'|'NEUTRAL'|'BOOST'
@@ -7,9 +8,10 @@ const KEY='nhlTrackerConfidencePredictions:v1'
 const BETKEY='nhlTrackerConfidenceWagerLinks:v1'
 const safeRead=<T,>(key:string,fallback:T):T=>{try{return JSON.parse(localStorage.getItem(key)||'null')||fallback}catch{return fallback}}
 export const confidenceSignal=(n:number):Signal=>n<67.5?'SKIP':n<72.5?'FADE':n>=85?'BOOST':'NEUTRAL'
-export const readPredictions=():Prediction[]=>safeRead(KEY,[])
+export const readPredictions=():Prediction[]=>trackedConfidenceRows(KEY,safeRead<Prediction[]>(KEY,[]))
 export const readWagerLinks=():Record<string,string|null>=>safeRead(BETKEY,{})
 export function capturePredictions(date:string,games:any[],abbr:(team:any)=>string):boolean{
+ if(date<CONFIDENCE_TRACKING_START)return false;
  const existing=readPredictions(),known=new Set(existing.map(p=>p.id));let changed=false
  for(const g of games){if(!['PRE','FUT'].includes(String(g.gameState||'')))continue
   const away=abbr(g.awayTeam),home=abbr(g.homeTeam)

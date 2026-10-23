@@ -1,0 +1,10 @@
+export type OpportunityTeam={team:string;games:number;xgf:number;xga:number;hdFor:number;hdAgainst:number}
+export type OpportunityFeed={date:string;season:number;strength:'all';source:'MoneyPuck';url:string;checkedAt:string;teams:OpportunityTeam[]}
+function csvRows(text:string){const rows:string[][]=[];let row:string[]=[],cell='',quoted=false;for(let i=0;i<text.length;i++){const c=text[i];if(c==='"'){if(quoted&&text[i+1]==='"'){cell+='"';i++}else quoted=!quoted}else if(c===','&&!quoted){row.push(cell);cell=''}else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cell);if(row.some(Boolean))rows.push(row);row=[];cell=''}else cell+=c}if(quoted)throw Error('Incomplete MoneyPuck CSV');if(cell||row.length){row.push(cell);rows.push(row)}return rows}
+export function parseTeamOpportunityStats(csv:string,date:string,season:number,checkedAt=new Date().toISOString()):OpportunityFeed{
+ const [headers,...rows]=csvRows(csv);const fields=['team','season','situation','games_played','xGoalsFor','xGoalsAgainst','highDangerShotsFor','highDangerShotsAgainst'];if(!headers||fields.some(k=>!headers.includes(k)))throw Error('MoneyPuck team columns changed')
+ const value=(row:string[],k:string)=>row[headers.indexOf(k)];const teams:OpportunityTeam[]=[]
+ for(const row of rows){if(value(row,'situation')!=='all'||Number(value(row,'season'))!==season)continue;const team=value(row,'team')==='ARI'?'UTA':value(row,'team');const games=Number(value(row,'games_played'));const totals=['xGoalsFor','xGoalsAgainst','highDangerShotsFor','highDangerShotsAgainst'].map(k=>value(row,k)===''?NaN:Number(value(row,k)));if(!/^[A-Z]{2,3}$/.test(team)||!Number.isInteger(games)||games<=0||totals.some(n=>!Number.isFinite(n)||n<0))continue;teams.push({team,games,xgf:totals[0]/games,xga:totals[1]/games,hdFor:totals[2]/games,hdAgainst:totals[3]/games})}
+ if(!teams.length||new Set(teams.map(t=>t.team)).size!==teams.length)throw Error('MoneyPuck team stats are missing or ambiguous')
+ return {date,season,strength:'all',source:'MoneyPuck',url:`https://moneypuck.com/moneypuck/playerData/seasonSummary/${season}/regular/teams.csv`,checkedAt,teams}
+}

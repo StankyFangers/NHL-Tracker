@@ -1,5 +1,6 @@
 import {CONFIDENCE_TEAMS,CONFIDENCE_AS_OF} from './confidenceEngine'
 import {netUnits} from './confidenceResults'
+import {officialGameDate} from './nhlGameDate'
 const INDEX='nhlTracker:dailyComboSnapshot:index:v1',dayKey=(date:string)=>`nhlTracker:dailyComboSnapshot:v1:${date}`
 const resultKey=(date:string)=>`nhlTracker:comboResults:day:v1:${date}`
 const read=<T,>(key:string,fallback:T):T=>{try{return JSON.parse(localStorage.getItem(key)||'null')||fallback}catch{return fallback}}
@@ -14,6 +15,7 @@ export function comboGroups(info:any):string[][]{
 export function recordDailyCombos(date:string,games:any[],lineups:Record<string,any>,abbr:(t:any)=>string,confirmed:(i:any,d:string)=>boolean):boolean{
  const existing=read<AutoCombo[]>(dayKey(date),[]);let changed=false
  for(const g of games){
+  if(officialGameDate(g)!==date)continue
   const cutoff=Date.parse(g.startTimeUTC);if(!['PRE','FUT'].includes(String(g.gameState))||(Number.isFinite(cutoff)&&Date.now()>=cutoff))continue
   for(const team of [abbr(g.awayTeam),abbr(g.homeTeam)]){
    const record=read<any>(`nhlTracker:dfoSnapshots:v1:${date}:${team}`,null)
@@ -47,14 +49,14 @@ export function gradeCombo(combo:AutoCombo,box:any,bets:any[]){
  const net1u=odds!=null&&Number.isFinite(odds)&&Math.abs(odds)>=100&&result!=='UNVERIFIED'?(result==='MISS'?-1:odds>0?odds/100:100/Math.abs(odds)):undefined
  return {key:combo.key,date:combo.date,gameId:combo.gameId,matchup:combo.matchup,team:combo.team,opponent,players:combo.players,status:combo.status,result,odds,book:combo.book,source,referenceUnits:combo.referenceUnits??1,net1u,automatic:true,gradedAt:new Date().toISOString()}
 }
-export async function gradeSavedDays(bets:any[],api:any,alive:()=>boolean){
+export async function gradeSavedDays(bets:any[],api:any,alive:()=>boolean,force=false){
  const discovered=Array.from({length:localStorage.length},(_,i)=>localStorage.key(i)||'').filter(k=>k.startsWith('nhlTracker:dailyComboSnapshot:v1:')).map(k=>k.slice(-10));const dates=[...new Set([...read<string[]>(INDEX,[]),...discovered])].sort();if(discovered.length)localStorage.setItem(INDEX,JSON.stringify(dates));let count=0
- for(const date of dates){if(!alive())break;const previous=read<any>(resultKey(date),null);if(previous?.automatic&&Date.now()-Date.parse(previous.verifiedAt)<15*60*1000)continue;const combos=read<AutoCombo[]>(dayKey(date),[]);if(!combos.length)continue
-  let schedule:any;try{schedule=await api.score(date)}catch{continue}
+ for(const date of dates){if(!alive())break;const previous=read<any>(resultKey(date),null);if(!force&&previous?.automatic&&Date.now()-Date.parse(previous.verifiedAt)<15*60*1000)continue;const combos=read<AutoCombo[]>(dayKey(date),[]);if(!combos.length)continue
+  let schedule:any;try{schedule=await api.score(date)}catch(e){if(force)throw Error('Combo history schedule check failed for '+date+': '+String(e));continue}
   const old=read<any>(resultKey(date),{rows:[]}),rows=new Map<string,any>((old.rows||[]).map((r:any)=>[r.key,r]))
   for(const game of schedule?.games||[]){if(!['FINAL','OFF'].includes(String(game.gameState)))continue
    const selected=combos.filter(c=>c.gameId===Number(game.id));if(!selected.length)continue
-   let box:any;try{box=await api.boxscore(Number(game.id))}catch{continue}
+   let box:any;try{box=await api.boxscore(Number(game.id))}catch(e){if(force)throw Error('Combo history boxscore check failed for '+game.id+': '+String(e));continue}
    if(!['FINAL','OFF'].includes(String(box?.gameState)))continue
    for(const c of selected){rows.set(c.key,gradeCombo(c,box,bets));count++}
   }
@@ -70,7 +72,7 @@ export function refreshComboFactors(date:string,bets:any[]){
  const year=Number(date.slice(0,4))-(Number(date.slice(5,7))<9?1:0),seasonStart=`${year}-09-01`;
  const days=read<string[]>(INDEX,[]).filter(d=>d>=seasonStart&&d<date),graded=days.flatMap(d=>read<any>(resultKey(d),{rows:[]}).rows||[]).filter((r:any)=>['HIT','MISS'].includes(r.result))
  const combos=days.flatMap(d=>read<AutoCombo[]>(dayKey(d),[]));const netByTeam=new Map<string,number[]>(),allowedByTeam=new Map<string,number[]>()
- for(const b of bets){if(b.category!=='COMBOS'||b.date>=date||!['WON','LOST'].includes(b.status))continue;const legs=b.legs||[];if(legs.length<2||legs.length>3||legs.some((l:any)=>l.voided||l.kind==='TEAM'||l.stat!=='Point'||Number(l.qty)!==1))continue
+ for(const b of bets){if(b.category!=='COMBOS'||b.date<seasonStart||b.date>=date||!['WON','LOST'].includes(b.status))continue;const legs=b.legs||[];if(legs.length<2||legs.length>3||legs.some((l:any)=>l.voided||l.kind==='TEAM'||l.stat!=='Point'||Number(l.qty)!==1))continue
   const match=combos.find(c=>c.date===b.date&&legs.every((l:any)=>l.team===c.team&&String(l.gameId)===String(c.gameId)&&c.players.some(p=>playerKey(p)===playerKey(l.player))));const net=netUnits(b);if(!match||net==null||!Number.isFinite(Number(b.units))||Number(b.units)<=0)continue
   netByTeam.set(match.team,[...(netByTeam.get(match.team)||[]),net/Number(b.units)]);const opponent=match.opponent||match.matchup.split('@').map(s=>s.trim()).find(s=>s!==match.team);if(opponent)allowedByTeam.set(opponent,[...(allowedByTeam.get(opponent)||[]),net/Number(b.units)])
  }

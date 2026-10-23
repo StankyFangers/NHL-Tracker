@@ -12,6 +12,9 @@ interface Window {
     registryPlayers: () => Promise<{available:boolean;players:Array<{id:string;name:string;team?:string;teams?:string[]}>}>
     standings: () => Promise<any>
     clubStats: (team: string) => Promise<any>
+    confidenceTeamStats: (date:string,force?:boolean) => Promise<import('../../shared/confidenceTeamStats').CoreFeed>
+    teamOpportunityStats: (date:string,force?:boolean) => Promise<import('../../shared/teamOpportunityStats').OpportunityFeed>
+    dfoStartingGoalies: (date:string,force?:boolean) => Promise<import('../../shared/dfoStartingGoalies').DfoGoalieFeed>
     dfoLines: (team: string) => Promise<any>
     dfoPlayerStats: (team: string, names: string[]) => Promise<any>
     dfoGoalieToi: (team: string, names: string[]) => Promise<any>

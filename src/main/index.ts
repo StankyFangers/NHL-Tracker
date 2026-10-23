@@ -1,3 +1,7 @@
+import {fetchConfidenceTeamStats} from './confidenceTeamStats'
+import {fetchDfoStartingGoalies} from './dfoStartingGoalies'
+import {rememberLogin} from './rememberLogin'
+import {fetchTeamOpportunityStats} from './teamOpportunityStats'
 import { app, BrowserWindow, ipcMain, Notification, shell, dialog, net } from 'electron'
 import { join } from 'path'
 import { writeFile } from 'fs/promises'
@@ -147,12 +151,12 @@ app.whenReady().then(() => {
   // Optional DEV-only registry snapshot. Token remains in Electron main process,
   // never exposed to renderer/localStorage. No endpoint or token configuration = local fallback.
   // DEV accounts: credentials sent via Electron IPC to this main-process HTTPS client.
-  // Tokens are kept in memory only and never written to disk or localStorage.
+  // Tokens stay in memory; optional remembered credentials use OS encryption.
   // Fail closed: the existing authentication and wager APIs target the TEST Neon branch.
   // Never allow a packaged LIVE executable to access TEST account data.
   const testEnvironment = !app.isPackaged
   let devAccountToken = ''
-  ipcMain.handle('dev-account:request', async (_e, payload: {action:string;username?:string;email?:string;login?:string;password?:string;setupKey?:string}) => {
+  ipcMain.handle('dev-account:request', rememberLogin('test', async (_e, payload: {action:string;username?:string;email?:string;login?:string;password?:string;setupKey?:string}) => {
     if (!testEnvironment) return {error:'LIVE cloud accounts are not configured yet. Your LIVE wagers remain local; TEST database access is blocked.'}
     const action=String(payload?.action||'')
     if(!['register','login','logout','me','bootstrap_dev','rename_self'].includes(action))return {error:'Invalid account action'}
@@ -170,10 +174,10 @@ app.whenReady().then(() => {
       return {account:data.account||null}
     }catch(error:any){return {error:'DEV account service unavailable: '+String(error?.message||error)}}
     finally{clearTimeout(timeout)}
-  })
-  // LIVE auth is independent from the TEST account endpoint. Tokens stay in main-process memory.
+  }))
+  // LIVE auth is independent from TEST. Remembered credentials are isolated by mode.
   let liveAccountToken = ''
-  ipcMain.handle('live-account:request', async (_e, payload: {action:string;username?:string;email?:string;login?:string;password?:string}) => {
+  ipcMain.handle('live-account:request', rememberLogin('live', async (_e, payload: {action:string;username?:string;email?:string;login?:string;password?:string}) => {
     if (testEnvironment) return {error:'LIVE accounts are unavailable in TEST mode'}
     const action=String(payload?.action||'')
     if (!['login','register','logout','me'].includes(action)) return {error:'Invalid LIVE account action'}
@@ -193,7 +197,7 @@ app.whenReady().then(() => {
       return {account:data.account||null}
     }catch(e:any){const cause=e?.cause;return {error:'LIVE account service unavailable: '+String(e?.message||e)+(cause?.code?' ['+String(cause.code)+']':'')}}
     finally{clearTimeout(timeout)}
-  })
+  }))
   // Phase 2H: LIVE wager transport only. This deliberately does NOT mount cloud
   // wagers into the renderer, migrate local history, or run background sync.
   // Authentication token never leaves Electron's main process.
@@ -320,6 +324,9 @@ app.whenReady().then(() => {
 
   ipcMain.handle('nhl:standings', async () => nhlJson('/standings/now'))
   ipcMain.handle('nhl:clubStats', async (_e, team: string) => nhlJson(`/club-stats/${encodeURIComponent(team)}/now`))
+  ipcMain.handle('stats:confidenceTeams', async (_e,date:string,force:boolean=false)=>fetchConfidenceTeamStats(date,force))
+  ipcMain.handle('stats:teamOpportunities', async (_e,date:string,force:boolean=false)=>fetchTeamOpportunityStats(date,force))
+  ipcMain.handle('dfo:startingGoalies', async (_e,date:string,force:boolean=false)=>fetchDfoStartingGoalies(date,force))
   ipcMain.handle('dfo:lines', async (_e, team: string) => dfoLines(team))
   ipcMain.handle('dfo:playerStats', async (_e, team: string, names: string[]) => dfoPlayerStats(team,names))
   ipcMain.handle('dfo:goalieToi', async (_e, team: string, names: string[]) => goalieAverageToi(team,names))

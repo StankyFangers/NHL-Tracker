@@ -1,0 +1,13 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert'),os=require('os'),path=require('path');
+const esbuild=require('esbuild');
+const dir=fs.mkdtempSync(path.join(os.tmpdir(),'tracker-auth-'));let available=true;
+const code=esbuild.transformSync(fs.readFileSync('src/main/rememberLogin.ts','utf8'),{loader:'ts',format:'cjs'}).code;
+const electron={app:{getPath:()=>dir},safeStorage:{isEncryptionAvailable:()=>available,getSelectedStorageBackend:()=> 'gnome_libsecret',encryptString:s=>Buffer.from(s).map(x=>x^117),decryptString:b=>Buffer.from(b.map(x=>x^117)).toString()}};
+const context={exports:{},module:{exports:{}},require:n=>n==='electron'?electron:require(n),process};vm.runInNewContext(code,context);const {rememberLogin}=context.module.exports;
+(async()=>{let calls=[];const handler=async(e,p)=>{calls.push(p);return p.action==='logout'?{error:'offline'}:{account:{username:'Papi',role:'DEV'}}};const test=rememberLogin('test',handler),live=rememberLogin('live',handler);
+await test(null,{action:'login',login:'Papi',password:'secret-password',rememberSession:true});assert(!fs.readFileSync(path.join(dir,'remember-login-test.bin')).includes('secret-password'));assert(!('rememberSession' in calls[0]));
+const restored=await rememberLogin('test',handler)(null,{action:'restore'});assert.equal(restored.account.username,'Papi');assert.equal(calls.at(-1).password,'secret-password');
+assert.equal((await live(null,{action:'restore'})).account,null);
+await test(null,{action:'logout'});assert(!fs.existsSync(path.join(dir,'remember-login-test.bin')));
+await test(null,{action:'login',login:'Papi',password:'secret-password',rememberSession:true});await test(null,{action:'login',login:'Papi',password:'secret-password',rememberSession:false});assert(!fs.existsSync(path.join(dir,'remember-login-test.bin')));
+available=false;assert((await test(null,{action:'login',rememberSession:true})).error);fs.rmSync(dir,{recursive:true});console.log('PASS: encrypted storage, restart restoration, TEST/LIVE isolation, offline logout, opt-out clearing, unavailable encryption.');})().catch(e=>{console.error(e);process.exitCode=1});

@@ -45,3 +45,11 @@ export function optimizeThresholds(rows:Result[]){
  }
  return {bands,net:best,tested,count:eligible.length,standard:eligible.reduce((n,r)=>n+r.net,0),current:eligible.reduce((n,r)=>n+r.net*multiplier(r.score!),0)}
 }
+
+export const CONFIDENCE_DIVIDER=72.5
+export const OUTCOME_LABELS=['Profit + High Confidence','Loss + High Confidence','Profit + Low Confidence','Loss + Low Confidence'] as const
+export function confidenceOutcome(score:number|undefined,net:number,count:number):string{
+ if(score==null||!Number.isFinite(score)||!Number.isFinite(net)||count<=0)return 'Unclassified'
+ if(Math.abs(net)<1e-9)return 'Break-even'
+ return `${net>0?'Profit':'Loss'} + ${score>=CONFIDENCE_DIVIDER?'High':'Low'} Confidence`
+}

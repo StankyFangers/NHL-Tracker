@@ -1067,3 +1067,7 @@ html,body,#root,.app,main{scrollbar-width:thin;scrollbar-color:#3e7898 #0a1118}
 .matchupGoalieStats b{font-size:18px;color:#eaf5fb;font-variant-numeric:tabular-nums}
 .matchupGoalies>p{font-size:10px;color:#7894a5;margin:10px 0 0}
 @media(max-width:700px){.matchupGoaliesGrid{grid-template-columns:1fr}}
+
+/* NHL ALL-TEAM GOAL ART SOURCE-CARD CROP v1 */
+/* Goal art source cards: expose only the right-side illustration, never sample text. */
+.event.goal.goalWithArt .goalMascotArt{top:-4.4%;right:-1%;height:110%;width:auto;max-width:none;object-fit:fill;clip-path:inset(4% 1% 5% 62%);-webkit-mask-image:linear-gradient(90deg,transparent 62%,black 73%);mask-image:linear-gradient(90deg,transparent 62%,black 73%)}

@@ -1,0 +1,14 @@
+import {matchupStarter,matchingGoalieStats,type DfoGoalieFeed} from '../../shared/dfoStartingGoalies'
+import './matchupGoalies.css'
+const metric=(row:any,keys:string[])=>{for(const key of keys){const n=row?.[key];if(n!==null&&n!==undefined&&n!==''&&Number.isFinite(Number(n)))return Number(n)}return null}
+export function MatchupGoalies({game,date,feed,loading,error,refresh,clubStats}:{game:any;date:string;feed?:DfoGoalieFeed;loading:boolean;error:string;refresh:()=>Promise<void>;clubStats:Record<string,any>}){
+ const abbr=(t:any)=>String(t?.abbrev||t?.abbreviation||'');const away=abbr(game.awayTeam),home=abbr(game.homeTeam)
+ const clock=(value:string|null)=>value?new Date(value).toLocaleString([],{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'Not supplied'
+ return <section className="matchupGoalies dfoGoalieSync"><div className="matchupGoaliesHeading"><div><b>STARTING GOALIES</b><small>Daily Faceoff · {date}</small></div><button type="button" disabled={loading} onClick={()=>void refresh()}>{loading?'CHECKING DFO…':'↻ REFRESH GOALIES'}</button></div>
+ {error&&<div className="dfoGoalieError" role="status">{feed?'Showing the last successful DFO check. ':''}{error}</div>}
+ <div className="matchupGoaliesGrid">{[[away,home],[home,away]].map(([team,opponent])=>{
+  const starter=matchupStarter(feed,date,team,opponent,game.startTimeUTC),name=starter?.name||null,stats=matchingGoalieStats(name,clubStats[team]);const sv=starter?.savePct??metric(stats,['savePctg','savePercentage','svPct']),gaa=starter?.gaa??metric(stats,['goalsAgainstAverage','gaa']),starts=metric(stats,['gamesStarted']),games=metric(stats,['gamesPlayed']);
+  const label=!name?'Unknown':starter?.status==='CONFIRMED'?'✓ Confirmed':starter?.status==='LIKELY'?'◷ Likely':starter?.status==='PROJECTED'?'◷ Projected':'Unknown'
+  return <div className="matchupGoalieCard" key={team}><div className="matchupGoalieTeam">{team}<span className={'dfoStarterStatus '+(starter?.status||'UNKNOWN').toLowerCase()}>{label}</span></div><strong>{name||(loading?'Checking DFO…':'Starter not listed by DFO')}</strong><div className="matchupGoalieStats"><div><small>SV%</small><b>{sv==null?'—':sv.toFixed(3)}</b></div><div><small>GAA</small><b>{gaa==null?'—':gaa.toFixed(2)}</b></div><div><small>NHL STARTS / GP</small><b>{starts==null&&games==null?'—':`${starts??'—'} / ${games??'—'}`}</b></div></div><div className="dfoStarterMeta"><span>DFO update: {clock(starter?.updatedAt||null)}</span><span>{starter?.source||'Awaiting DFO starter report'}</span></div></div>
+ })}</div><p>Last checked: {feed?clock(feed.checkedAt):'Not yet synced'}. Starter status and available GAA/SV% come from DFO. NHL stats are matched by goalie name only; no primary-goalie substitution. Starting-goalie data is informational only and does not affect confidence scores in this build.</p></section>
+}

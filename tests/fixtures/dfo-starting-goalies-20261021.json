@@ -1,0 +1,53 @@
+{
+  "props": {
+    "pageProps": {
+      "date": "2026-10-21",
+      "data": [
+        {
+          "date": "2026-10-21",
+          "dateGmt": "2026-10-21T23:30:00.000Z",
+          "awayTeamAbbreviation": "FLA",
+          "awayGoalieName": "Akira Schmid",
+          "awayGoalieId": 29148,
+          "awayGoalieSavePercentage": "0.876",
+          "awayGoalieGoalsAgainstAvg": "3.24",
+          "awayNewsStrengthName": "Confirmed",
+          "awayNewsCreatedAt": "2026-10-21T16:23:52.434Z",
+          "awayNewsSourceName": "TSN 1200",
+          "awayNewsSourceUrl": "https://x.com/TSN1200/status/2112942670020522031?s=20",
+          "homeTeamAbbreviation": "OTT",
+          "homeGoalieName": "Linus Ullmark",
+          "homeGoalieId": 2534,
+          "homeGoalieSavePercentage": "0.945",
+          "homeGoalieGoalsAgainstAvg": "1.33",
+          "homeNewsStrengthName": "Likely",
+          "homeNewsCreatedAt": "2026-10-21T15:53:55.722Z",
+          "homeNewsSourceName": "Ottawa Senators",
+          "homeNewsSourceUrl": "https://x.com/Senators/status/2112929418326716423"
+        },
+        {
+          "date": "2026-10-21",
+          "dateGmt": "2026-10-21T23:30:00.000Z",
+          "awayTeamAbbreviation": "PHI",
+          "awayGoalieName": "Dan Vladar",
+          "awayGoalieId": 3831,
+          "awayGoalieSavePercentage": "0.889",
+          "awayGoalieGoalsAgainstAvg": "3.58",
+          "awayNewsStrengthName": "Confirmed",
+          "awayNewsCreatedAt": "2026-10-21T16:10:20.548Z",
+          "awayNewsSourceName": "Heather Engel",
+          "awayNewsSourceUrl": "https://x.com/engelheather/status/2112939090286915977?s=20",
+          "homeTeamAbbreviation": "BUF",
+          "homeGoalieName": "Ukko-Pekka Luukkonen",
+          "homeGoalieId": 4783,
+          "homeGoalieSavePercentage": "0.86",
+          "homeGoalieGoalsAgainstAvg": "3.59",
+          "homeNewsStrengthName": "Confirmed",
+          "homeNewsCreatedAt": "2026-10-21T15:31:36.248Z",
+          "homeNewsSourceName": "Mike Harrington",
+          "homeNewsSourceUrl": "https://x.com/ByMHarrington/status/2112928112803721536?s=20"
+        }
+      ]
+    }
+  }
+}
