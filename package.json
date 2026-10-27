@@ -1,6 +1,6 @@
 {
   "name": "nhl-tracker",
-  "version": "1.7.8",
+  "version": "1.7.9",
   "description": "Spoiler-controlled NHL live tracker",
   "main": "./out/main/index.js",
   "author": "NHL Tracker <geddylwalker@gmail.com>",
