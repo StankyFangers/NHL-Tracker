@@ -12,3 +12,10 @@
 .commandSplit .sectionAccentEvents .sectionTitle,.commandSplit .sectionAccentBets .betsTop{background:transparent}
 .commandSplit:has(.sectionAccentBets) .betsRail{background:var(--bet-rail,#123147)!important}
 .commandSplit:has(.sectionAccentEvents) .eventsRail{background:var(--event-rail,#123147)!important}
+
+/* Bet Entry: two customizable workspace backgrounds, preserving form controls and accents. */
+.betEntryWorkspace .entrySlipPane,
+.betEntryWorkspace .entrySlipPane > .entrySlip,
+.betEntryWorkspace .entryResearchPane {background-color:var(--entry-pane-background,#0b1b29)!important}
+.betEntryWorkspace .entryResearchPane .confirmedBoard,
+.betEntryWorkspace .entryResearchPane .confirmedBoardHead {background-color:transparent}
