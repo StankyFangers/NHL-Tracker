@@ -37,8 +37,8 @@ module.exports=handler(async(req,res)=>{
  if(action==='login') {
   const login=String(data.login||'').trim().toLowerCase(),password=String(data.password||'')
   if(login.length>254||password.length>128)return reply(res,401,{error:'Invalid credentials'})
-  const attempts=await db().query('SELECT attempts FROM public.nhl_auth_limit_login($1)',[digest(login)])
-  if(Number(attempts.rows[0]?.attempts||0)>8)return reply(res,429,{error:'Too many login attempts. Try again in 15 minutes.'})
+  // TEST-only authentication: password verification remains required.
+  // Do not use account-wide failed-attempt lockouts in this isolated development environment.
   const result=await db().query('SELECT id,username,role,password_hash FROM public.nhl_dev_accounts WHERE username=$1 OR email=$1 LIMIT 1',[login])
   const a=result.rows[0]
   // Perform a password KDF even for unknown accounts, reducing username enumeration.
