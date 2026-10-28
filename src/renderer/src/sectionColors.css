@@ -137,3 +137,15 @@ header.themedTopNav .primaryNav button.active{border-bottom-color:var(--nav-acce
 .sectionAccentEvents .eventCard,
 .sectionAccentEvents .feedEvent,
 .sectionAccentEvents .eventItem{background-color:color-mix(in srgb,var(--section-background,#0b151e) 14%,#081b29)!important}
+
+/* Color integration: verified actual live component selectors */
+
+/* Tint only the dark surfaces; never override semantic P/L or goal artwork colors. */
+.sectionAccentGames .scoreStrip .scoreTile { background-color:color-mix(in srgb,var(--section-background,#0b151e) 24%,#101e2e)!important; }
+.sectionAccentGames .scoreStrip .scoreTile.selected { border-color:var(--section-accent,#44b4ed)!important; }
+.sectionAccentBets .betMasterBody,
+.sectionAccentBets .betMasterAccordion > summary,
+.sectionAccentBets .matchupAccordion > summary,
+.sectionAccentBets .matchupCategory > summary { background-color:color-mix(in srgb,var(--section-background,#0b151e) 18%,#0b1722)!important; }
+.sectionAccentEvents .feed > article.event:not(.goalWithArt) { background-color:color-mix(in srgb,var(--section-background,#0b151e) 15%,#0b1b29)!important; }
+.sectionAccentEvents .feed > article.event.goalWithArt { background-color:color-mix(in srgb,var(--section-background,#0b151e) 9%,#0b1b29)!important; }
