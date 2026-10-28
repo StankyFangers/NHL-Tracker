@@ -122,3 +122,18 @@
 .betEntryWorkspace .entryResearchPane .confirmedQuickBet{
   color:#75eab0!important;
 }
+
+/* Scoreboard theme extends gently to the navigation; preserve active-tab cues. */
+header.themedTopNav{background:var(--nav-tint,#0b151e)!important;border-bottom:1px solid color-mix(in srgb,var(--nav-accent,#44b4ed) 35%,transparent)}
+header.themedTopNav .primaryNav button.active{border-bottom-color:var(--nav-accent,#44b4ed)!important}
+
+/* Harmonize interior panels rather than flooding readable data with color. */
+.sectionAccentGames .scoreboardGame,
+.sectionAccentGames .scoreboardCard,
+.sectionAccentGames .gameTile{background-color:color-mix(in srgb,var(--section-background,#0b151e) 22%,#0b1722)!important}
+.sectionAccentBets .betMasterAccordion,
+.sectionAccentBets .betCategoryAccordion.matchupAccordion,
+.sectionAccentBets .betCategoryAccordion.matchupCategory{background-color:color-mix(in srgb,var(--section-background,#0b151e) 20%,#0b1722)!important;border-color:color-mix(in srgb,var(--section-accent,#44b4ed) 22%,#294154)!important}
+.sectionAccentEvents .eventCard,
+.sectionAccentEvents .feedEvent,
+.sectionAccentEvents .eventItem{background-color:color-mix(in srgb,var(--section-background,#0b151e) 14%,#081b29)!important}
