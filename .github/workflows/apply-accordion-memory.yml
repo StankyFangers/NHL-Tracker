@@ -26,24 +26,25 @@ jobs:
           s=p.read_text()
           anchor=' const [lineupReviewTeam,setLineupReviewTeam]=useState<string|null>(null);'
           addition=""" const [accordionMemory,setAccordionMemory]=useState<Record<string,boolean>>({});
- const accordionDateKey=(id:string)=>`nhl.accordion.${date}.${id}`;
- const accordionOpen=(id:string)=>accordionMemory[accordionDateKey(id)]??localStorage.getItem(accordionDateKey(id))==='true';
- const accordionToggle=(id:string)=>(e:React.SyntheticEvent<HTMLDetailsElement>)=>{
+           const accordionDateKey=(id:string)=>`nhl.accordion.${date}.${id}`;
+           const accordionOpen=(id:string)=>accordionMemory[accordionDateKey(id)]??localStorage.getItem(accordionDateKey(id))==='true';
+           const accordionToggle=(id:string)=>(e:React.SyntheticEvent<HTMLDetailsElement>)=>{
+            if(e.target!==e.currentTarget)return;
   const value=e.currentTarget.open;
-  const key=accordionDateKey(id);
-  localStorage.setItem(key,String(value));
-  setAccordionMemory(old=>({...old,[key]:value}));
- };
- const revealGameAccordion=(gameId:number)=>{
-  const gameKey=String(gameId);
-  const section=finalIds.has(gameKey)?'final':'active';
-  for(const id of [section==='final'?'finalized':'pending',section+':'+gameKey]){
-   const key=accordionDateKey(id);
-   localStorage.setItem(key,'true');
-   setAccordionMemory(old=>({...old,[key]:true}));
-  }
- };
-"""
+            const key=accordionDateKey(id);
+            localStorage.setItem(key,String(value));
+            setAccordionMemory(old=>({...old,[key]:value}));
+           };
+           const revealGameAccordion=(gameId:number)=>{
+            const gameKey=String(gameId);
+            const section=finalIds.has(gameKey)?'final':'active';
+            for(const id of [section==='final'?'finalized':'pending',section+':'+gameKey]){
+             const key=accordionDateKey(id);
+             localStorage.setItem(key,'true');
+             setAccordionMemory(old=>({...old,[key]:true}));
+            }
+           };
+          """
           assert s.count(anchor)==1
           s=s.replace(anchor,addition+anchor)
           replacements={
