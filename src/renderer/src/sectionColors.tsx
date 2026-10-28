@@ -24,3 +24,16 @@ export function useSectionColors(){
 const segments:[SectionName,string][]=[['games',"Today's Games / Scoreboard"],['bets','Bet Tracker'],['events','Live Event Tracker']]
 const controls:[SectionProperty,string][]=[['background','Panel background'],['accent','Highlight border'],['rail','Collapsed tab / rail']]
 export function SectionColorSettings({colors,update,reset}:{colors:SectionColors;update:(name:SectionName,property:SectionProperty,color:string)=>void;reset:()=>void}){return <section className="sectionColorSettings"><div className="sectionColorHeading"><div><h2>Section Colors</h2><p>Choose separate panel background, highlight border and collapsed-tab colors for each section.</p></div><button type="button" className="sectionColorReset" onClick={reset}>RESET COLORS</button></div><div className="sectionColorGrid">{segments.map(([name,label])=><div key={name} className="sectionColorGroup"><strong>{label}</strong>{controls.map(([property,caption])=><label key={property} className="sectionColorOption"><input type="color" value={colors[name][property]} onChange={e=>update(name,property,e.target.value)} aria-label={label+' '+caption}/><span>{caption}</span><code>{colors[name][property].toUpperCase()}</code></label>)}</div>)}</div><p className="sectionColorNote">Changes apply immediately and are saved on this computer. Existing accent selections are preserved.</p></section>}
+
+type BetEntryColors={slip:string;research:string}
+const ENTRY_KEY='nhlTracker:betEntryColors:v1'
+const ENTRY_DEFAULTS:BetEntryColors={slip:'#0b1b29',research:'#0b1b29'}
+const loadEntry=():BetEntryColors=>{try{const data=JSON.parse(localStorage.getItem(ENTRY_KEY)||'{}');return{slip:isHex(data.slip)?data.slip:ENTRY_DEFAULTS.slip,research:isHex(data.research)?data.research:ENTRY_DEFAULTS.research}}catch{return{...ENTRY_DEFAULTS}}}
+export function useBetEntryColors(){
+ const [entryColors,setEntryColors]=useState<BetEntryColors>(loadEntry)
+ useEffect(()=>{const sync=()=>setEntryColors(loadEntry());window.addEventListener('storage',sync);return()=>window.removeEventListener('storage',sync)},[])
+ const updateEntryColor=(key:keyof BetEntryColors,color:string)=>{if(!isHex(color))return;setEntryColors(current=>{const next={...current,[key]:color};localStorage.setItem(ENTRY_KEY,JSON.stringify(next));return next})}
+ const resetEntryColors=()=>{localStorage.removeItem(ENTRY_KEY);setEntryColors({...ENTRY_DEFAULTS})}
+ return {entryColors,updateEntryColor,resetEntryColors}
+}
+export function BetEntryColorSettings({colors,update,reset}:{colors:BetEntryColors;update:(key:keyof BetEntryColors,color:string)=>void;reset:()=>void}){return <section className="sectionColorSettings"><div className="sectionColorHeading"><div><h2>Bet Entry Colors</h2><p>Two background pickers for the Bet Slip and the pregame research area.</p></div><button type="button" className="sectionColorReset" onClick={reset}>RESET BET ENTRY</button></div><div className="sectionColorGrid">{([['slip','Bet Slip background'],['research','Pregame Research background']] as const).map(([key,label])=><label key={key} className="sectionColorOption"><input type="color" value={colors[key]} onChange={e=>update(key,e.target.value)} aria-label={label}/><span><strong>{label}</strong></span><code>{colors[key].toUpperCase()}</code></label>)}</div></section>}
