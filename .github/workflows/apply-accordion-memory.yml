@@ -30,7 +30,7 @@ jobs:
            const accordionOpen=(id:string)=>accordionMemory[accordionDateKey(id)]??localStorage.getItem(accordionDateKey(id))==='true';
            const accordionToggle=(id:string)=>(e:React.SyntheticEvent<HTMLDetailsElement>)=>{
             if(e.target!==e.currentTarget)return;
-  const value=e.currentTarget.open;
+            const value=e.currentTarget.open;
             const key=accordionDateKey(id);
             localStorage.setItem(key,String(value));
             setAccordionMemory(old=>({...old,[key]:value}));
