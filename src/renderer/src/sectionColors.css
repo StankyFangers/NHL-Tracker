@@ -19,3 +19,34 @@
 .betEntryWorkspace .entryResearchPane {background-color:var(--entry-pane-background,#0b1b29)!important}
 .betEntryWorkspace .entryResearchPane .confirmedBoard,
 .betEntryWorkspace .entryResearchPane .confirmedBoardHead {background-color:transparent}
+
+/* Smart theme: context-bound palette, with no global page or modal overrides. */
+.smartThemeToggle{display:flex!important;align-items:center;gap:8px;margin:8px 0;color:#b7e5f4;font-size:11px;cursor:pointer}
+.smartThemeToggle input{width:15px;height:15px;accent-color:#36cfa2;flex:none}
+.sectionColorOption .smartThemeToggle{font-weight:500}
+.smartTheme{color:var(--smart-text)!important}
+.smartTheme .entrySlipHead,
+.smartTheme .sectionTitle,
+.smartTheme .entryResearchTop{color:var(--smart-text)}
+.entrySlipPane.smartTheme .entrySlip,
+.entryResearchPane.smartTheme .entryResearchTop,
+.entryResearchPane.smartTheme .confirmedBoard{color:var(--smart-text)!important}
+.entrySlipPane.smartTheme .entrySlip .entrySlipHead,
+.entryResearchPane.smartTheme .entryResearchTop{background:transparent!important}
+.smartTheme input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+.smartTheme select,
+.smartTheme textarea{background:var(--smart-field)!important;color:var(--smart-button-text)!important;border-color:var(--smart-border)!important}
+.smartTheme input::placeholder{color:var(--smart-muted)!important;opacity:.85}
+.smartTheme .entrySlipBody,
+.smartTheme .entrySlipEmpty,
+.smartTheme .entryResearchPaneBody,
+.smartTheme .betsTop,
+.smartTheme .confirmedBoardHead{color:var(--smart-text)!important}
+.entrySlipPane.smartTheme .entrySlipEmpty,
+.entrySlipPane.smartTheme .entrySlipLegs,
+.entryResearchPane.smartTheme .confirmedBoardHead{background-color:var(--smart-surface)!important;border-color:var(--smart-border)!important}
+.smartTheme button:not(.confirmedQuickBet):not(.addBetButton):not(.verifyNightButton):not(.entrySubmitBet):not(.entryLineConfirmCheck):not(:disabled){border-color:var(--smart-border)}
+.entrySlipPane.smartTheme button:not(.confirmedQuickBet):not(.entrySubmitBet):not(:disabled),
+.entryResearchPane.smartTheme .entryResearchTop button:not(:disabled){background:var(--smart-button)!important;color:var(--smart-button-text)!important}
+.entrySlipPane.smartTheme .entrySlipHead h1,
+.entryResearchPane.smartTheme .confirmedBoardHead h2{color:var(--smart-text)!important}
