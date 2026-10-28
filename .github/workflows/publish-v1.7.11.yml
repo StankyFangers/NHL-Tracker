@@ -1,0 +1,66 @@
+name: Publish NHL Tracker v1.7.11 Windows release
+on:
+  push:
+    paths:
+      - '.github/workflows/publish-v1.7.11.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify package version and release is not already published
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+          if ($pkg.version -ne '1.7.11') { throw "Expected v1.7.11, found $($pkg.version)" }
+          $existing = gh release list --repo "$env:GITHUB_REPOSITORY" --limit 100 --json tagName | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to inspect existing GitHub releases' }
+          if ($existing | Where-Object { $_.tagName -eq 'v1.7.11' }) { throw 'v1.7.11 release already exists; refusing to overwrite it' }
+      - name: Install dependencies
+        run: npm ci
+      - name: Build Windows NSIS installer
+        run: npm run dist
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Verify installer exists and is nonempty
+        shell: pwsh
+        run: |
+          $file = 'release/NHL Tracker Setup 1.7.11.exe'
+          if (!(Test-Path -LiteralPath $file)) { throw "Missing expected installer: $file" }
+          $bytes = (Get-Item -LiteralPath $file).Length
+          if ($bytes -lt 10000000) { throw "Installer unexpectedly small: $bytes bytes" }
+          Write-Host "Verified installer: $bytes bytes"
+      - name: Create versioned GitHub release with installer
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $notes = @'
+          NHL Tracker v1.7.11 — Windows Desktop
+
+          Highlights:
+          - Bet Tracker Accordion Memory: remembers LIVE / PENDING, FINALIZED GAMES, individual matchups and nested categories by slate date; starts collapsed by default.
+          - Section Color Integration: subtle coordinated tints across top navigation, scoreboard tiles, Bet Tracker and Live Event Tracker cards.
+          - Matchup accordion P/L currency formatting improvements.
+          - All other existing cloud accounts, bet tracking, confidence, and live NHL features are retained.
+
+          Installation:
+          Download and run "NHL Tracker Setup 1.7.11.exe". Use your existing NHL Tracker account to sign in.
+          Windows may display a SmartScreen warning for an unsigned installer.
+
+          Note: This release is an installer update, not a cloud wager migration.
+          '@
+          $notes | Set-Content -LiteralPath release-notes.txt -Encoding utf8
+          gh release create v1.7.11 "release/NHL Tracker Setup 1.7.11.exe" --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --title "NHL Tracker v1.7.11" --notes-file release-notes.txt --latest
