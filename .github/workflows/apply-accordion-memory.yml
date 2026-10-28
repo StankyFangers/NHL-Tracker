@@ -1,0 +1,67 @@
+name: Apply accordion memory (build gated)
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Apply isolated accordion memory change
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/renderer/src/App.tsx')
+          s=p.read_text()
+          anchor=' const [lineupReviewTeam,setLineupReviewTeam]=useState<string|null>(null);'
+          addition=""" const [accordionMemory,setAccordionMemory]=useState<Record<string,boolean>>({});
+ const accordionDateKey=(id:string)=>`nhl.accordion.${date}.${id}`;
+ const accordionOpen=(id:string)=>accordionMemory[accordionDateKey(id)]??localStorage.getItem(accordionDateKey(id))==='true';
+ const accordionToggle=(id:string)=>(e:React.SyntheticEvent<HTMLDetailsElement>)=>{
+  const value=e.currentTarget.open;
+  const key=accordionDateKey(id);
+  localStorage.setItem(key,String(value));
+  setAccordionMemory(old=>({...old,[key]:value}));
+ };
+ const revealGameAccordion=(gameId:number)=>{
+  const gameKey=String(gameId);
+  const section=finalIds.has(gameKey)?'final':'active';
+  for(const id of [section==='final'?'finalized':'pending',section+':'+gameKey]){
+   const key=accordionDateKey(id);
+   localStorage.setItem(key,'true');
+   setAccordionMemory(old=>({...old,[key]:true}));
+  }
+ };
+"""
+          assert s.count(anchor)==1
+          s=s.replace(anchor,addition+anchor)
+          replacements={
+           '<details className="betMasterAccordion livePending" open>':'<details className="betMasterAccordion livePending" open={accordionOpen("pending")} onToggle={accordionToggle("pending")}>',
+           '<details className="betMasterAccordion finalizedGames" open={!!selectedId||!isToday||keys.length===0}>':'<details className="betMasterAccordion finalizedGames" open={accordionOpen("finalized")} onToggle={accordionToggle("finalized")}>',
+           "key={'active-'+k} open={selectedId?selectedId===Number(k):true}":"key={'active-'+k} open={accordionOpen('active:'+k)} onToggle={accordionToggle('active:'+k)}",
+           "key={'final-'+k} open={selectedId?selectedId===Number(k):false}":"key={'final-'+k} open={accordionOpen('final:'+k)} onToggle={accordionToggle('final:'+k)}",
+           "key={k+'-'+cat} open={cat==='COMBOS'}":"key={k+'-'+cat} open={accordionOpen('category:'+k+':'+cat)} onToggle={accordionToggle('category:'+k+':'+cat)}",
+           "setSelectedGame(String(gameId));setBetsCollapsed(false);setEventsCollapsed(false)":"setSelectedGame(String(gameId));revealGameAccordion(gameId);setBetsCollapsed(false);setEventsCollapsed(false)"
+          }
+          for a,b in replacements.items():
+           count=s.count(a)
+           assert count==(2 if a=="key={k+'-'+cat} open={cat==='COMBOS'}" else 1),(a,count)
+           s=s.replace(a,b)
+          p.write_text(s)
+          PY
+      - run: npm ci
+      - run: npm run build
+      - name: Commit only on passing build
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/renderer/src/App.tsx
+          git diff --cached --quiet || (git commit -m "Remember Bet Tracker accordion state by slate date" && git push origin HEAD:main)
