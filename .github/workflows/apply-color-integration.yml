@@ -1,0 +1,54 @@
+name: Apply section color integration (build gated)
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-color-integration.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Apply scoped color theme integration
+        run: |
+          from pathlib import Path
+          app=Path('src/renderer/src/App.tsx')
+          s=app.read_text()
+          old='<header><div className="brand">'
+          new='<header className="themedTopNav" style={{\'--nav-tint\':subtleBackground(sectionColors.games.background),\'--nav-accent\':smartPalette(sectionColors.games.background)[\'--smart-border\']} as React.CSSProperties}><div className="brand">'
+          assert s.count(old)==1, ('header',s.count(old))
+          s=s.replace(old,new)
+          app.write_text(s)
+          css=Path('src/renderer/src/sectionColors.css')
+          c=css.read_text()
+          marker='/* Color integration: verified actual live component selectors */'
+          assert marker not in c
+          c+='\n'+marker+'\n'+'''
+          /* Tint only the dark surfaces; never override semantic P/L or goal artwork colors. */
+          .sectionAccentGames .scoreStrip .scoreTile { background-color:color-mix(in srgb,var(--section-background,#0b151e) 24%,#101e2e)!important; }
+          .sectionAccentGames .scoreStrip .scoreTile.selected { border-color:var(--section-accent,#44b4ed)!important; }
+          .sectionAccentBets .betMasterBody,
+          .sectionAccentBets .betMasterAccordion > summary,
+          .sectionAccentBets .matchupAccordion > summary,
+          .sectionAccentBets .matchupCategory > summary { background-color:color-mix(in srgb,var(--section-background,#0b151e) 18%,#0b1722)!important; }
+          .sectionAccentEvents .feed > article.event:not(.goalWithArt) { background-color:color-mix(in srgb,var(--section-background,#0b151e) 15%,#0b1b29)!important; }
+          .sectionAccentEvents .feed > article.event.goalWithArt { background-color:color-mix(in srgb,var(--section-background,#0b151e) 9%,#0b1b29)!important; }
+          '''
+          css.write_text(c)
+      - run: npm ci
+      - run: npm run build
+      - name: Commit only after successful build
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/renderer/src/App.tsx src/renderer/src/sectionColors.css
+          git diff --cached --quiet || (git commit -m "Connect section color tint to nav scoreboard and live cards" && git push origin HEAD:main)
