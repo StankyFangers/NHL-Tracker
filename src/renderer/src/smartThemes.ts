@@ -9,13 +9,13 @@ const luminance=(color:string)=>{const c=rgb(color).map(n=>{const v=n/255;return
 const contrast=(a:string,b:string)=>{const x=luminance(a),y=luminance(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05)}
 export function smartPalette(background:string):Record<string,string>{
  const base=/^#[0-9a-f]{6}$/i.test(background)?background:'#0b1b29'
- const dark=luminance(base)<.25
- const text=contrast(base,'#ffffff')>=4.5?'#ffffff':'#07131f'
- const surface=mix(base,dark?'#ffffff':'#07131f',dark?.09:.14)
- const field=mix(base,dark?'#061421':'#07131f',dark?.35:.68)
- const button=mix(base,dark?'#ffffff':'#07131f',dark?.20:.60)
- const border=mix(base,dark?'#ffffff':'#07131f',dark?.37:.48)
- const buttonText=contrast(button,'#ffffff')>=4.5?'#ffffff':'#07131f'
- const muted=contrast(base,'#ffffff')>=4.5?mix('#ffffff',base,.20):mix('#07131f',base,.15)
- return {'--smart-surface':surface,'--smart-field':field,'--smart-button':button,'--smart-border':border,'--smart-text':text,'--smart-button-text':buttonText,'--smart-muted':muted}
+ // Layered, dark surfaces keep cards readable even when the selected backdrop is light.
+ const dark=luminance(base)<.22
+ const surface=mix(base,'#071521',dark?.70:.85)
+ const field=mix(base,'#061521',dark?.78:.91)
+ const button=mix(base,'#16394b',dark?.65:.80)
+ const border=mix(base,'#d9ebf5',dark?.40:.48)
+ const text='#f3f9ff'
+ const muted='#b9d2df'
+ return {'--smart-surface':surface,'--smart-field':field,'--smart-button':button,'--smart-border':border,'--smart-text':text,'--smart-button-text':'#f3f9ff','--smart-muted':muted}
 }
