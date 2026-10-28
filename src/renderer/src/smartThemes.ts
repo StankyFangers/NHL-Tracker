@@ -19,3 +19,9 @@ export function smartPalette(background:string):Record<string,string>{
  const muted='#b9d2df'
  return {'--smart-surface':surface,'--smart-field':field,'--smart-button':button,'--smart-border':border,'--smart-text':text,'--smart-button-text':'#f3f9ff','--smart-muted':muted}
 }
+
+/** The chosen color is an accent influence, not a full-strength workspace fill. */
+export function subtleBackground(color:string):string{
+ const base=/^#[0-9a-f]{6}$/i.test(color)?color:'#0b1b29'
+ return mix('#09141f',base,.20)
+}
