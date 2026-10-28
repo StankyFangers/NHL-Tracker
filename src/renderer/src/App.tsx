@@ -123,7 +123,7 @@ const cashNetUnits=(b:Bet)=>b.unitSize>0?cashNet(b)/b.unitSize:0
 const teamUnitsBet=(bets:Bet[],day:string,team:string):number=>bets.reduce((n,b)=>{if(b.date!==day||b.status==='VOID')return n;const teams=new Set(b.legs.filter(l=>!l.voided).map(l=>String(l.team||'').toUpperCase()).filter(Boolean));return n+(teams.has(team.toUpperCase())&&Number.isFinite(b.units)?b.units:0)},0)
 const displayBetUnits=(n:number)=>Number(n.toFixed(2)).toString()+'u'
 const gameShots=(team:any):number|undefined=>{const candidates=[team?.sog,team?.shotsOnGoal,team?.shots];for(const raw of candidates){if(raw!==undefined&&raw!==null&&raw!==''&&Number.isFinite(Number(raw)))return Number(raw)}return undefined}
-const BOOKS=['Kalshi','Fanatics','DraftKings','FanDuel','bet365']
+const BOOKS=['Kalshi','Fanatics','DraftKings','FanDuel','bet365','PrizePicks','Underdog']
 function parsePowerPlays(pbp:any,game:Game):FeedEvent[]{
  const out:FeedEvent[]=[]; const plays=pbp?.plays||[]; let previousSituation=''; const pulled:{away:boolean;home:boolean}={away:false,home:false}; (game as any)._trackerEmptyNetTeam=''
  const rosterName=new Map<number,string>();for(const r of(pbp?.rosterSpots||[])){const id=Number(r?.playerId||r?.player?.id||0);const nm=[name(r?.firstName),name(r?.lastName)].filter(Boolean).join(' ')||name(r?.player?.name)||'';if(id&&nm)rosterName.set(id,nm)}
