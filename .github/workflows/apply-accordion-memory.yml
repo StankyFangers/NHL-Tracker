@@ -1,5 +1,8 @@
 name: Apply accordion memory (build gated)
 on:
+  push:
+    paths:
+      - '.github/workflows/apply-accordion-memory.yml'
   workflow_dispatch:
 permissions:
   contents: write
