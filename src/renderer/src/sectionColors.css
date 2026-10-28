@@ -82,3 +82,43 @@
 .entrySlipPane.smartTheme select,
 .entryResearchPane.smartTheme input,
 .entryResearchPane.smartTheme select{color:#f3f9ff!important}
+
+/* Theme continuity: actual Bet Entry cards (slipLeg / confirmedMatchup),
+   not the older unused entrySlipLeg / confirmedComboRow selectors. */
+.betEntryWorkspace .entrySlipPane .slipLeg,
+.betEntryWorkspace .entrySlipPane .slipEmpty,
+.betEntryWorkspace .entryResearchPane .confirmedMatchup,
+.betEntryWorkspace .entryResearchPane .confirmedCombo{
+  background:var(--smart-surface,#112334)!important;
+  border-color:var(--smart-border,#35586a)!important;
+  color:#f3f9ff!important;
+}
+.betEntryWorkspace .entryResearchPane .confirmedMatchupHead{
+  background:color-mix(in srgb,var(--smart-surface,#112334) 78%,var(--entry-pane-background,#0b1b29))!important;
+  border-color:var(--smart-border,#35586a)!important;
+  color:#f3f9ff!important;
+}
+.betEntryWorkspace .entrySlipPane .slipLeg b,
+.betEntryWorkspace .entrySlipPane .slipLeg label,
+.betEntryWorkspace .entryResearchPane .confirmedMatchupHead b,
+.betEntryWorkspace .entryResearchPane .confirmedComboRow b,
+.betEntryWorkspace .entryResearchPane .confirmedComboRow .confirmedDeployment{
+  color:#f3f9ff!important;
+}
+.betEntryWorkspace .entrySlipPane .slipLeg small,
+.betEntryWorkspace .entryResearchPane .confirmedEntrySource{
+  color:#bdd4e1!important;
+}
+.betEntryWorkspace .entrySlipPane .slipLeg input,
+.betEntryWorkspace .entrySlipPane .slipLeg select{
+  background:var(--smart-field,#091c29)!important;
+  border-color:var(--smart-border,#35586a)!important;
+  color:#f3f9ff!important;
+}
+.betEntryWorkspace .entryResearchPane .confirmedMatchup,
+.betEntryWorkspace .entryResearchPane .confirmedCombo{
+  border-color:color-mix(in srgb,var(--smart-border,#35586a) 65%,transparent)!important;
+}
+.betEntryWorkspace .entryResearchPane .confirmedQuickBet{
+  color:#75eab0!important;
+}
