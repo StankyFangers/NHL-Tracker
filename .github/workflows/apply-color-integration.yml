@@ -20,6 +20,7 @@ jobs:
           cache: npm
       - name: Apply scoped color theme integration
         run: |
+          python3 - <<'PY'
           from pathlib import Path
           app=Path('src/renderer/src/App.tsx')
           s=app.read_text()
@@ -44,6 +45,7 @@ jobs:
           .sectionAccentEvents .feed > article.event.goalWithArt { background-color:color-mix(in srgb,var(--section-background,#0b151e) 9%,#0b1b29)!important; }
           '''
           css.write_text(c)
+          PY
       - run: npm ci
       - run: npm run build
       - name: Commit only after successful build
