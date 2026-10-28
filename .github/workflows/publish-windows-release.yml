@@ -46,14 +46,14 @@ jobs:
           target_commitish: ${{ github.sha }}
           name: NHL Tracker v${{ steps.version.outputs.version }}
           body: |
-            NHL Tracker v1.7.9
-            - Pregame compact scoreboard now shows total Units Bet per team across every wager category.
-            - Bet Tracker groups wagers by matchup, then by Combos / Assists / Other / custom category.
-            - Configurable category dropdowns in Settings, including Apply to All Sports.
-            - Assist-only bets default to the Assists category.
-            - Existing wagers retain their saved categories.
+            NHL Tracker v1.7.10
+            - Matchup accordions show custom away/home crests, running dollar P/L and unit P/L.
+            - Selecting a live event filters the Bet Tracker to that matchup's expanded accordion.
+            - Sportsbook Balances view in the top bar, with daily opening balances in Settings.
+            - Individually select visible books, including PrizePicks and Underdog.
+            - Includes all v1.7.9 category, team Units Bet and wager grouping updates.
 
-            Download the Windows Setup .exe attached below. In NHL Tracker v1.7.8, use Settings > Check for Updates > Download Update to reach this release.
+            Download the Windows Setup .exe attached below. In NHL Tracker, use Settings > Check for Updates > Download Update to reach this release.
             This updater opens the download page; installation is manual.
           files: release/*.exe
           fail_on_unmatched_files: true
