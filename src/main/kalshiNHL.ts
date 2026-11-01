@@ -32,6 +32,14 @@ async function request(path:string,params?:URLSearchParams){
 const dateOf=(f:any)=>String(f.created_time||f.ts||f.created_at||f.timestamp||'')
 const hockey=(s:string)=>/\bNHL\b|hockey|ice hockey|KXNHL|KXNHLPTS|KXNHLAST|KXNHLGOALS/i.test(s)
 const rawTicker=(f:any)=>String(f.ticker||f.market_ticker||'')
+const isNhlTicker=(ticker:string)=>/^KXNHL(?:[A-Z0-9]*)(?:-|$)/i.test(ticker)
+const parentLegDescriptions=(m:any,expected:number)=>{
+ const title=[m?.title,m?.subtitle,m?.yes_sub_title].filter(Boolean).join(' | ')
+ // Kalshi often renders "yes PLAYER: 1+ yes PLAYER: 1+" in the combo title.
+ // These are shown for diagnosis only and never treated as verified per-leg markets.
+ const snippets=[...title.matchAll(/\byes\s+([^|]+?:\s*\d+\+)(?=\s+yes\s+|\s*\||$)/gi)].map(x=>x[1].trim())
+ return snippets.length===expected?snippets:[]
+}
 const asLegs=(m:any):any[]=>Array.isArray(m?.mve_selected_legs)?m.mve_selected_legs:[]
 const metaCache=new Map<string,any>()
 async function market(ticker:string):Promise<any>{
@@ -80,18 +88,21 @@ async function scan(from:string,limitPages:number){
  }
  const rows=all.map((f:any)=>{
   const ticker=rawTicker(f),m=metaCache.get(ticker)||{}
-  const legs=asLegs(m).map((l:any)=>{
+  const parentTitles=parentLegDescriptions(m,asLegs(m).length)
+  const legs=asLegs(m).map((l:any,index:number)=>{
    const lt=String(l.market_ticker||'')
    const lm=metaCache.get(lt)||{}
-   return {ticker:lt,side:String(l.side||''),title:[lm.title,lm.subtitle,lm.yes_sub_title].filter(Boolean).join(' | ')||lt,resolved:!!lm.title}
+   const metadataTitle=[lm.title,lm.subtitle,lm.yes_sub_title].filter(Boolean).join(' | ')
+   const fallback=parentTitles[index]||''
+   return {ticker:lt,side:String(l.side||''),title:metadataTitle||fallback||lt,resolved:!!lm.title,source:metadataTitle?'MARKET_METADATA':fallback?'PARENT_TITLE':'TICKER_ONLY',nhlTicker:isNhlTicker(lt)}
   })
   const description=[m.title,m.subtitle,m.yes_sub_title].filter(Boolean).join(' | ')
   const classificationText=[ticker,description,...legs.flatMap(l=>[l.ticker,l.title])].join(' ')
   const anyNhl=hockey(classificationText)
-  const everyLegNhl=legs.length>0&&legs.every(l=>l.resolved&&hockey(l.ticker+' '+l.title))
+  const everyLegNhl=legs.length>0&&legs.every(l=>l.nhlTicker || (l.resolved&&hockey(l.title)))
   const allLegsResolved=legs.length>0&&legs.every(l=>l.resolved)
   const isNhl=legs.length>0?everyLegNhl:anyNhl
-  const classification=legs.length>0?(everyLegNhl?'NHL_COMBO':!allLegsResolved?'UNRESOLVED_COMBO':anyNhl?'MIXED_OR_UNVERIFIED_COMBO':'OTHER_COMBO'):(isNhl?'NHL_SINGLE':'UNCLASSIFIED')
+  const classification=legs.length>0?(everyLegNhl?(allLegsResolved?'NHL_COMBO_VERIFIED':'NHL_COMBO_TICKERS_CONFIRMED') :!allLegsResolved?'UNRESOLVED_COMBO':anyNhl?'MIXED_OR_UNVERIFIED_COMBO':'OTHER_COMBO'):(isNhl?'NHL_SINGLE':'UNCLASSIFIED'):(isNhl?'NHL_SINGLE':'UNCLASSIFIED')
   const fillId=String(f.fill_id||f.trade_id||'')
   const orderId=String(f.order_id||'')
   // Never invent an external ID from date and ticker; the import engine must require a real ID.
@@ -108,7 +119,8 @@ async function scan(from:string,limitPages:number){
  const distinctOrders=new Set(nhl.map(r=>r.orderId).filter(Boolean))
  // A single order may contain multiple fills. Only order-level grouping is proposed for review.
  const combos=nhl.filter(r=>r.legs.length>=2)
- return {totalFills:all.length,nhl,unknown:unknown.slice(0,500),unclassified:unknown.length,pages,complete,marketLookups:lookups,legLookups,unresolved:Math.max(unresolved,uniqueTickers.filter(t=>!metaCache.has(t)).length),distinctNhlOrders:distinctOrders.size,combos:combos.length,mixedLegs,unresolvedCombos,otherCombos,notice:'Read-only: '+nhl.length+' NHL-related fills, '+combos.length+' with multiple documented component legs, '+unknown.length+' review-required/other fills ('+mixedLegs+' mixed, '+unresolvedCombos+' unresolved combos). No wagers imported.'}
+ const comboTickerFallbacks=nhl.filter(r=>r.review==='NHL_COMBO_TICKERS_CONFIRMED').length
+ return {totalFills:all.length,nhl,unknown:unknown.slice(0,500),unclassified:unknown.length,pages,complete,marketLookups:lookups,legLookups,unresolved:Math.max(unresolved,uniqueTickers.filter(t=>!metaCache.has(t)).length),distinctNhlOrders:distinctOrders.size,combos:combos.length,comboTickerFallbacks,mixedLegs,unresolvedCombos,otherCombos,notice:'Read-only: '+nhl.length+' NHL-related fills, '+combos.length+' with multiple documented component legs, '+unknown.length+' review-required/other fills ('+mixedLegs+' mixed, '+unresolvedCombos+' unresolved combos). No wagers imported.'}
 }
 export function registerKalshiNHL(){
  ipcMain.handle('kalshi:settings',async()=>{
