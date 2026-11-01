@@ -15,7 +15,7 @@ async function stored():Promise<Credential>{
  if(!credential?.id||!credential?.pem)throw Error('Invalid stored Kalshi credentials')
  return credential
 }
-async function request(path:string,params?:URLSearchParams){
+async function request(path:string,params?:URLSearchParams,signal?:AbortSignal){
  const creds=cached||await stored()
  const key=createPrivateKey(creds.pem)
  const ms=String(Date.now())
@@ -24,7 +24,7 @@ async function request(path:string,params?:URLSearchParams){
   ?sign(null,signed,key)
   :sign('sha256',signed,{key,padding:constants.RSA_PKCS1_PSS_PADDING,saltLength:32})
  const url=BASE+path+(params?.size?'?'+params.toString():'')
- const resp=await fetch(url,{headers:{'KALSHI-ACCESS-KEY':creds.id,'KALSHI-ACCESS-TIMESTAMP':ms,'KALSHI-ACCESS-SIGNATURE':signature.toString('base64'),'Accept':'application/json'},signal:AbortSignal.timeout(30000)})
+ const resp=await fetch(url,{headers:{'KALSHI-ACCESS-KEY':creds.id,'KALSHI-ACCESS-TIMESTAMP':ms,'KALSHI-ACCESS-SIGNATURE':signature.toString('base64'),'Accept':'application/json'},signal:signal?AbortSignal.any([signal,AbortSignal.timeout(30000)]):AbortSignal.timeout(30000)})
  if(!resp.ok)throw Error('Kalshi HTTP '+resp.status+' — '+(await resp.text()).slice(0,140))
  return resp.json() as Promise<any>
 }
@@ -61,16 +61,17 @@ const parentLegDescriptions=(m:any,expected:number)=>{
 }
 const asLegs=(m:any):any[]=>Array.isArray(m?.mve_selected_legs)?m.mve_selected_legs:[]
 const metaCache=new Map<string,any>()
-async function market(ticker:string):Promise<any>{
+async function market(ticker:string,signal?:AbortSignal):Promise<any>{
+ if(signal?.aborted)throw Error('Kalshi scan cancelled')
  if(metaCache.has(ticker))return metaCache.get(ticker)
  try{
-  const r=await request('/markets/'+encodeURIComponent(ticker))
+  const r=await request('/markets/'+encodeURIComponent(ticker),undefined,signal)
   const result=r.market||null
   metaCache.set(ticker,result)
   return result
- }catch{metaCache.set(ticker,null);return null}
+ }catch(e){if(signal?.aborted)throw e;metaCache.set(ticker,null);return null}
 }
-async function scan(from:string,limitPages:number){
+async function scan(from:string,limitPages:number,signal?:AbortSignal){
  if(!/^20\d{2}-\d{2}-\d{2}$/.test(from))throw Error('Invalid historical date')
  const start=Date.parse(from+'T00:00:00Z')
  if(!Number.isFinite(start))throw Error('Invalid historical date')
@@ -78,9 +79,10 @@ async function scan(from:string,limitPages:number){
  const seen=new Set<string>()
  let cursor='',complete=false,pages=0
  for(let i=0;i<limitPages;i++){
+  if(signal?.aborted)throw Error('Kalshi scan cancelled')
   const q=new URLSearchParams({limit:'200',min_ts:String(Math.floor(start/1000))})
   if(cursor)q.set('cursor',cursor)
-  const response=await request('/portfolio/fills',q)
+  const response=await request('/portfolio/fills',q,signal)
   all.push(...(Array.isArray(response.fills)?response.fills:[]))
   pages++
   cursor=String(response.cursor||'')
@@ -94,7 +96,8 @@ async function scan(from:string,limitPages:number){
  for(const ticker of uniqueTickers){
   if(metaCache.has(ticker))continue
   if(lookups>=1200){unresolved++;continue}
-  await market(ticker);lookups++
+  if(signal?.aborted)throw Error('Kalshi scan cancelled')
+  await market(ticker,signal);lookups++
  }
  // Fetch each component market's readable title rather than searching JSON strings
  // containing only underlying market identifiers.
@@ -103,7 +106,8 @@ async function scan(from:string,limitPages:number){
  for(const ticker of parentLegTickers){
   if(metaCache.has(ticker))continue
   if(legLookups>=1200)break
-  await market(ticker);legLookups++
+  if(signal?.aborted)throw Error('Kalshi scan cancelled')
+  await market(ticker,signal);legLookups++
  }
  const rows=all.map((f:any)=>{
   const ticker=rawTicker(f),m=metaCache.get(ticker)||{}
@@ -147,7 +151,17 @@ async function scan(from:string,limitPages:number){
  const comboTickerFallbacks=nhl.filter(r=>r.review==='NHL_COMBO_TICKERS_CONFIRMED').length
  return {totalFills:all.length,nhl,unknown:unknown.slice(0,500),unclassified:unknown.length,categoryCounts:{unresolved:buckets.unresolved.length,mixed:buckets.mixed.length,otherSports:buckets.otherSports.length},pages,complete,marketLookups:lookups,legLookups,unresolved:Math.max(unresolved,uniqueTickers.filter(t=>!metaCache.has(t)).length),distinctNhlOrders:distinctOrders.size,combos:combos.length,comboTickerFallbacks,mixedLegs,unresolvedCombos,otherCombos,notice:'Read-only: '+nhl.length+' NHL-related fills, '+combos.length+' with multiple documented component legs, '+unknown.length+' review-required/other fills ('+mixedLegs+' mixed, '+unresolvedCombos+' unresolved combos). No wagers imported.'}
 }
+let activeScan:AbortController|null=null
+async function withScan<T>(work:(signal:AbortSignal)=>Promise<T>):Promise<T>{
+ if(activeScan)throw Error('Another Kalshi scan is already running. Cancel it first.')
+ const controller=new AbortController()
+ activeScan=controller
+ try{return await work(controller.signal)}
+ finally{if(activeScan===controller)activeScan=null}
+}
 export function registerKalshiNHL(){
+ ipcMain.handle('kalshi:cancel',async()=>{if(activeScan)activeScan.abort();return {cancelled:true}})
+
  ipcMain.handle('kalshi:settings',async()=>{
   if(!keySafe())return {configured:false,error:'Secure Windows encryption unavailable'}
   try{const c=await stored();return {configured:true,keyId:c.id}}catch(e:any){return {configured:false,error:e?.code==='ENOENT'?'':String(e?.message||e)}}
@@ -178,20 +192,20 @@ export function registerKalshiNHL(){
   return {ok:true}
  })
  ipcMain.handle('kalshi:check',async()=>{await request('/portfolio/balance');return {ok:true}})
- ipcMain.handle('kalshi:history',async(_e,from:string)=>scan(from,30))
- ipcMain.handle('kalshi:sync-today',async(_e,date:string)=>{
+ ipcMain.handle('kalshi:history',async(_e,from:string)=>withScan(signal=>scan(from,30,signal)))
+ ipcMain.handle('kalshi:sync-today',async(_e,date:string)=>withScan(async signal=>{
   if(!/^20\d{2}-\d{2}-\d{2}$/.test(date))throw Error('Invalid sync date')
   // Kalshi timestamps use UTC while NHL slate dates are America/New_York.
   // Fetch from the prior UTC day to include early Eastern-calendar-day buys,
   // but return ONLY orders placed on the selected Eastern date.
   const previousUtc=new Date(Date.parse(date+'T12:00:00Z')-86400000).toISOString().slice(0,10)
-  const result=await scan(previousUtc,30)
+  const result=await scan(previousUtc,30,signal)
   if(!result.complete)throw Error('Incomplete Kalshi scan: import blocked to prevent partial order totals')
   // Daily Sync imports ONLY wagers placed on the selected Eastern calendar day.
   // The prior UTC scan boundary is retrieval padding for Eastern midnight,
   // NOT permission to include yesterday's wagers. Older purchases belong to History.
   return {...result,nhl:result.nhl.filter(x=>x.date===date),unknown:[],notice:'Daily Sync: only NHL bets placed on '+date+' (Eastern). Older wagers must use Historical Sync.'}
- })
+ }))
  ipcMain.handle('kalshi:sync-preview',async()=>{
   // Deliberately preview-only until fill -> wager grouping / settlements are verified.
   return scan('2026-10-01',10)
