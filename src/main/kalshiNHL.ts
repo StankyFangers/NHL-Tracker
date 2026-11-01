@@ -172,7 +172,7 @@ export function registerKalshiNHL(){
  ipcMain.handle('kalshi:check',async()=>{await request('/portfolio/balance');return {ok:true}})
  ipcMain.handle('kalshi:history',async(_e,from:string)=>scan(from,30))
  ipcMain.handle('kalshi:sync-today',async(_e,date:string)=>{
-  if(!/^20\\d{2}-\\d{2}-\\d{2}$/.test(date))throw Error('Invalid sync date')
+  if(!/^20\d{2}-\d{2}-\d{2}$/.test(date))throw Error('Invalid sync date')
   const result=await scan(date,10)
   if(!result.complete)throw Error('Incomplete Kalshi scan: import blocked to prevent partial order totals')
   return {...result,nhl:result.nhl.filter(x=>x.date===date),unknown:[],notice:'Current-day scan complete. Review candidates before importing.'}
