@@ -1,7 +1,7 @@
 import {useKalshiJob,startKalshiJob,cancelKalshiJob,dismissKalshiPreview,setKalshiJobStatus} from './kalshiSyncJobs'
 import {KalshiHistoricalImporter} from './KalshiHistoricalImporter'
 import {addKalshiFlags,clearKalshiFlags} from './KalshiSyncReview'
-import {prepareKalshiImports,verifyKalshiIdentity,classifyExistingKalshiBet,type KalshiFill,type Candidate} from './kalshiImport'
+import {prepareKalshiImports,reconcileAlreadyLoggedKalshi,verifyKalshiIdentity,classifyExistingKalshiBet,type KalshiFill,type Candidate} from './kalshiImport'
 import {useEffect,useState,type CSSProperties} from 'react'
 type Row={id:string;fillId:string;orderId:string;date:string;ticker:string;title:string;side:string;action:string;count:string;price:string;fee:string;isNhl:boolean;review:string;detectedSport:string;legs:{ticker:string;side:string;title:string;resolved:boolean;source:string;nhlTicker:boolean}[]}
 type Result={totalFills:number;nhl:Row[];unknown:Row[];unclassified:number;pages:number;complete:boolean;marketLookups:number;legLookups:number;unresolved:number;distinctNhlOrders:number;combos:number;categoryCounts:{unresolved:number;mixed:number;otherSports:number};comboTickerFallbacks:number;mixedLegs:number;unresolvedCombos:number;otherCombos:number;notice:string}
@@ -124,8 +124,8 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
    ctx.assertActive()
    if(flags.length)addKalshiFlags(flags)
    if(!ready.length){
-    const already=skipped.filter(x=>x.reason==='Already imported').length
-    const reasons=[...new Map(diagnosis.filter(x=>x.reason!=='Already imported').map(x=>[x.reason,true])).keys()]
+    const already=skipped.filter(x=>/Already imported|Already recorded as a matching manually logged Kalshi bet/.test(x.reason)).length
+    const reasons=[...new Map(diagnosis.filter(x=>!/^Already (imported|recorded)/.test(x.reason)).map(x=>[x.reason,true])).keys()]
     ctx.update({msg:'No new wagers · '+totalGroups+' Kalshi orders scanned · '+already+' exact duplicates · '+(skippedCount-already)+' skipped for other reasons. '+(reasons.length?'See individual reasons below.':'')})
 
     return
@@ -141,7 +141,9 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
   // Keep the same ID and manually-entered-wager checks in the final React state update.
   setBets((old:any[])=>{
    const ids=new Set(old.map(b=>String(b.id)))
-   const additions=newBets.filter(b=>!ids.has(b.id))
+   const eligible=reconcileAlreadyLoggedKalshi(preview.items,old).available
+   const allowed=new Set(eligible.map(c=>c.id))
+   const additions=newBets.filter(b=>allowed.has(b.id)&&!ids.has(b.id))
    return additions.length?[...old,...additions]:old
   })
   clearKalshiFlags(preview.items.map(c=>c.id))
