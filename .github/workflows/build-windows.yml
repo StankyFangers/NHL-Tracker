@@ -75,3 +75,25 @@ jobs:
           test "$(node -p "require('./package.json').version")" = "1.7.8"
           (cd installer && sha256sum *.exe > SHA256SUMS.txt)
           gh release create v1.7.8 installer/*.exe installer/SHA256SUMS.txt --target "$GITHUB_SHA" --title "NHL Tracker v1.7.8" --notes-file docs/releases/v1.7.8.md --latest
+
+  publish-v1-7-12:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[publish-v1.7.12]')
+    needs: windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: NHL-Tracker-Windows-${{ github.run_number }}
+          path: installer
+      - name: Publish verified 1.7.12 Windows release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node -p "require('./package.json').version")" = "1.7.12"
+          (cd installer && sha256sum *.exe > SHA256SUMS.txt)
+          gh release create v1.7.12 installer/*.exe installer/SHA256SUMS.txt --target "$GITHUB_SHA" --title "NHL Tracker v1.7.12" --notes-file docs/releases/v1.7.12.md --latest
