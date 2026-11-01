@@ -57,7 +57,9 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
    // Repeat the ID guard against the most current React state.
    setBets((old:any[])=>{
     const ids=new Set(old.map(b=>String(b.id)))
-    const additions=newBets.filter(b=>!ids.has(b.id))
+    const signature=(b:any)=>String(b.date)+'|'+(b.legs||[]).map((l:any)=>String(l.player).normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')+':'+l.qty+':'+l.stat).sort().join(';')
+    const manual=new Set(old.filter(b=>b.book==='Kalshi').map(signature))
+    const additions=newBets.filter(b=>!ids.has(b.id)&&!manual.has(signature(b)))
     return additions.length?[...old,...additions]:old
    })
    setMsg('Submitted '+newBets.length+' Kalshi wagers to Bet Tracker ('+skippedCount+' skipped). Check cloud sync status before closing NHL Tracker. All imported wagers are PENDING.')
