@@ -41,11 +41,11 @@ function extractLegs(row:KalshiFill):ParsedLeg[]|null{
  const p=parseTitle(row.title,row.ticker)
  return p?[p]:null
 }
-function attachNhlMatch(legs:ParsedLeg[],dfo:Record<string,any>,games:any[]):boolean{
+function attachNhlMatch(legs:ParsedLeg[],dfo:Record<string,any>,games:any[],rosterPlayers:Record<string,string[]>={}):boolean{
  const teamOf=(g:any,side:'away'|'home')=>String(g?.[side+'Team']?.abbrev?.default||g?.[side+'Team']?.abbrev||g?.[side+'Team']?.triCode||'').toUpperCase()
  for(const leg of legs){
   const player=normalized(leg.player)
-  const matchingTeams=Object.entries(dfo).filter(([_,info])=>[...(info?.forwardLines||[]).flat(),...(info?.defensePairs||[]).flat(),...(info?.pp1||[]),...(info?.pp2||[])].some((name:any)=>normalized(String(name))===player)).map(([team])=>team)
+  // The game roster is the identity source. DFO lineup coverage is optional and used for classification.\n  const matchingTeams=Object.entries(rosterPlayers).filter(([_,names])=>names.some(name=>normalized(name)===player)).map(([team])=>team)
   if(matchingTeams.length!==1)return false
   const team=matchingTeams[0]
   const matchedGames=games.filter(g=>teamOf(g,'away')===team||teamOf(g,'home')===team)
@@ -72,7 +72,7 @@ function classify(legs:ParsedLeg[],dfo:Record<string,any>,games:any[]){
  return 'OTHER'
 }
 export type KalshiSlate={date:string;dfo:Record<string,any>;games:any[]}
-export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Record<string,any>,games:any[],unitSize:number,overnight:KalshiSlate[]=[],currentSlateDate:string=''){
+export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Record<string,any>,games:any[],unitSize:number,overnight:KalshiSlate[]=[],currentSlateDate:string='',rosterPlayers:Record<string,string[]>={}){
  const groups=new Map<string,KalshiFill[]>()
  const skipped:{id:string;reason:string}[]=[]
  const day=Array.from(new Set(fills.map(f=>f.date)))
@@ -95,8 +95,8 @@ export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Recor
   // Never move a wager onto another slate just because the players match.
   const matchingSlate=[{date:currentSlateDate||fs[0].date,dfo,games},...overnight].find(slate=>slate.date===fs[0].date)
   if(!matchingSlate){skipped.push({id,reason:'No NHL slate loaded for Kalshi bet placement date '+fs[0].date});continue}
-  if(!attachNhlMatch(legs,matchingSlate.dfo,matchingSlate.games)){
-   skipped.push({id,reason:'Players not found on NHL lineup for bet placement date '+fs[0].date});continue
+  if(!attachNhlMatch(legs,matchingSlate.dfo,matchingSlate.games,rosterPlayers)){
+   skipped.push({id,reason:'Players could not be uniquely matched to NHL teams playing on '+fs[0].date});continue
   }
   const gameDate=fs[0].date
   // An order can contain multiple fills, priced in dollars per contract. Preserve actual fee cost.
