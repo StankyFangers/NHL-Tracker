@@ -1,3 +1,4 @@
+import {readDfoSnapshot} from './dfoSnapshots'
 import {addKalshiFlags} from './KalshiSyncReview'
 import {prepareKalshiImports,verifyKalshiIdentity,type KalshiFill,type Candidate} from './kalshiImport'
 import {useEffect,useState,type CSSProperties} from 'react'
@@ -48,7 +49,27 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
    if(!Number.isFinite(unitSize)||unitSize<=0)throw Error('Set a positive unit size in Settings.')
    if(!Object.keys(slateDfo).length)throw Error('Load projected/confirmed lines first using Update Lines.')
    const res=await api().kalshiSyncToday(date)
-   const {candidates,skipped,totalGroups}=prepareKalshiImports(res.nhl as KalshiFill[],bets,slateDfo,games,unitSize)
+   const previous=new Date(Date.parse(date+'T12:00:00Z')-86400000).toISOString().slice(0,10)
+   // Read actual saved previous-day lineups, not current DFO projections.
+   // Lack of a historical snapshot is an explicit review flag, never permission to guess.
+   const overnight:import('./kalshiImport').KalshiSlate[]=[]
+   try{
+    const score=await (window as any).nhlTracker.score(previous)
+    const previousGames=Array.isArray(score?.games)?score.games:[]
+    const teams=new Set<string>()
+    for(const g of previousGames)for(const t of [g.awayTeam,g.homeTeam]){
+     const key=String(t?.abbrev?.default||t?.abbrev||t?.triCode||'').toUpperCase()
+     if(key)teams.add(key)
+    }
+    const historical:Record<string,any>={}
+    for(const team of teams){
+     const snapshot=readDfoSnapshot(previous,team)
+     const info=snapshot?.confirmed||snapshot?.firstProjected||snapshot?.baseline
+     if(info)historical[team]=info
+    }
+    if(previousGames.length&&Object.keys(historical).length)overnight.push({date:previous,dfo:historical,games:previousGames})
+   }catch{/* No trusted old slate available: unmatched wagers remain flagged. */}
+   const {candidates,skipped,totalGroups}=prepareKalshiImports(res.nhl as KalshiFill[],bets,slateDfo,games,unitSize,overnight)
    const verified=await verifyKalshiIdentity(candidates,(team:string)=>(window as any).nhlTracker.roster(team))
    const ready=verified.accepted
    const skippedCount=skipped.length+verified.rejected.length
