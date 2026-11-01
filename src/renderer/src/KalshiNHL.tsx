@@ -1,4 +1,4 @@
-import {prepareKalshiImports,verifyKalshiIdentity,type KalshiFill} from './kalshiImport'
+import {prepareKalshiImports,verifyKalshiIdentity,type KalshiFill,type Candidate} from './kalshiImport'
 import {useEffect,useState,type CSSProperties} from 'react'
 type Row={id:string;fillId:string;orderId:string;date:string;ticker:string;title:string;side:string;action:string;count:string;price:string;fee:string;isNhl:boolean;review:string;detectedSport:string;legs:{ticker:string;side:string;title:string;resolved:boolean;source:string;nhlTicker:boolean}[]}
 type Result={totalFills:number;nhl:Row[];unknown:Row[];unclassified:number;pages:number;complete:boolean;marketLookups:number;legLookups:number;unresolved:number;distinctNhlOrders:number;combos:number;categoryCounts:{unresolved:number;mixed:number;otherSports:number};comboTickerFallbacks:number;mixedLegs:number;unresolvedCombos:number;otherCombos:number;notice:string}
@@ -36,34 +36,59 @@ export function KalshiNHLSettings({mode='settings'}:{mode?:'settings'|'history'}
 }
 export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo,games,canSave}:{date:string;selectedSlate:string;bets:any[];setBets:any;unitSize:number;slateDfo:Record<string,any>;games:any[];canSave:boolean}){
  const [busy,setBusy]=useState(false),[msg,setMsg]=useState('')
+ const [preview,setPreview]=useState<{date:string;items:Candidate[];skipped:number;orders:number}|null>(null)
+ const signature=(b:any)=>String(b.date)+'|'+(b.legs||[]).map((l:any)=>String(l.player).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')+':'+l.qty+':'+l.stat).sort().join(';')
  const sync=async()=>{
   if(busy)return
-  setBusy(true);setMsg('Contacting Kalshi and reviewing today’s fills…')
+  setBusy(true);setPreview(null);setMsg('Contacting Kalshi and reviewing today’s fills…')
   try{
-   if(selectedSlate!==date)throw Error('Select today’s NHL slate before importing. Current DFO lineups belong to the selected slate, not necessarily today.')
-   if(!canSave)throw Error('Account wager synchronization is not ready. Sign in and wait for cloud status before importing.')
-   if(!Number.isFinite(unitSize)||unitSize<=0)throw Error('Set a positive unit size in Settings before importing.')
-   if(!Object.keys(slateDfo).length)throw Error('Load the projected/confirmed lines before importing. Use Update Lines on Bet Entry.')
+   if(selectedSlate!==date)throw Error('Select today’s NHL slate before importing. Current DFO lineups belong to the selected slate.')
+   if(!canSave)throw Error('Wait until account wager synchronization is ready.')
+   if(!Number.isFinite(unitSize)||unitSize<=0)throw Error('Set a positive unit size in Settings.')
+   if(!Object.keys(slateDfo).length)throw Error('Load projected/confirmed lines first using Update Lines.')
    const res=await api().kalshiSyncToday(date)
    const {candidates,skipped,totalGroups}=prepareKalshiImports(res.nhl as KalshiFill[],bets,slateDfo,games,unitSize)
    const verified=await verifyKalshiIdentity(candidates,(team:string)=>(window as any).nhlTracker.roster(team))
    const ready=verified.accepted
    const skippedCount=skipped.length+verified.rejected.length
-   if(!ready.length){setMsg('No eligible new bets. Reviewed '+totalGroups+' orders; '+skipped.length+' skipped/previously recorded. No wagers changed.');return}
-   const preview=ready.slice(0,8).map(x=>x.legs.map(l=>l.player+' '+l.qty+'+ '+l.stat).join(' + ')+' · '+x.category+' · $'+x.risk.toFixed(2)).join('\n')
-   const ok=window.confirm('Import '+ready.length+' NEW Kalshi wagers?\n\n'+preview+(ready.length>8?'\n…plus '+(ready.length-8)+' more':'')+'\n\n'+skippedCount+' fills/orders skipped for safety.\n\nOnly verified YES buys are included. Imported wagers start PENDING; settlements are not yet reconciled.\n\nProceed?')
-   if(!ok){setMsg('Import cancelled; no wagers changed.');return}
-   const newBets=ready.map(c=>c.bet)
-   // Repeat the ID guard against the most current React state.
-   setBets((old:any[])=>{
-    const ids=new Set(old.map(b=>String(b.id)))
-    const signature=(b:any)=>String(b.date)+'|'+(b.legs||[]).map((l:any)=>String(l.player).normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')+':'+l.qty+':'+l.stat).sort().join(';')
-    const manual=new Set(old.filter(b=>b.book==='Kalshi').map(signature))
-    const additions=newBets.filter(b=>!ids.has(b.id)&&!manual.has(signature(b)))
-    return additions.length?[...old,...additions]:old
-   })
-   setMsg('Submitted '+newBets.length+' Kalshi wagers to Bet Tracker ('+skippedCount+' skipped). Check cloud sync status before closing NHL Tracker. All imported wagers are PENDING.')
+   if(!ready.length){setMsg('No eligible new wagers · '+totalGroups+' orders reviewed · '+skippedCount+' skipped or already recorded. Nothing changed.');return}
+   setPreview({date,items:ready,skipped:skippedCount,orders:totalGroups})
+   setMsg(ready.length+' new Kalshi wager'+(ready.length===1?'':'s')+' found. Review the batch below, then choose Import All.')
   }catch(e:any){setMsg('Kalshi sync blocked: '+String(e?.message||e))}finally{setBusy(false)}
  }
- return <div style={{padding:'8px 16px',textAlign:'center'}}><button style={button} disabled={busy||!canSave} onClick={sync}>{busy?'↻ Syncing Kalshi…':'↻ Sync Kalshi Bets'}</button>{msg&&<p role="status" style={{color:'#b8d4e1',margin:'8px auto',maxWidth:900,whiteSpace:'pre-wrap'}}>{msg}</p>}</div>
+ const importAll=()=>{
+  if(!preview||busy)return
+  if(!canSave||selectedSlate!==date||preview.date!==date){setPreview(null);setMsg('Slate or account changed. Run Sync Kalshi Bets again.');return}
+  const newBets=preview.items.map(c=>c.bet)
+  // Keep the same ID and manually-entered-wager checks in the final React state update.
+  setBets((old:any[])=>{
+   const ids=new Set(old.map(b=>String(b.id)))
+   const existingManual=new Set(old.filter(b=>b.book==='Kalshi').map(signature))
+   const additions=newBets.filter(b=>!ids.has(b.id)&&!existingManual.has(signature(b)))
+   return additions.length?[...old,...additions]:old
+  })
+  setMsg('Import submitted · '+newBets.length+' eligible Kalshi wager'+(newBets.length===1?'':'s')+' · '+preview.skipped+' skipped or already logged. Check Bet Tracker and cloud save status. Imported wagers begin PENDING.')
+  setPreview(null)
+ }
+ return <div style={{padding:'8px 16px',textAlign:'center'}}>
+  <button style={button} disabled={busy||!canSave} onClick={sync}>{busy?'↻ Scanning Kalshi…':'↻ Sync Kalshi Bets'}</button>
+  {msg&&<p role="status" style={{color:'#b8d4e1',margin:'8px auto',maxWidth:1000}}>{msg}</p>}
+  {preview&&<section aria-label="Kalshi import preview" style={{...wrapper,maxWidth:1050,textAlign:'left',marginTop:12}}>
+   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+    <strong style={{fontSize:16}}>Review Kalshi Imports · {preview.items.length} new wager{preview.items.length===1?'':'s'}</strong>
+    <span style={{fontSize:12,color:'#afc9d6'}}>{preview.orders} orders reviewed · {preview.skipped} safely skipped</span>
+   </div>
+   <div style={{maxHeight:320,overflowY:'auto',overscrollBehavior:'contain',margin:'12px 0',borderTop:'1px solid #294855'}}>
+    {preview.items.map(c=><div key={c.id} style={{borderBottom:'1px solid #294855',padding:'11px 4px',display:'flex',justifyContent:'space-between',gap:16,flexWrap:'wrap'}}>
+     <div><b>{c.legs.map(l=>l.player+' '+l.qty+'+ '+l.stat).join(' + ')}</b><div style={{color:'#9dbacb',fontSize:11,marginTop:4}}>{c.category} · {c.ticker}</div></div>
+     <div style={{fontWeight:700,whiteSpace:'nowrap'}}>${c.risk.toFixed(2)} · {c.units.toFixed(2)}u · {c.odds>=0?'+':''}{c.odds}</div>
+    </div>)}
+   </div>
+   <p style={{fontSize:12,color:'#e8bc83'}}>Only fully verified YES purchases are included. All imported wagers begin pending; Kalshi settlement reconciliation is not enabled yet.</p>
+   <div style={{display:'flex',gap:10,justifyContent:'flex-end',flexWrap:'wrap'}}>
+    <button style={{...button,background:'#193644',borderColor:'#446272'}} onClick={()=>{setPreview(null);setMsg('Import dismissed. No wagers changed.')}}>Cancel</button>
+    <button style={button} disabled={!canSave} onClick={importAll}>Import All {preview.items.length} Wager{preview.items.length===1?'':'s'}</button>
+   </div>
+  </section>}
+ </div>
 }
