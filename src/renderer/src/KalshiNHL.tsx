@@ -1,4 +1,4 @@
-import {addKalshiFlags} from './KalshiSyncReview'
+import {addKalshiFlags,clearKalshiFlags} from './KalshiSyncReview'
 import {prepareKalshiImports,verifyKalshiIdentity,type KalshiFill,type Candidate} from './kalshiImport'
 import {useEffect,useState,type CSSProperties} from 'react'
 type Row={id:string;fillId:string;orderId:string;date:string;ticker:string;title:string;side:string;action:string;count:string;price:string;fee:string;isNhl:boolean;review:string;detectedSport:string;legs:{ticker:string;side:string;title:string;resolved:boolean;source:string;nhlTicker:boolean}[]}
@@ -108,7 +108,8 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
     source.set(f.id,f)
     if(f.orderId&&f.ticker)source.set('KALSHI-'+f.orderId+'|'+f.ticker,f)
    }
-   const flags=[...skipped,...verified.rejected].filter(x=>!/Already imported|Not a YES-side purchase/i.test(x.reason)).map(x=>{
+   clearKalshiFlags(skipped.filter(x=>/Already imported|Already recorded as a matching Kalshi bet/i.test(x.reason)).map(x=>x.id))
+   const flags=[...skipped,...verified.rejected].filter(x=>!/Already imported|Already recorded as a matching Kalshi bet|Not a YES-side purchase/i.test(x.reason)).map(x=>{
     const f=source.get(x.id)
     return {id:x.id,date:f?.date||date,ticker:f?.ticker||'',description:f?.title||'',reason:x.reason}
    })
@@ -129,6 +130,7 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
    const additions=newBets.filter(b=>!ids.has(b.id)&&!existingManual.has(signature(b)))
    return additions.length?[...old,...additions]:old
   })
+  clearKalshiFlags(preview.items.map(c=>c.id))
   setMsg('Import submitted · '+newBets.length+' eligible Kalshi wager'+(newBets.length===1?'':'s')+' · '+preview.skipped+' skipped or already logged. Check Bet Tracker and cloud save status. Imported wagers begin PENDING.')
   setPreview(null)
  }
