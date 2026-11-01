@@ -34,13 +34,12 @@ export function KalshiHistoricalImporter({bets,setBets,unitSize,canSave}:{bets:a
     }
     slates.push({date,games,dfo})
    }
-   // Resolve each historical player against that game's actual boxscore,
-   // not a present-day roster that may have changed since the wager.
-   const players:Record<string,string[]>={}
-   const historicalByTeam=new Map<string,Map<number,any>>()
+   // A player can have appeared for different clubs on different October
+   // dates. Build identities separately for EACH slate; never merge rosters
+   // across dates, and never use a modern roster as proof of a past game.
    const label=(v:any)=>typeof v==='string'?v:typeof v?.default==='string'?v.default:''
-   const collect=(root:any,teamCode:string)=>{
-    const found=historicalByTeam.get(teamCode)||new Map<number,any>()
+   const extract=(root:any):{playerId:number;fullName:string}[]=>{
+    const found=new Map<number,{playerId:number;fullName:string}>()
     const seen=new WeakSet<object>()
     const walk=(v:any)=>{
      if(!v||typeof v!=='object'||seen.has(v))return
@@ -52,34 +51,57 @@ export function KalshiHistoricalImporter({bets,setBets,unitSize,canSave}:{bets:a
      Object.values(v).forEach(walk)
     }
     walk(root)
-    historicalByTeam.set(teamCode,found)
+    return [...found.values()]
    }
+   const accepted:Candidate[]=[]
+   const skipped:{id:string;reason:string}[]=[]
+   let totalGroups=0
    for(const slate of slates){
+    const dayFills=fills.filter(f=>f.date===slate.date)
+    const byTeam=new Map<string,Map<number,{playerId:number;fullName:string}>>()
+    let boxscoresLoaded=0
     for(const game of slate.games){
      try{
       const box=await api.boxscore(Number(game.id))
       const root=box?.playerByGameStats||box?.boxscore?.playerByGameStats
       if(!root)continue
-      collect(root.awayTeam,team(game,'awayTeam'))
-      collect(root.homeTeam,team(game,'homeTeam'))
-     }catch{/* Missing historical game data is held for review. */}
+      boxscoresLoaded++
+      for(const side of ['awayTeam','homeTeam']){
+       const abbr=team(game,side)
+       if(!abbr)continue
+       const players=extract(root[side])
+       const map=byTeam.get(abbr)||new Map<number,{playerId:number;fullName:string}>()
+       for(const player of players)map.set(player.playerId,player)
+       byTeam.set(abbr,map)
+      }
+     }catch{/* Keep unverified history out of import. */}
+    }
+    const players:Record<string,string[]>={}
+    for(const [abbr,records] of byTeam)players[abbr]=[...records.values()].map(x=>x.fullName)
+    const prepared=prepareKalshiImports(dayFills,bets,slate.dfo,slate.games,unitSize,[],slate.date,players)
+    totalGroups+=prepared.totalGroups
+    // The existing verifier requires a roster-style object, but these records
+    // are historical boxscore identities for this specific slate only.
+    const roster=async(abbr:string)=>[...(byTeam.get(abbr)?.values()||[])]
+    const verified=await verifyKalshiIdentity(prepared.candidates,roster)
+    accepted.push(...verified.accepted)
+    skipped.push(...prepared.skipped,...verified.rejected)
+    if(!boxscoresLoaded&&prepared.candidates.length===0&&dayFills.length){
+     // Preserve each detailed error below, but distinguish a missing
+     // source from a legitimate player who did not appear in a game.
+     for(const error of skipped.filter(x=>x.reason==='Players could not be uniquely matched to NHL teams playing on '+slate.date)){
+      error.reason='Historical NHL boxscores unavailable or players absent for '+slate.date
+     }
     }
    }
-   for(const [abbr,entries] of historicalByTeam){
-    players[abbr]=[...entries.values()].map(p=>p.fullName)
-   }
-   const roster=async(t:string)=>[...(historicalByTeam.get(t)?.values()||[])]
-   const matched=prepareKalshiImports(fills,bets,{},[],unitSize,slates,'__history__',players)
-   const checked=await verifyKalshiIdentity(matched.candidates,roster)
    const sources=new Map<string,KalshiFill>()
    for(const f of fills){sources.set(f.id,f);if(f.orderId&&f.ticker)sources.set('KALSHI-'+f.orderId+'|'+f.ticker,f)}
-   const skipped=[...matched.skipped,...checked.rejected]
    setFailures(skipped.map(x=>({id:x.id,reason:x.reason,description:sources.get(x.id)?.title||x.id})))
-   clearKalshiFlags(matched.skipped.filter(x=>x.reason==='Already imported').map(x=>x.id))
+   clearKalshiFlags(skipped.filter(x=>x.reason==='Already imported').map(x=>x.id))
    const flags=skipped.filter(x=>!['Already imported','Not a YES-side purchase'].includes(x.reason)).map(x=>({id:x.id,date:sources.get(x.id)?.date||from,ticker:sources.get(x.id)?.ticker||'',description:sources.get(x.id)?.title||'',reason:x.reason}))
    if(flags.length)addKalshiFlags(flags)
-   setPreview({items:checked.accepted,from,to})
-   setMsg(checked.accepted.length+' new historical wagers across '+dates.length+' dates; '+skipped.length+' skipped. Review before import.')
+   setPreview({items:accepted,from,to})
+   setMsg(accepted.length+' new historical wagers across '+dates.length+' dates; '+skipped.length+' skipped. Review before import.')
   }catch(e:any){setMsg('Historical Sync blocked: '+String(e?.message||e))}
   finally{setBusy(false)}
  }
