@@ -1,5 +1,5 @@
 import {addKalshiFlags,clearKalshiFlags} from './KalshiSyncReview'
-import {prepareKalshiImports,verifyKalshiIdentity,type KalshiFill,type Candidate} from './kalshiImport'
+import {prepareKalshiImports,verifyKalshiIdentity,classifyExistingKalshiBet,type KalshiFill,type Candidate} from './kalshiImport'
 import {useEffect,useState,type CSSProperties} from 'react'
 type Row={id:string;fillId:string;orderId:string;date:string;ticker:string;title:string;side:string;action:string;count:string;price:string;fee:string;isNhl:boolean;review:string;detectedSport:string;legs:{ticker:string;side:string;title:string;resolved:boolean;source:string;nhlTicker:boolean}[]}
 type Result={totalFills:number;nhl:Row[];unknown:Row[];unclassified:number;pages:number;complete:boolean;marketLookups:number;legLookups:number;unresolved:number;distinctNhlOrders:number;combos:number;categoryCounts:{unresolved:number;mixed:number;otherSports:number};comboTickerFallbacks:number;mixedLegs:number;unresolvedCombos:number;otherCombos:number;notice:string}
@@ -78,6 +78,20 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
      rosterPlayers[team]=[...names]
     }catch{/* Missing NHL roster is not evidence that the player is absent. */}
    }))
+   // Repair categories from earlier versions without creating new wagers.
+   // Restrict this to today's identifiable Kalshi imports; leave manually entered
+   // OTHER wagers and wagers from historical dates untouched.
+   let repaired=0
+   setBets((old:any[])=>{
+    const next=old.map(b=>{
+     if(b.date!==date||b.book!=='Kalshi'||!String(b.id||'').startsWith('KALSHI-')||b.category!=='OTHER')return b
+     const category=classifyExistingKalshiBet(b,slateDfo)
+     if(category==='OTHER')return b
+     repaired++
+     return {...b,category}
+    })
+    return repaired?next:old
+   })
    const {candidates,skipped,totalGroups}=prepareKalshiImports(todayFills,bets,slateDfo,games,unitSize,[],date,rosterPlayers)
    const verified=await verifyKalshiIdentity(candidates,roster)
    const ready=verified.accepted
