@@ -35,6 +35,10 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
  const msg=job.msg
  const sync=()=>startKalshiJob('daily',async ctx=>{
 
+   const easternParts=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date())
+   const today=(k:string)=>easternParts.find(p=>p.type===k)?.value||''
+   const easternToday=today('year')+'-'+today('month')+'-'+today('day')
+   if(date!==easternToday)throw Error('Daily Sync only accepts wagers placed today ('+easternToday+' Eastern). Use Historical Backfill for earlier dates.')
    if(selectedSlate!==date)throw Error('Select today’s NHL slate before importing. Current DFO lineups belong to the selected slate.')
    if(!canSave)throw Error('Wait until account wager synchronization is ready.')
    if(!Number.isFinite(unitSize)||unitSize<=0)throw Error('Set a positive unit size in Settings.')
@@ -144,7 +148,7 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
   setKalshiJobStatus('daily','Import submitted · '+newBets.length+' eligible Kalshi wager'+(newBets.length===1?'':'s')+' · '+preview.skipped+' skipped or already logged. Check Bet Tracker and cloud save status. Imported wagers begin PENDING.',null)
  }
  return <div style={{padding:'8px 16px',textAlign:'center'}}>
-  <button style={button} disabled={busy||!canSave} onClick={sync}>{busy?'↻ Scanning Kalshi…':'↻ Sync Kalshi Bets'}</button>
+  <button style={button} disabled={busy||!canSave} onClick={sync}>{busy?'↻ Syncing Today’s Kalshi Bets…':'↻ Sync Today’s Kalshi Bets'}</button>
   {busy&&<button style={{...button,background:'#6a3441',marginLeft:10}} onClick={cancelKalshiJob}>Cancel Running Sync</button>}
   {msg&&<p role="status" style={{color:'#b8d4e1',margin:'8px auto',maxWidth:1000}}>{msg}</p>}
   {skipDetails.length>0&&<details style={{...wrapper,textAlign:'left',marginTop:8}} open={!preview}>
