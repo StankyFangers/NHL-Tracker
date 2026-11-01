@@ -179,7 +179,7 @@ export function reconcileAlreadyLoggedKalshi(candidates:Candidate[],existing:any
  const manual=existing.filter(b=>
   String(b?.book||'').toLowerCase()==='kalshi' &&
   !String(b?.id||'').startsWith('KALSHI-') &&
-  /^\\d{4}-\\d{2}-\\d{2}$/.test(String(b?.date||'')) &&
+  /^\d{4}-\d{2}-\d{2}$/.test(String(b?.date||'')) &&
   signature(b?.legs||'') &&
   Number(b?.units)>0&&Number(b?.unitSize)>0&&Number.isFinite(Number(b?.odds))
  )
