@@ -6,7 +6,7 @@ export type KalshiImport={id:string;date:string;legs:ParsedLeg[];book:string;uni
 export type Candidate={id:string;date:string;ticker:string;legs:ParsedLeg[];risk:number;units:number;odds:number;category:string;description:string;bet:KalshiImport}
 const normalized=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')
 const num=(v:string)=>Number(v)
-const parseTitle=(raw:string):ParsedLeg|null=>{
+const parseTitle=(raw:string,ticker=''):ParsedLeg|null=>{
  // Parent descriptions: "yes Owen Power: 1+"; leg metadata often includes NHL point/assist text.
  const s=raw.replace(/\s*\|.*/,'').replace(/^\s*(?:yes|if)\s+/i,'').trim()
  const colon=s.match(/^(.+?):\s*(\d+)\+\s*(?:points?|assists?|goals?)?\s*$/i)
@@ -18,26 +18,27 @@ const parseTitle=(raw:string):ParsedLeg|null=>{
  const qty=Number(m[2])
  if(!Number.isInteger(qty)||qty<1||qty>10)return null
  const statHint=(colon?s:long?.[3]||'').toLowerCase()
- const stat=/assist/.test(statHint)?'Assist':/goal/.test(statHint)?'Goal':'Point'
+ const market=ticker.toUpperCase()
+ const stat=/^KXNHLAST(?:-|$)/.test(market)?'Assist':/^KXNHLGOAL/.test(market)?'Goal':/^KXNHLPTS/.test(market)?'Point':/assist/.test(statHint)?'Assist':/goal/.test(statHint)?'Goal':'Point'
  return {player,qty,stat,side:'OVER',kind:'PLAYER'}
 }
 function extractLegs(row:KalshiFill):ParsedLeg[]|null{
  const byMarket=row.legs||[]
  if(byMarket.length){
   if(byMarket.some(l=>l.side.toLowerCase()!=='yes'||!l.nhlTicker))return null
-  const output=byMarket.map(l=>parseTitle(l.title))
+  const output=byMarket.map(l=>parseTitle(l.title,l.ticker))
   if(output.every(Boolean)&&new Set(output.map(x=>normalized(x!.player))).size===output.length)return output as ParsedLeg[]
   // Parent title can contain matching repeated "yes Name: N+" clauses.
   const chunks=[...row.title.matchAll(/\byes\s+([\p{L}\p{M}.' -]+?:\s*\d+\+)(?=\s+yes\s+|\s*\||$)/giu)].map(m=>m[1])
   const distinctChunks=[...new Map<string,string>(chunks.map(x=>[normalized(x),x] as const)).values()]
   if(distinctChunks.length===byMarket.length){
-   const parsed=distinctChunks.map(x=>parseTitle(x))
+   const parsed=distinctChunks.map((x,i)=>parseTitle(x,byMarket[i].ticker))
    if(parsed.every(Boolean)&&new Set(parsed.map(x=>normalized(x!.player))).size===parsed.length)return parsed as ParsedLeg[]
   }
   return null
  }
  // Single market title must explicitly indicate the player and target.
- const p=parseTitle(row.title)
+ const p=parseTitle(row.title,row.ticker)
  return p?[p]:null
 }
 function attachNhlMatch(legs:ParsedLeg[],dfo:Record<string,any>,games:any[]):boolean{
