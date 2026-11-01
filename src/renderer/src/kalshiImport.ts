@@ -29,8 +29,9 @@ function extractLegs(row:KalshiFill):ParsedLeg[]|null{
   if(output.every(Boolean)&&new Set(output.map(x=>normalized(x!.player))).size===output.length)return output as ParsedLeg[]
   // Parent title can contain matching repeated "yes Name: N+" clauses.
   const chunks=[...row.title.matchAll(/\byes\s+([\p{L}\p{M}.' -]+?:\s*\d+\+)(?=\s+yes\s+|\s*\||$)/giu)].map(m=>m[1])
-  if(chunks.length===byMarket.length){
-   const parsed=chunks.map(x=>parseTitle(x))
+  const distinctChunks=[...new Map(chunks.map(x=>[normalized(x),x])).values()]
+  if(distinctChunks.length===byMarket.length){
+   const parsed=distinctChunks.map(x=>parseTitle(x))
    if(parsed.every(Boolean)&&new Set(parsed.map(x=>normalized(x!.player))).size===parsed.length)return parsed as ParsedLeg[]
   }
   return null
@@ -64,8 +65,7 @@ function classify(legs:ParsedLeg[],dfo:Record<string,any>,games:any[]){
   const ppUnits=[info.pp1,info.pp2].filter(Array.isArray) as string[][]
   const pairs=info.forwardLines as string[][]
   if(pairs.some(line=>names.every(n=>line.some(p=>normalized(p)===n)))&&ppUnits.some(pp=>names.every(n=>pp.some(p=>normalized(p)===n)))){
-   const g=games.find(g=>[g.awayTeam?.abbrev,g.homeTeam?.abbrev].some((a:any)=>String(a?.default||a||'').toUpperCase()===team))
-   return 'COMBOS'
+    return 'COMBOS'
   }
  }
  return 'OTHER'
