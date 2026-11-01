@@ -124,7 +124,7 @@ async function scan(from:string,limitPages:number){
    ?(sportSignals.every(x=>x!=='UNKNOWN'&&x===sportSignals[0])?sportSignals[0]:sportSignals.some(x=>x==='UNKNOWN')?'UNRESOLVED':'MIXED')
    :obviousSport(ticker,description)
   const review=classification
-  return {detectedSport,id,fillId,orderId,date:dateOf(f).slice(0,10),ticker,title:description||ticker,side:String(f.side||''),action:String(f.action||''),count:String(f.count_fp??f.count??''),price:String(f.yes_price_dollars??f.no_price_dollars??f.yes_price??f.no_price??''),fee:String(f.fee_cost_dollars??f.fee_cost??''),isNhl,review,legs}
+  return {detectedSport,id,fillId,orderId,date:dateOf(f).slice(0,10),createdAt:dateOf(f),ticker,title:description||ticker,side:String(f.side||''),action:String(f.action||''),count:String(f.count_fp??f.count??''),price:String(f.yes_price_dollars??f.no_price_dollars??f.yes_price??f.no_price??''),fee:String(f.fee_cost_dollars??f.fee_cost??''),isNhl,review,legs}
  })
  const nhl=rows.filter(r=>r.isNhl),unknown=rows.filter(r=>!r.isNhl)
  const buckets={unresolved:unknown.filter(r=>r.detectedSport==='UNRESOLVED'||r.detectedSport==='UNKNOWN'),mixed:unknown.filter(r=>r.detectedSport==='MIXED'),otherSports:unknown.filter(r=>!['UNRESOLVED','UNKNOWN','MIXED'].includes(r.detectedSport))}
@@ -171,6 +171,12 @@ export function registerKalshiNHL(){
  })
  ipcMain.handle('kalshi:check',async()=>{await request('/portfolio/balance');return {ok:true}})
  ipcMain.handle('kalshi:history',async(_e,from:string)=>scan(from,30))
+ ipcMain.handle('kalshi:sync-today',async(_e,date:string)=>{
+  if(!/^20\\d{2}-\\d{2}-\\d{2}$/.test(date))throw Error('Invalid sync date')
+  const result=await scan(date,10)
+  if(!result.complete)throw Error('Incomplete Kalshi scan: import blocked to prevent partial order totals')
+  return {...result,nhl:result.nhl.filter(x=>x.date===date),unknown:[],notice:'Current-day scan complete. Review candidates before importing.'}
+ })
  ipcMain.handle('kalshi:sync-preview',async()=>{
   // Deliberately preview-only until fill -> wager grouping / settlements are verified.
   return scan('2026-10-01',10)
