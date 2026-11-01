@@ -1,3 +1,4 @@
+import {addKalshiFlags} from './KalshiSyncReview'
 import {prepareKalshiImports,verifyKalshiIdentity,type KalshiFill,type Candidate} from './kalshiImport'
 import {useEffect,useState,type CSSProperties} from 'react'
 type Row={id:string;fillId:string;orderId:string;date:string;ticker:string;title:string;side:string;action:string;count:string;price:string;fee:string;isNhl:boolean;review:string;detectedSport:string;legs:{ticker:string;side:string;title:string;resolved:boolean;source:string;nhlTicker:boolean}[]}
@@ -51,6 +52,18 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
    const verified=await verifyKalshiIdentity(candidates,(team:string)=>(window as any).nhlTracker.roster(team))
    const ready=verified.accepted
    const skippedCount=skipped.length+verified.rejected.length
+   // Persist actionable import failures for Settings > Kalshi Sync > Sync Review.
+   // Already imported IDs and ordinary sells are not errors to repair.
+   const source=new Map<string,KalshiFill>()
+   for(const f of res.nhl as KalshiFill[]){
+    source.set(f.id,f)
+    if(f.orderId&&f.ticker)source.set('KALSHI-'+f.orderId+'|'+f.ticker,f)
+   }
+   const flags=[...skipped,...verified.rejected].filter(x=>!/Already imported|Not a YES-side purchase/i.test(x.reason)).map(x=>{
+    const f=source.get(x.id)
+    return {id:x.id,date:f?.date||date,ticker:f?.ticker||'',description:f?.title||'',reason:x.reason}
+   })
+   if(flags.length)addKalshiFlags(flags)
    if(!ready.length){setMsg('No eligible new wagers · '+totalGroups+' orders reviewed · '+skippedCount+' skipped or already recorded. Nothing changed.');return}
    setPreview({date,items:ready,skipped:skippedCount,orders:totalGroups})
    setMsg(ready.length+' new Kalshi wager'+(ready.length===1?'':'s')+' found. Review the batch below, then choose Import All.')
