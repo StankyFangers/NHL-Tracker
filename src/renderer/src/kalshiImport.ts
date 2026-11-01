@@ -110,7 +110,7 @@ export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Recor
    skipped.push({id,reason:'Unsupported wager cost/return'});continue
   }
   const signature=gameDate+'|'+legs.map(l=>normalized(l.player)+':'+l.qty+':'+l.stat).sort().join(';')
-  if(existingSignatures.has(signature)){skipped.push({id,reason:'Potential existing manual Kalshi bet — needs review'});continue}
+  if(existingSignatures.has(signature)){skipped.push({id,reason:'Already recorded as a matching Kalshi bet'});continue}
   const odds=Math.round(((count/risk)-1)*100)
   const category=classify(legs,matchingSlate.dfo,matchingSlate.games)
   const gameIds=[...new Set(legs.map(l=>String(l.gameId||'')).filter(Boolean))]
