@@ -29,19 +29,18 @@ const parseTitle=(raw:string,ticker=''):ParsedLeg|null=>{
 /** Parse repeated Kalshi multi-view event descriptions, without confusing
     duplicate title/subtitle copies with additional player legs. */
 export function parseKalshiParentLegs(raw:string):{player:string;qty:number}[] {
- const parts=raw.split(/\s*\|\s*/)
- // Parent title may be repeated in subtitle; use the first complete copy.
- for(const part of parts){
-  const clauses=part.split(/\s*,\s*/)
-  if(!clauses.length)return []
-  const parsed=clauses.map(clause=>{
-   const m=clause.trim().match(/^yes\s+([\p{L}\p{M}.' -]+):\s*(\d+)\+$/iu)
-   if(!m||!m[1].trim().includes(' '))return null
-   const qty=Number(m[2])
-   return qty>=1&&qty<=10?{player:m[1].trim(),qty}:null
-  })
-  if(parsed.length>1&&parsed.every(Boolean)&&new Set(parsed.map(v=>normalized(v!.player))).size===parsed.length)
-   return parsed as {player:string;qty:number}[]
+ // Kalshi has used comma separators, spaces, and mixed ", yes" between legs.
+ // Parent descriptions can be repeated after "|"; take one complete copy.
+ for(const part of raw.split(/\s*\|\s*/)){
+  const pattern=/\byes\s+([\p{L}\p{M}.' -]+?):\s*(\d+)\+(?=\s*(?:,|\byes\b|$))/giu
+  const matches=[...part.matchAll(pattern)]
+  if(matches.length<2)continue
+  // Reject descriptions with stray unparsed content rather than silently
+  // dropping an unknown third leg or accepting a truncated player name.
+  if(part.replace(pattern,'').replace(/[\s,]+/g,'')!=='')continue
+  const parsed=matches.map(m=>({player:m[1].trim(),qty:Number(m[2])}))
+  if(parsed.every(v=>v.player.includes(' ')&&v.qty>=1&&v.qty<=10)&&
+     new Set(parsed.map(v=>normalized(v.player))).size===parsed.length)return parsed
  }
  return []
 }
