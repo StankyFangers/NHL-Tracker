@@ -1,4 +1,5 @@
 import {useState} from 'react'
+import {useKalshiJob,startKalshiJob,cancelKalshiJob,dismissKalshiPreview,setKalshiJobStatus} from './kalshiSyncJobs'
 import {prepareKalshiImports,fullNamesFromGameRoster,type HistoricalGamePlayer,type Candidate,type KalshiFill,type KalshiSlate} from './kalshiImport'
 import {addKalshiFlags,clearKalshiFlags} from './KalshiSyncReview'
 const eastern=()=>{
@@ -11,21 +12,21 @@ const team=(g:any,side:string)=>String(g?.[side]?.abbrev?.default||g?.[side]?.ab
 const snapshot=(d:string,t:string)=>{try{const x=localStorage.getItem('nhlTracker:dfoSnapshots:v1:'+d+':'+t),v=x?JSON.parse(x):null;return v?.confirmed||v?.latest||v?.baseline||null}catch{return null}}
 export function KalshiHistoricalImporter({bets,setBets,unitSize,canSave}:{bets:any[];setBets:any;unitSize:number;canSave:boolean}){
  const [from,setFrom]=useState('2026-10-01'),[to,setTo]=useState(yesterday)
- const [busy,setBusy]=useState(false),[msg,setMsg]=useState('')
- const [preview,setPreview]=useState<{items:Candidate[];from:string;to:string}|null>(null)
- const [failures,setFailures]=useState<{id:string;reason:string;description:string}[]>([])
- const scan=async()=>{
-  if(busy)return
-  setBusy(true);setPreview(null);setFailures([]);setMsg('Scanning historical Kalshi wagers…')
-  try{
+ const job=useKalshiJob('history')
+ const {busy,preview,failures}=job as typeof job & {preview:{items:Candidate[];from:string;to:string}|null;failures:{id:string;reason:string;description:string}[]}
+ const msg=job.msg
+ const scan=()=>startKalshiJob('history',async ctx=>{
+   ctx.assertActive()
    if(!canSave||!(unitSize>0))throw Error('Wait for account sync and configure a positive unit size.')
    if(!/^\d{4}-\d{2}-\d{2}$/.test(from)||! /^\d{4}-\d{2}-\d{2}$/.test(to)||from>to||to>yesterday())throw Error('Select historical dates ending no later than yesterday.')
    const api=(window as any).nhlTracker,history=await api.kalshiHistory(from)
+   ctx.assertActive()
    if(!history.complete)throw Error('Incomplete Kalshi scan: importing partial data is blocked.')
    const fills=(history.nhl as KalshiFill[]).filter(f=>f.date>=from&&f.date<=to)
    const dates=[...new Set(fills.map(f=>f.date))]
    const slates:KalshiSlate[]=[]
    for(const date of dates){
+    ctx.assertActive()
     const response=await api.score(date),games=Array.isArray(response?.games)?response.games:[]
     if(!games.length)throw Error('Cannot load NHL games for '+date)
     const dfo:Record<string,any>={}
@@ -57,12 +58,15 @@ export function KalshiHistoricalImporter({bets,setBets,unitSize,canSave}:{bets:a
    const skipped:{id:string;reason:string}[]=[]
    let totalGroups=0
    for(const slate of slates){
+    ctx.assertActive()
     const dayFills=fills.filter(f=>f.date===slate.date)
     const dayPlayers:HistoricalGamePlayer[]=[]
     let boxscoresLoaded=0
     for(const game of slate.games){
+     ctx.assertActive()
      try{
       const [box,pbp]=await Promise.all([api.boxscore(Number(game.id)),api.playByPlay(Number(game.id))])
+      ctx.assertActive()
       const root=box?.playerByGameStats||box?.boxscore?.playerByGameStats
       if(!root)continue
       // Boxscore skaters are usually abbreviated (e.g. "S. Crosby").
@@ -93,32 +97,33 @@ export function KalshiHistoricalImporter({bets,setBets,unitSize,canSave}:{bets:a
    }
    const sources=new Map<string,KalshiFill>()
    for(const f of fills){sources.set(f.id,f);if(f.orderId&&f.ticker)sources.set('KALSHI-'+f.orderId+'|'+f.ticker,f)}
-   setFailures(skipped.map(x=>({id:x.id,reason:x.reason,description:sources.get(x.id)?.title||x.id})))
+   ctx.update({failures:skipped.map(x=>({id:x.id,reason:x.reason,description:sources.get(x.id)?.title||x.id}))})
+   ctx.assertActive()
    clearKalshiFlags(skipped.filter(x=>x.reason==='Already imported').map(x=>x.id))
    const flags=skipped.filter(x=>!['Already imported','Not a YES-side purchase'].includes(x.reason)).map(x=>({id:x.id,date:sources.get(x.id)?.date||from,ticker:sources.get(x.id)?.ticker||'',description:sources.get(x.id)?.title||'',reason:x.reason}))
    if(flags.length)addKalshiFlags(flags)
-   setPreview({items:accepted,from,to})
-   setMsg(accepted.length+' new historical wagers across '+dates.length+' dates; '+skipped.length+' skipped. Review before import.')
-  }catch(e:any){setMsg('Historical Sync blocked: '+String(e?.message||e))}
-  finally{setBusy(false)}
- }
+   ctx.update({preview:{items:accepted,from,to}})
+   ctx.update({msg:accepted.length+' new historical wagers across '+dates.length+' dates; '+skipped.length+' skipped. Review before import.'})
+  ctx.assertActive()
+ })
  const importAll=()=>{
-  if(!preview||busy||!canSave||preview.from!==from||preview.to!==to)return
+  if(!preview||busy||!canSave)return
   const incoming=preview.items.map(c=>c.bet)
   setBets((old:any[])=>{
    const ids=new Set(old.map(b=>String(b.id))),additions=incoming.filter(b=>!ids.has(String(b.id)))
    return additions.length?[...old,...additions]:old
   })
   clearKalshiFlags(preview.items.map(c=>c.id))
-  setPreview(null);setMsg('Import submitted: '+incoming.length+' historical wagers. Check Bet Tracker and Cloud saved.')
+  setKalshiJobStatus('history','Import submitted: '+incoming.length+' historical wagers. Check Bet Tracker and Cloud saved.',null)
  }
  return <div style={{display:'grid',gap:12,marginTop:14}}>
   <p>Historical wagers only. Matches use their original Eastern placement date and NHL slate, not settlement date.</p>
   <div style={{display:'flex',alignItems:'end',gap:10,flexWrap:'wrap'}}>
-   <label>From <input type="date" value={from} max={yesterday()} onChange={e=>{setFrom(e.target.value);setPreview(null)}}/></label>
-   <label>Through <input type="date" value={to} max={yesterday()} onChange={e=>{setTo(e.target.value);setPreview(null)}}/></label>
+   <label>From <input type="date" value={from} max={yesterday()} onChange={e=>{setFrom(e.target.value);dismissKalshiPreview('history','Date range changed. Scan again before import.')}}/></label>
+   <label>Through <input type="date" value={to} max={yesterday()} onChange={e=>{setTo(e.target.value);dismissKalshiPreview('history','Date range changed. Scan again before import.')}}/></label>
    <button disabled={busy||!canSave} onClick={scan}>{busy?'Scanning…':'Scan Historical Bets'}</button>
   </div>
+  {busy&&<button onClick={cancelKalshiJob}>Cancel Running Sync</button>}
   {msg&&<p role="status">{msg}</p>}
   {preview&&<section style={{padding:12,border:'1px solid #345664',borderRadius:8}}>
    <strong>Historical Import Preview: {preview.items.length} wagers</strong>
@@ -129,7 +134,7 @@ export function KalshiHistoricalImporter({bets,setBets,unitSize,canSave}:{bets:a
    </div>)}
    </div>
    <button disabled={!preview.items.length||!canSave} onClick={importAll}>Import All {preview.items.length}</button>
-   <button onClick={()=>setPreview(null)}>Cancel</button>
+   <button onClick={()=>dismissKalshiPreview('history','Preview dismissed. No wagers imported.')}>Dismiss Preview</button>
   </section>}
   {!!failures.length&&<details><summary>Skipped / Needs Review ({failures.length})</summary>
    {failures.map((f,i)=><div key={f.id+'-'+i} style={{padding:6,fontSize:12}}><b>{f.reason}</b> · {f.description}<div>{f.id}</div></div>)}
