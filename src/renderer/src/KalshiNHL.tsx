@@ -1,3 +1,4 @@
+import {useKalshiJob,startKalshiJob,cancelKalshiJob,dismissKalshiPreview,setKalshiJobStatus} from './kalshiSyncJobs'
 import {KalshiHistoricalImporter} from './KalshiHistoricalImporter'
 import {addKalshiFlags,clearKalshiFlags} from './KalshiSyncReview'
 import {prepareKalshiImports,verifyKalshiIdentity,classifyExistingKalshiBet,type KalshiFill,type Candidate} from './kalshiImport'
@@ -35,17 +36,16 @@ export function KalshiNHLSettings({mode='settings',bets=[],setBets,unitSize=1,ca
  {mode==='history'&&<KalshiHistoricalImporter bets={bets} setBets={setBets} unitSize={unitSize} canSave={canSave}/>}</section>
 }
 export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo,games,canSave}:{date:string;selectedSlate:string;bets:any[];setBets:any;unitSize:number;slateDfo:Record<string,any>;games:any[];canSave:boolean}){
- const [busy,setBusy]=useState(false),[msg,setMsg]=useState('')
- const [preview,setPreview]=useState<{date:string;items:Candidate[];skipped:number;orders:number}|null>(null)
- const [skipDetails,setSkipDetails]=useState<{id:string;reason:string;description:string}[]>([])
- const sync=async()=>{
-  if(busy)return
-  setBusy(true);setPreview(null);setSkipDetails([]);setMsg('Contacting Kalshi and reviewing today’s fills…')
-  try{
+ const job=useKalshiJob('daily')
+ const {busy,preview,skipDetails}=job as typeof job & {preview:{date:string;items:Candidate[];skipped:number;orders:number}|null;skipDetails:{id:string;reason:string;description:string}[]}
+ const msg=job.msg
+ const sync=()=>startKalshiJob('daily',async ctx=>{
+
    if(selectedSlate!==date)throw Error('Select today’s NHL slate before importing. Current DFO lineups belong to the selected slate.')
    if(!canSave)throw Error('Wait until account wager synchronization is ready.')
    if(!Number.isFinite(unitSize)||unitSize<=0)throw Error('Set a positive unit size in Settings.')
    const res=await api().kalshiSyncToday(date)
+   ctx.assertActive()
    // Daily Sync is exclusively for the current placement date.
    // Historical Sync handles all older wagers and their original game slates.
    const todayFills=(res.nhl as KalshiFill[]).filter(f=>f.date===date)
@@ -77,6 +77,11 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
      rosterPlayers[team]=[...names]
     }catch{/* Missing NHL roster is not evidence that the player is absent. */}
    }))
+   ctx.assertActive()
+   const {candidates,skipped,totalGroups}=prepareKalshiImports(todayFills,bets,slateDfo,games,unitSize,[],date,rosterPlayers)
+   const verified=await verifyKalshiIdentity(candidates,roster)
+   ctx.assertActive()
+   ctx.assertActive()
    // Repair categories from earlier versions without creating new wagers.
    // Restrict this to today's identifiable Kalshi imports; leave manually entered
    // OTHER wagers and wagers from historical dates untouched.
@@ -91,8 +96,6 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
     })
     return repaired?next:old
    })
-   const {candidates,skipped,totalGroups}=prepareKalshiImports(todayFills,bets,slateDfo,games,unitSize,[],date,rosterPlayers)
-   const verified=await verifyKalshiIdentity(candidates,roster)
    const ready=verified.accepted
    const skippedCount=skipped.length+verified.rejected.length
    // Expose the actual reason for each skipped order; do not mislabel all failures
@@ -106,7 +109,7 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
     const source=orderById.get(item.id)
     return {id:item.id,reason:item.reason,description:source?.title||source?.ticker||item.id}
    })
-   setSkipDetails(diagnosis)
+   ctx.update({skipDetails:diagnosis})
 
    // Persist actionable import failures for Settings > Kalshi Sync > Sync Review.
    // Already imported IDs and ordinary sells are not errors to repair.
@@ -120,21 +123,22 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
     const f=source.get(x.id)
     return {id:x.id,date:f?.date||date,ticker:f?.ticker||'',description:f?.title||'',reason:x.reason}
    })
+   ctx.assertActive()
    if(flags.length)addKalshiFlags(flags)
    if(!ready.length){
     const already=skipped.filter(x=>x.reason==='Already imported').length
     const reasons=[...new Map(diagnosis.filter(x=>x.reason!=='Already imported').map(x=>[x.reason,true])).keys()]
-    setMsg('No new wagers · '+totalGroups+' Kalshi orders scanned · '+already+' exact duplicates · '+(skippedCount-already)+' skipped for other reasons. '+(reasons.length?'See individual reasons below.':''))
+    ctx.update({msg:'No new wagers · '+totalGroups+' Kalshi orders scanned · '+already+' exact duplicates · '+(skippedCount-already)+' skipped for other reasons. '+(reasons.length?'See individual reasons below.':'')})
 
     return
    }
-   setPreview({date,items:ready,skipped:skippedCount,orders:totalGroups})
-   setMsg(ready.length+' new Kalshi wager'+(ready.length===1?'':'s')+' found. Review the batch below, then choose Import All.')
-  }catch(e:any){setMsg('Kalshi sync blocked: '+String(e?.message||e))}finally{setBusy(false)}
- }
+   ctx.update({preview:{date,items:ready,skipped:skippedCount,orders:totalGroups}})
+   ctx.update({msg:ready.length+' new Kalshi wager'+(ready.length===1?'':'s')+' found. Review the batch below, then choose Import All.'})
+  ctx.assertActive()
+ })
  const importAll=()=>{
   if(!preview||busy)return
-  if(!canSave||selectedSlate!==date||preview.date!==date){setPreview(null);setMsg('Slate or account changed. Run Sync Kalshi Bets again.');return}
+  if(!canSave||preview.date!==date){dismissKalshiPreview('daily','Account or date changed. Run Sync Kalshi Bets again.');return}
   const newBets=preview.items.map(c=>c.bet)
   // Keep the same ID and manually-entered-wager checks in the final React state update.
   setBets((old:any[])=>{
@@ -143,11 +147,11 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
    return additions.length?[...old,...additions]:old
   })
   clearKalshiFlags(preview.items.map(c=>c.id))
-  setMsg('Import submitted · '+newBets.length+' eligible Kalshi wager'+(newBets.length===1?'':'s')+' · '+preview.skipped+' skipped or already logged. Check Bet Tracker and cloud save status. Imported wagers begin PENDING.')
-  setPreview(null)
+  setKalshiJobStatus('daily','Import submitted · '+newBets.length+' eligible Kalshi wager'+(newBets.length===1?'':'s')+' · '+preview.skipped+' skipped or already logged. Check Bet Tracker and cloud save status. Imported wagers begin PENDING.',null)
  }
  return <div style={{padding:'8px 16px',textAlign:'center'}}>
   <button style={button} disabled={busy||!canSave} onClick={sync}>{busy?'↻ Scanning Kalshi…':'↻ Sync Kalshi Bets'}</button>
+  {busy&&<button style={{...button,background:'#6a3441',marginLeft:10}} onClick={cancelKalshiJob}>Cancel Running Sync</button>}
   {msg&&<p role="status" style={{color:'#b8d4e1',margin:'8px auto',maxWidth:1000}}>{msg}</p>}
   {skipDetails.length>0&&<details style={{...wrapper,textAlign:'left',marginTop:8}} open={!preview}>
    <summary style={{cursor:'pointer',fontWeight:700}}>Kalshi sync diagnostics · {skipDetails.length} skipped item{skipDetails.length===1?'':'s'}</summary>
@@ -172,7 +176,7 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
    </div>
    <p style={{fontSize:12,color:'#e8bc83'}}>Only fully verified YES purchases are included. All imported wagers begin pending; Kalshi settlement reconciliation is not enabled yet.</p>
    <div style={{display:'flex',gap:10,justifyContent:'flex-end',flexWrap:'wrap'}}>
-    <button style={{...button,background:'#193644',borderColor:'#446272'}} onClick={()=>{setPreview(null);setMsg('Import dismissed. No wagers changed.')}}>Cancel</button>
+    <button style={{...button,background:'#193644',borderColor:'#446272'}} onClick={()=>dismissKalshiPreview('daily','Import dismissed. No wagers changed.')}>Cancel</button>
     <button style={button} disabled={!canSave} onClick={importAll}>Import All {preview.items.length} Wager{preview.items.length===1?'':'s'}</button>
    </div>
   </section>}
