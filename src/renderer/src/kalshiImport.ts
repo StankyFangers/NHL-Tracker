@@ -7,19 +7,23 @@ export type Candidate={id:string;date:string;ticker:string;legs:ParsedLeg[];risk
 const normalized=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')
 const num=(v:string)=>v.trim()===''?NaN:Number(v)
 const parseTitle=(raw:string,ticker=''):ParsedLeg|null=>{
- // Parent descriptions: "yes Owen Power: 1+"; leg metadata often includes NHL point/assist text.
- const s=raw.replace(/\s*\|.*/,'').replace(/^\s*(?:yes|if)\s+/i,'').trim()
- const colon=s.match(/^(.+?):\s*(\d+)\+\s*(?:points?|assists?|goals?)?\s*$/i)
- const long=s.match(/^(.+?)\s+(\d+)\+\s+(points?|assists?|goals?)\b/i)
+ // Each leg can carry its market type in its own title; parent combo tickers
+ // (KXMVE...) do not identify whether a leg is points, assists or goals.
+ const segments=raw.split(/\\s*\\|\\s*/).map(x=>x.trim()).filter(Boolean)
+ const text=segments.join(' ')
+ const s=(segments.find(x=>/\\b(?:yes|if)\\s+.+?:\\s*\\d+\\+|^.+?:\\s*\\d+\\+/.test(x))||segments[0]||'').replace(/^\\s*(?:yes|if)\\s+/i,'').trim()
+ const colon=s.match(/^(.+?):\\s*(\\d+)\\+\\s*(?:points?|assists?|goals?)?\\s*$/i)
+ const long=s.match(/^(.+?)\\s+(\\d+)\\+\\s+(points?|assists?|goals?)\\b/i)
  const m=colon||long
  if(!m)return null
- const player=m[1].trim().replace(/^(?:yes|if)\s+/i,'')
- if(!/^[\p{L}\p{M}.' -]{3,70}$/u.test(player)||!player.includes(' '))return null
+ const player=m[1].trim().replace(/^(?:yes|if)\\s+/i,'')
+ if(!/^[\\p{L}\\p{M}.' -]{3,70}$/u.test(player)||!player.includes(' '))return null
  const qty=Number(m[2])
  if(!Number.isInteger(qty)||qty<1||qty>10)return null
- const statHint=(colon?s:long?.[3]||'').toLowerCase()
  const market=ticker.toUpperCase()
- const stat=/^KXNHLAST(?:-|$)/.test(market)?'Assist':/^KXNHLGOAL/.test(market)?'Goal':/^KXNHLPTS/.test(market)?'Point':/assist/.test(statHint)?'Assist':/goal/.test(statHint)?'Goal':'Point'
+ const explicitStat=long?.[3]||s.match(/(?:\\d+\\+\\s*)(points?|assists?|goals?)\\b/i)?.[1]||''
+ const hint=[explicitStat,...segments.filter(x=>/\\b(assist|goal|point)s?\\b/i.test(x))].join(' ').toLowerCase()
+ const stat=/^KXNHLAST(?:-|$)/.test(market)||/\\bassists?\\b/.test(hint)?'Assist':/^KXNHLGOAL/.test(market)||/\\bgoals?\\b/.test(hint)?'Goal':'Point'
  return {player,qty,stat,side:'OVER',kind:'PLAYER'}
 }
 function extractLegs(row:KalshiFill):ParsedLeg[]|null{
@@ -58,19 +62,22 @@ function attachNhlMatch(legs:ParsedLeg[],dfo:Record<string,any>,games:any[],rost
  return true
 }
 function classify(legs:ParsedLeg[],dfo:Record<string,any>,games:any[]){
- if(legs.every(l=>l.stat==='Assist'))return 'ASSISTS'
- if(legs.length<2||legs.some(l=>l.stat!=='Point'))return 'OTHER'
- // A combo must be in the same forward line AND same power-play unit.
+ if(legs.length&&legs.every(l=>l.stat==='Assist'))return 'ASSISTS'
+ // Correlated forward combos are multiple 1+ point legs for one NHL team.
+ // When DFO lines exist, retain the strict forward-line + PP relationship rule.
+ if(legs.length<2||legs.some(l=>l.stat!=='Point'||l.qty!==1))return 'OTHER'
+ const team=legs[0].team
+ if(!team||!legs.every(l=>l.team===team))return 'OTHER'
  const names=legs.map(l=>normalized(l.player))
- for(const [team,info] of Object.entries(dfo)){
-  if(!info?.forwardLines||!Array.isArray(info.forwardLines))continue
-  const ppUnits=[info.pp1,info.pp2].filter(Array.isArray) as string[][]
-  const pairs=info.forwardLines as string[][]
-  if(pairs.some(line=>names.every(n=>line.some(p=>normalized(p)===n)))&&ppUnits.some(pp=>names.every(n=>pp.some(p=>normalized(p)===n)))){
-    return 'COMBOS'
-  }
- }
- return 'OTHER'
+ const info=dfo[team]
+ const forwards=Array.isArray(info?.forwardLines)?info.forwardLines as string[][]:[]
+ const ppUnits=[info?.pp1,info?.pp2].filter(Array.isArray) as string[][]
+ const together=(unit:string[])=>names.every(n=>unit.some(p=>normalized(p)===n))
+ if(forwards.length&&ppUnits.length)return forwards.some(together)&&ppUnits.some(together)?'COMBOS':'OTHER'
+ // DFO is sometimes unavailable on the current slate. A same-team 1+ points
+ // combination is still a player-combo wager; do not silently relabel it OTHER
+ // solely because the optional correlation metadata is missing.
+ return 'COMBOS'
 }
 export type KalshiSlate={date:string;dfo:Record<string,any>;games:any[]}
 export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Record<string,any>,games:any[],unitSize:number,overnight:KalshiSlate[]=[],currentSlateDate:string='',rosterPlayers:Record<string,string[]>={}){
