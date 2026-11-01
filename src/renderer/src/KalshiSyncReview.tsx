@@ -22,6 +22,21 @@ export function KalshiSyncReview({betIds=[]}:{betIds?:string[]}){
   const next=items.map(x=>x.id===id?{...x,...fields,updatedAt:new Date().toISOString()}:x)
   setItems(next);localStorage.setItem(KEY,JSON.stringify(next));window.dispatchEvent(new Event('kalshi-review-updated'))
  }
+ const demoPrefix='KALSHI-DEMO-REVIEW-'
+ const loadDemo=()=>{
+  addKalshiFlags([
+   {id:demoPrefix+'PLAYER',date:'2026-11-01',ticker:'DEMO-NHL-PLAYER',description:'Example: Sample Skater 1+ Point + Sample Forward 1+ Point',reason:'TEST SAMPLE: Could not verify the first player identity'},
+   {id:demoPrefix+'COMBO',date:'2026-11-01',ticker:'DEMO-NHL-COMBO',description:'Example: Sample Forward A 2+ Points + Sample Forward B 1+ Point',reason:'TEST SAMPLE: Exact combo leg threshold requires review'},
+   {id:demoPrefix+'FEE',date:'2026-11-01',ticker:'DEMO-NHL-FEE',description:'Example: Sample Skater 1+ Assist',reason:'TEST SAMPLE: Fill cost or fee could not be verified'}
+  ])
+  setFilter('NEEDS_REVIEW')
+ }
+ const clearDemo=()=>{
+  const next=readKalshiFlags().filter(x=>!x.id.startsWith(demoPrefix))
+  localStorage.setItem(KEY,JSON.stringify(next))
+  setItems(next);setActive('')
+  window.dispatchEvent(new Event('kalshi-review-updated'))
+ }
  const included=new Set(betIds)
  const visible=items.filter(x=>(filter==='ALL'||x.status===filter)&&!included.has(x.id))
  const counts={review:items.filter(x=>x.status==='NEEDS_REVIEW'&&!included.has(x.id)).length,done:items.filter(x=>x.status==='REVIEWED'&&!included.has(x.id)).length}
@@ -31,6 +46,11 @@ export function KalshiSyncReview({betIds=[]}:{betIds?:string[]}){
  return <section style={{maxWidth:1180,margin:'12px auto',color:'#e6f5fa'}}>
   <h2>Kalshi Sync Review</h2>
   <p style={{fontSize:13,color:'#a9c7d3'}}>Flagged wagers are held here instead of being added to your Bet Tracker. You can correct descriptions, record the intended category, and add notes. Marking a wager reviewed does not import it; the corrected wager must pass identity, cost and duplicate verification before import is enabled.</p>
+  {import.meta.env.DEV&&<div style={{...panel,borderStyle:'dashed',background:'#132d37'}}>
+   <b style={{color:'#baf4d8'}}>TEST ONLY · NO REAL KALSHI WAGERS</b>
+   <p style={{fontSize:12,color:'#b7d1dd'}}>Try the review queue using three labeled demo flags. This never contacts Kalshi, places bets, or writes anything to Bet Tracker.</p>
+   <div style={{display:'flex',gap:8,flexWrap:'wrap'}}><button style={action} onClick={loadDemo}>Load Sample Flags</button><button style={{...action,background:'#374456'}} onClick={clearDemo}>Clear Sample Flags</button></div>
+  </div>}
   <div style={{display:'flex',gap:8,flexWrap:'wrap',margin:'12px 0'}}>{(['NEEDS_REVIEW','REVIEWED','DISMISSED','ALL'] as const).map(x=><button key={x} style={{...action,background:filter===x?'#177c60':'#193947'}} onClick={()=>setFilter(x)}>{x==='NEEDS_REVIEW'?'Needs Review ('+counts.review+')':x==='REVIEWED'?'Reviewed ('+counts.done+')':x==='DISMISSED'?'Dismissed':'All'}</button>)}</div>
   {visible.length===0?<div style={panel}>No flagged wagers in this view. Newly skipped or ambiguous Kalshi orders will appear here after the next sync.</div>:visible.map(x=><article key={x.id} style={panel}>
    <div style={{display:'flex',justifyContent:'space-between',gap:10,flexWrap:'wrap'}}>
