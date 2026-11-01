@@ -62,6 +62,31 @@ function extractLegs(row:KalshiFill):ParsedLeg[]|null{
  if(parseKalshiParentLegs(row.title).length>1)return null
  return parseTitle(row.title,row.ticker)?[parseTitle(row.title,row.ticker)!]:null
 }
+export type HistoricalGamePlayer={gameId:string;team:string;player:string;playerId:number}
+/** Match only the NHL games played on the wager's original calendar date.
+ *  A verified player is identified by game and official player ID, never by
+ *  the team's present-day roster or a separate historical month-wide roster.
+ */
+export function matchHistoricalBoxscores(legs:ParsedLeg[],games:any[],players:HistoricalGamePlayer[]):{ok:boolean;reason:string}{
+ const knownGames=new Set(games.map(g=>String(g.id)))
+ const picks:ParsedLeg[]=legs.map(l=>({...l}))
+ for(const leg of picks){
+  const candidates=players.filter(p=>knownGames.has(String(p.gameId))&&normalized(p.player)===normalized(leg.player))
+  const identities=new Map(candidates.map(p=>[String(p.gameId)+':'+p.playerId,p]))
+  if(identities.size!==1)return {ok:false,reason:(identities.size?'Ambiguous player across game boxscores: ':'Player missing from game boxscores: ')+leg.player}
+  const match=[...identities.values()][0]
+  const game=games.find(g=>String(g.id)===String(match.gameId))
+  if(!game)return {ok:false,reason:'NHL game not in selected date: '+match.gameId}
+  const abbrev=(side:string)=>String(game[side]?.abbrev?.default||game[side]?.abbrev||game[side]?.triCode||'').toUpperCase()
+  const away=abbrev('awayTeam'),home=abbrev('homeTeam')
+  if(!match.team||![away,home].includes(match.team))return {ok:false,reason:'Boxscore team mismatch for '+leg.player}
+  leg.team=match.team;leg.opponent=match.team===away?home:away;leg.gameId=String(match.gameId)
+  ;(leg as any).playerId=match.playerId
+ }
+ // Do not partially mutate a wager when any leg fails verification.
+ picks.forEach((p,i)=>Object.assign(legs[i],p))
+ return {ok:true,reason:''}
+}
 function attachNhlMatch(legs:ParsedLeg[],dfo:Record<string,any>,games:any[],rosterPlayers:Record<string,string[]>={}):boolean{
  const teamOf=(g:any,side:'away'|'home')=>String(g?.[side+'Team']?.abbrev?.default||g?.[side+'Team']?.abbrev||g?.[side+'Team']?.triCode||'').toUpperCase()
  for(const leg of legs){
@@ -115,7 +140,7 @@ export function classifyExistingKalshiBet(bet:any,dfo:Record<string,any>):string
 }
 
 export type KalshiSlate={date:string;dfo:Record<string,any>;games:any[]}
-export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Record<string,any>,games:any[],unitSize:number,overnight:KalshiSlate[]=[],currentSlateDate:string='',rosterPlayers:Record<string,string[]>={}){
+export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Record<string,any>,games:any[],unitSize:number,overnight:KalshiSlate[]=[],currentSlateDate:string='',rosterPlayers:Record<string,string[]>={},historicalPlayers?:HistoricalGamePlayer[]){
  const groups=new Map<string,KalshiFill[]>()
  const skipped:{id:string;reason:string}[]=[]
  const day=Array.from(new Set(fills.map(f=>f.date)))
@@ -137,7 +162,8 @@ export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Recor
   // Never move a wager onto another slate just because the players match.
   const matchingSlate=[{date:currentSlateDate||fs[0].date,dfo,games},...overnight].find(slate=>slate.date===fs[0].date)
   if(!matchingSlate){skipped.push({id,reason:'No NHL slate loaded for Kalshi bet placement date '+fs[0].date});continue}
-  if(!attachNhlMatch(legs,matchingSlate.dfo,matchingSlate.games,rosterPlayers)){
+  const historicalMatch=historicalPlayers?matchHistoricalBoxscores(legs,matchingSlate.games,historicalPlayers):null
+  if(historicalMatch?!historicalMatch.ok:!attachNhlMatch(legs,matchingSlate.dfo,matchingSlate.games,rosterPlayers)){
    const available=Object.entries(rosterPlayers).filter(([t])=>matchingSlate.games.some(g=>{
     const away=String(g?.awayTeam?.abbrev?.default||g?.awayTeam?.abbrev||'').toUpperCase()
     const home=String(g?.homeTeam?.abbrev?.default||g?.homeTeam?.abbrev||'').toUpperCase()
@@ -148,6 +174,7 @@ export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Recor
     const n=(t:any)=>String(t?.abbrev?.default||t?.abbrev||t?.triCode||'').toUpperCase()
     return n(g.awayTeam)+'@'+n(g.homeTeam)
    }).join(', ')
+   if(historicalMatch){skipped.push({id,reason:historicalMatch.reason+' on '+fs[0].date});continue}
    skipped.push({id,reason:missing.length?
     'NHL game-day player(s) not found: '+[...new Set(missing)].join(', ')+' on '+fs[0].date+' · games '+(searched||'none'):
     'Player team/game match ambiguous on '+fs[0].date+' · games '+(searched||'none')});continue
