@@ -38,9 +38,10 @@ export function KalshiNHLSettings({mode='settings'}:{mode?:'settings'|'history'}
 export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo,games,canSave}:{date:string;selectedSlate:string;bets:any[];setBets:any;unitSize:number;slateDfo:Record<string,any>;games:any[];canSave:boolean}){
  const [busy,setBusy]=useState(false),[msg,setMsg]=useState('')
  const [preview,setPreview]=useState<{date:string;items:Candidate[];skipped:number;orders:number}|null>(null)
+ const [skipDetails,setSkipDetails]=useState<{id:string;reason:string;description:string}[]>([])
  const sync=async()=>{
   if(busy)return
-  setBusy(true);setPreview(null);setMsg('Contacting Kalshi and reviewing today’s fills…')
+  setBusy(true);setPreview(null);setSkipDetails([]);setMsg('Contacting Kalshi and reviewing today’s fills…')
   try{
    if(selectedSlate!==date)throw Error('Select today’s NHL slate before importing. Current DFO lineups belong to the selected slate.')
    if(!canSave)throw Error('Wait until account wager synchronization is ready.')
@@ -95,6 +96,19 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
    const verified=await verifyKalshiIdentity(candidates,roster)
    const ready=verified.accepted
    const skippedCount=skipped.length+verified.rejected.length
+   // Expose the actual reason for each skipped order; do not mislabel all failures
+   // as duplicates or require the user to edit wagering data blindly.
+   const orderById=new Map<string,KalshiFill>()
+   for(const fill of todayFills){
+    orderById.set(fill.id,fill)
+    if(fill.orderId&&fill.ticker)orderById.set('KALSHI-'+fill.orderId+'|'+fill.ticker,fill)
+   }
+   const diagnosis=[...skipped,...verified.rejected].map(item=>{
+    const source=orderById.get(item.id)
+    return {id:item.id,reason:item.reason,description:source?.title||source?.ticker||item.id}
+   })
+   setSkipDetails(diagnosis)
+
    // Persist actionable import failures for Settings > Kalshi Sync > Sync Review.
    // Already imported IDs and ordinary sells are not errors to repair.
    const source=new Map<string,KalshiFill>()
@@ -110,8 +124,9 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
    if(flags.length)addKalshiFlags(flags)
    if(!ready.length){
     const already=skipped.filter(x=>x.reason==='Already imported').length
-    const current=skipped.filter(x=>x.reason==='Already imported').map(x=>x.id)
-    setMsg('No new wagers · '+totalGroups+' Kalshi orders scanned · '+already+' exact order IDs still present in the loaded Bet Tracker · '+(skippedCount-already)+' other skipped. '+(current.length?'If these were deleted, confirm Cloud saved and reload the app before retrying.':''))
+    const reasons=[...new Map(diagnosis.filter(x=>x.reason!=='Already imported').map(x=>[x.reason,true])).keys()]
+    setMsg('No new wagers · '+totalGroups+' Kalshi orders scanned · '+already+' exact duplicates · '+(skippedCount-already)+' skipped for other reasons. '+(reasons.length?'See individual reasons below.':''))
+
     return
    }
    setPreview({date,items:ready,skipped:skippedCount,orders:totalGroups})
@@ -135,6 +150,16 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
  return <div style={{padding:'8px 16px',textAlign:'center'}}>
   <button style={button} disabled={busy||!canSave} onClick={sync}>{busy?'↻ Scanning Kalshi…':'↻ Sync Kalshi Bets'}</button>
   {msg&&<p role="status" style={{color:'#b8d4e1',margin:'8px auto',maxWidth:1000}}>{msg}</p>}
+  {skipDetails.length>0&&<details style={{...wrapper,textAlign:'left',marginTop:8}} open={!preview}>
+   <summary style={{cursor:'pointer',fontWeight:700}}>Kalshi sync diagnostics · {skipDetails.length} skipped item{skipDetails.length===1?'':'s'}</summary>
+   <p style={{fontSize:12,color:'#a9c7d3'}}>These are the reasons returned by the importer. No skipped bet was automatically added.</p>
+   <div style={{maxHeight:260,overflowY:'auto'}}>
+   {skipDetails.map((item,i)=><div key={item.id+'-'+i} style={{padding:'9px 0',borderBottom:'1px solid #294855',fontSize:12}}>
+    <strong style={{color:'#efc28f'}}>{item.reason}</strong><div style={{marginTop:3}}>{item.description}</div>
+    <div style={{fontSize:10,color:'#86a8b9',overflowWrap:'anywhere'}}>{item.id}</div>
+   </div>)}
+   </div>
+  </details>}
   {preview&&<section aria-label="Kalshi import preview" style={{...wrapper,maxWidth:1050,textAlign:'left',marginTop:12}}>
    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,flexWrap:'wrap'}}>
     <strong style={{fontSize:16}}>Review Kalshi Imports · {preview.items.length} new wager{preview.items.length===1?'':'s'}</strong>
