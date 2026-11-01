@@ -1,6 +1,6 @@
 import {useState} from 'react'
 import {useKalshiJob,startKalshiJob,cancelKalshiJob,dismissKalshiPreview,setKalshiJobStatus} from './kalshiSyncJobs'
-import {prepareKalshiImports,fullNamesFromGameRoster,type HistoricalGamePlayer,type Candidate,type KalshiFill,type KalshiSlate} from './kalshiImport'
+import {prepareKalshiImports,reconcileAlreadyLoggedKalshi,fullNamesFromGameRoster,type HistoricalGamePlayer,type Candidate,type KalshiFill,type KalshiSlate} from './kalshiImport'
 import {addKalshiFlags,clearKalshiFlags} from './KalshiSyncReview'
 const eastern=()=>{
  const p=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date())
@@ -99,8 +99,8 @@ export function KalshiHistoricalImporter({bets,setBets,unitSize,canSave}:{bets:a
    for(const f of fills){sources.set(f.id,f);if(f.orderId&&f.ticker)sources.set('KALSHI-'+f.orderId+'|'+f.ticker,f)}
    ctx.update({failures:skipped.map(x=>({id:x.id,reason:x.reason,description:sources.get(x.id)?.title||x.id}))})
    ctx.assertActive()
-   clearKalshiFlags(skipped.filter(x=>x.reason==='Already imported').map(x=>x.id))
-   const flags=skipped.filter(x=>!['Already imported','Not a YES-side purchase'].includes(x.reason)).map(x=>({id:x.id,date:sources.get(x.id)?.date||from,ticker:sources.get(x.id)?.ticker||'',description:sources.get(x.id)?.title||'',reason:x.reason}))
+   clearKalshiFlags(skipped.filter(x=>/^Already (imported|recorded)/.test(x.reason)).map(x=>x.id))
+   const flags=skipped.filter(x=>!/^Already (imported|recorded)/.test(x.reason)&&x.reason!=='Not a YES-side purchase').map(x=>({id:x.id,date:sources.get(x.id)?.date||from,ticker:sources.get(x.id)?.ticker||'',description:sources.get(x.id)?.title||'',reason:x.reason}))
    if(flags.length)addKalshiFlags(flags)
    ctx.update({preview:{items:accepted,from,to}})
    ctx.update({msg:accepted.length+' new historical wagers across '+dates.length+' dates; '+skipped.length+' skipped. Review before import.'})
@@ -110,7 +110,7 @@ export function KalshiHistoricalImporter({bets,setBets,unitSize,canSave}:{bets:a
   if(!preview||busy||!canSave)return
   const incoming=preview.items.map(c=>c.bet)
   setBets((old:any[])=>{
-   const ids=new Set(old.map(b=>String(b.id))),additions=incoming.filter(b=>!ids.has(String(b.id)))
+   const ids=new Set(old.map(b=>String(b.id))),allowed=new Set(reconcileAlreadyLoggedKalshi(preview.items,old).available.map(c=>c.id)),additions=incoming.filter(b=>allowed.has(String(b.id))&&!ids.has(String(b.id)))
    return additions.length?[...old,...additions]:old
   })
   clearKalshiFlags(preview.items.map(c=>c.id))

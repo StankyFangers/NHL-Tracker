@@ -37,6 +37,8 @@ jobs:
         run: npx esbuild tests/betSlipDraft.test.mjs tests/liveCloudSync.test.mjs tests/liveMigrationUpload.test.mjs tests/liveMigrationPreflight.test.mjs --bundle --platform=node --format=esm --out-extension:.js=.mjs --outdir=qa-tests
       - name: Run focused tests
         run: node --test qa-tests/betSlipDraft.test.mjs qa-tests/liveCloudSync.test.mjs qa-tests/liveMigrationUpload.test.mjs qa-tests/liveMigrationPreflight.test.mjs
+      - name: Test Kalshi manual wager duplicate protection
+        run: node --test tests/kalshiManualDuplicates.test.mjs tests/kalshiHistoricalImport.test.mjs tests/kalshiTwoPointOnePoint.test.mjs
       - name: Test trio locks and remembered login
         run: |
           node tests/trioPuckDrop.test.cjs

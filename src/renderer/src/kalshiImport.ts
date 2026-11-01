@@ -158,6 +158,52 @@ export function classifyExistingKalshiBet(bet:any,dfo:Record<string,any>):string
 }
 
 export type KalshiSlate={date:string;dfo:Record<string,any>;games:any[]}
+/** Reconcile old/manual Kalshi entries that have no stable Kalshi order ID.
+ * Exact order IDs always take priority. A manually recorded wager may consume
+ * at most ONE new order; a second identical purchase remains importable.
+ * Require the same original date, player markets, stake and American odds.
+ * Never merge separately identified Kalshi purchases by their legs alone.
+ */
+export function reconcileAlreadyLoggedKalshi(candidates:Candidate[],existing:any[]):{available:Candidate[];matched:{id:string;reason:string}[]}{
+ const signature=(legs:any[]):string=>{
+  if(!Array.isArray(legs)||!legs.length)return ''
+  const parts=legs.map(l=>{
+   const player=normalized(String(l?.player||''))
+   const qty=Number(l?.qty)
+   const stat=normalized(String(l?.stat||'Point'))
+   if(!player||!Number.isFinite(qty)||qty<=0||!stat)return ''
+   return player+':'+stat+':'+qty+':'+String(l?.side||'OVER').toUpperCase()
+  })
+  return parts.every(Boolean)?parts.sort().join('|'):''
+ }
+ const manual=existing.filter(b=>
+  String(b?.book||'').toLowerCase()==='kalshi' &&
+  !String(b?.id||'').startsWith('KALSHI-') &&
+  /^\d{4}-\d{2}-\d{2}$/.test(String(b?.date||'')) &&
+  signature(b?.legs||'') &&
+  Number(b?.units)>0&&Number(b?.unitSize)>0&&Number.isFinite(Number(b?.odds))
+ )
+ const consumed=new Set<number>()
+ const available:Candidate[]=[],matched:{id:string;reason:string}[]=[]
+ for(const candidate of candidates){
+  const sig=signature(candidate.legs)
+  const index=manual.findIndex((b,i)=>{
+   if(consumed.has(i)||b.date!==candidate.date||signature(b.legs)!==sig)return false
+   const stake=Number(b.units)*Number(b.unitSize)
+   const centsMatch=Math.abs(stake-candidate.risk)<=0.021
+   const oddsMatch=Math.abs(Number(b.odds)-candidate.odds)<=1
+   const oldGames=[...new Set(b.legs.map((l:any)=>String(l?.gameId||'')).filter(Boolean))]
+   const newGames=[...new Set(candidate.legs.map(l=>String(l.gameId||'')).filter(Boolean))]
+   return centsMatch&&oddsMatch&&(!oldGames.length||!newGames.length||oldGames.join('|')===newGames.join('|'))
+  })
+  if(index>=0){
+   consumed.add(index)
+   matched.push({id:candidate.id,reason:'Already recorded as a matching manually logged Kalshi bet (date, players, stake and odds)'})
+  }else available.push(candidate)
+ }
+ return {available,matched}
+}
+
 export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Record<string,any>,games:any[],unitSize:number,overnight:KalshiSlate[]=[],currentSlateDate:string='',rosterPlayers:Record<string,string[]>={},historicalPlayers?:HistoricalGamePlayer[]){
  const groups=new Map<string,KalshiFill[]>()
  const skipped:{id:string;reason:string}[]=[]
@@ -216,7 +262,9 @@ export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Recor
   const bet:KalshiImport={id,date:gameDate,legs,book:'Kalshi',units:risk/unitSize,unitSize,odds,createdAt:fs[0].createdAt||new Date().toISOString(),groupKey:gameIds.length===1?gameIds[0]:'MULTI',status:'PENDING',category,source:'LIVE'}
   candidates.push({id,date:gameDate,ticker:fs[0].ticker,legs,risk,units:bet.units,odds,category,description:fs[0].title,bet})
  }
- return {candidates,skipped,totalGroups:groups.size,days:day}
+ const reconciled=reconcileAlreadyLoggedKalshi(candidates,existing)
+ skipped.push(...reconciled.matched)
+ return {candidates:reconciled.available,skipped,totalGroups:groups.size,days:day}
 }
 
 const rosterName=(v:any)=>typeof v==='string'?v:typeof v?.default==='string'?v.default:''
