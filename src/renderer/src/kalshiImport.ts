@@ -105,7 +105,7 @@ export function matchHistoricalBoxscores(legs:ParsedLeg[],games:any[],players:Hi
  picks.forEach((p,i)=>Object.assign(legs[i],p))
  return {ok:true,reason:''}
 }
-function attachNhlMatch(legs:ParsedLeg[],dfo:Record<string,any>,games:any[],rosterPlayers:Record<string,string[]>={}):boolean{
+function attachNhlMatch(legs:ParsedLeg[],_dfo:Record<string,any>,games:any[],rosterPlayers:Record<string,string[]>={}):boolean{
  const teamOf=(g:any,side:'away'|'home')=>String(g?.[side+'Team']?.abbrev?.default||g?.[side+'Team']?.abbrev||g?.[side+'Team']?.triCode||'').toUpperCase()
  for(const leg of legs){
   const player=normalized(leg.player)
@@ -132,7 +132,7 @@ export function isTwoPointOnePoint(legs:readonly {player:string;qty:number;stat:
  if(!legs.some(l=>Number(l.qty)===1))return false
  return new Set(legs.map(l=>normalized(String(l.player)))).size===legs.length
 }
-function classify(legs:ParsedLeg[],dfo:Record<string,any>,games:any[]){
+function classify(legs:ParsedLeg[],dfo:Record<string,any>,_games:any[]){
  if(legs.length&&legs.every(l=>l.stat==='Assist'))return 'ASSISTS'
  if(isTwoPointOnePoint(legs))return '2P - 1P'
  // Correlated forward combos are multiple 1+ point legs for one NHL team.
