@@ -91,18 +91,14 @@ export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Recor
   if(fs.some(f=>f.ticker!==fs[0].ticker||f.date!==fs[0].date)){skipped.push({id,reason:'Inconsistent fills'});continue}
   const legs=extractLegs(fs[0])
   if(!legs){skipped.push({id,reason:'Cannot verify exact player thresholds'});continue}
-  // Prefer a date-matched historical slate if the players cannot be found today.
-  // Work on copies so a failed slate cannot leave partial player/game assignments.
-  const slates:KalshiSlate[]=[{date:currentSlateDate||fs[0].date,dfo,games},...overnight]
-  const matches=slates.flatMap(slate=>{
-   const trial=legs.map(l=>({...l}))
-   return attachNhlMatch(trial,slate.dfo,slate.games)?[{slate,legs:trial}]:[]
-  })
-  const distinct=[...new Map(matches.map(m=>[m.legs.map(l=>l.gameId).join('|'),m])).values()]
-  if(distinct.length!==1){skipped.push({id,reason:distinct.length?'Multiple NHL game dates matched; review game assignment':'Player not found on current or overnight NHL lineups; historical lineup review needed'});continue}
-  const match=distinct[0]
-  legs.splice(0,legs.length,...match.legs)
-  const gameDate=match.slate.date
+  // Same-day combo rule: the Kalshi purchase date IS the NHL game date.
+  // Never move a wager onto another slate just because the players match.
+  const matchingSlate=[{date:currentSlateDate||fs[0].date,dfo,games},...overnight].find(slate=>slate.date===fs[0].date)
+  if(!matchingSlate){skipped.push({id,reason:'No NHL slate loaded for Kalshi bet placement date '+fs[0].date});continue}
+  if(!attachNhlMatch(legs,matchingSlate.dfo,matchingSlate.games)){
+   skipped.push({id,reason:'Players not found on NHL lineup for bet placement date '+fs[0].date});continue
+  }
+  const gameDate=fs[0].date
   // An order can contain multiple fills, priced in dollars per contract. Preserve actual fee cost.
   const values=fs.map(f=>({count:num(f.count),price:num(f.price),fee:num(f.fee)}))
   if(values.some(x=>!Number.isFinite(x.count)||x.count<=0||!Number.isFinite(x.price)||x.price<=0||x.price>=1||!Number.isFinite(x.fee)||x.fee<0)){
@@ -116,7 +112,7 @@ export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Recor
   const signature=gameDate+'|'+legs.map(l=>normalized(l.player)+':'+l.qty+':'+l.stat).sort().join(';')
   if(existingSignatures.has(signature)){skipped.push({id,reason:'Potential existing manual Kalshi bet — needs review'});continue}
   const odds=Math.round(((count/risk)-1)*100)
-  const category=classify(legs,match.slate.dfo,match.slate.games)
+  const category=classify(legs,matchingSlate.dfo,matchingSlate.games)
   const gameIds=[...new Set(legs.map(l=>String(l.gameId||'')).filter(Boolean))]
   const bet:KalshiImport={id,date:gameDate,legs,book:'Kalshi',units:risk/unitSize,unitSize,odds,createdAt:fs[0].createdAt||new Date().toISOString(),groupKey:gameIds.length===1?gameIds[0]:'MULTI',status:'PENDING',category,source:'LIVE'}
   candidates.push({id,date:gameDate,ticker:fs[0].ticker,legs,risk,units:bet.units,odds,category,description:fs[0].title,bet})
