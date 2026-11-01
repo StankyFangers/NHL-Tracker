@@ -1,6 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
 contextBridge.exposeInMainWorld('nhlTracker', {
+  kalshiSettings: () => ipcRenderer.invoke('kalshi:settings'),
+  kalshiChoosePem: () => ipcRenderer.invoke('kalshi:choose-pem'),
+  kalshiSave: (id:string,path:string) => ipcRenderer.invoke('kalshi:save',id,path),
+  kalshiDisconnect: () => ipcRenderer.invoke('kalshi:disconnect'),
+  kalshiCheck: () => ipcRenderer.invoke('kalshi:check'),
+  kalshiHistory: (from:string) => ipcRenderer.invoke('kalshi:history',from),
+  kalshiSyncPreview: () => ipcRenderer.invoke('kalshi:sync-preview'),
   saveLineComboPdf: (payload: {title:string;subtitle:string;lines:string[]}) => ipcRenderer.invoke('app:saveLineComboPdf',payload),
   score: (date?: string) => ipcRenderer.invoke('nhl:score', date),
   playByPlay: (gameId: number) => ipcRenderer.invoke('nhl:pbp', gameId),
