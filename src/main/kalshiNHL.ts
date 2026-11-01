@@ -28,8 +28,21 @@ async function request(path:string,params?:URLSearchParams){
  if(!resp.ok)throw Error('Kalshi HTTP '+resp.status+' — '+(await resp.text()).slice(0,140))
  return resp.json() as Promise<any>
 }
+
 const dateOf=(f:any)=>String(f.created_time||f.ts||f.created_at||f.timestamp||'')
-const hockey=(s:string)=>/NHL|hockey|ice hockey|\b(McDavid|MacKinnon|Matthews|Kucherov)\b/i.test(s)
+const hockey=(s:string)=>/\bNHL\b|hockey|ice hockey|KXNHL|KXNHLPTS|KXNHLAST|KXNHLGOALS/i.test(s)
+const rawTicker=(f:any)=>String(f.ticker||f.market_ticker||'')
+const asLegs=(m:any):any[]=>Array.isArray(m?.mve_selected_legs)?m.mve_selected_legs:[]
+const metaCache=new Map<string,any>()
+async function market(ticker:string):Promise<any>{
+ if(metaCache.has(ticker))return metaCache.get(ticker)
+ try{
+  const r=await request('/markets/'+encodeURIComponent(ticker))
+  const result=r.market||null
+  metaCache.set(ticker,result)
+  return result
+ }catch{metaCache.set(ticker,null);return null}
+}
 async function scan(from:string,limitPages:number){
  if(!/^20\d{2}-\d{2}-\d{2}$/.test(from))throw Error('Invalid historical date')
  const start=Date.parse(from+'T00:00:00Z')
@@ -47,28 +60,47 @@ async function scan(from:string,limitPages:number){
   if(!cursor){complete=true;break}
   if(seen.has(cursor))throw Error('Repeated cursor returned by Kalshi');seen.add(cursor)
  }
- const grouped=new Map<string,any[]>()
- for(const f of all){const ticker=String(f.ticker||f.market_ticker||'');if(!grouped.has(ticker))grouped.set(ticker,[]);grouped.get(ticker)!.push(f)}
- const marketMeta=new Map<string,string>()
- // Limit lookups; never import unidentified legs.
- const tickers=[...grouped.keys()].filter(Boolean)
- for(let i=0;i<tickers.length&&i<400;i++){
-  const ticker=tickers[i]
-  try{
-   const r=await request('/markets/'+encodeURIComponent(ticker))
-   const m=r.market||{}
-   const legs=Array.isArray(m.mve_selected_legs)?m.mve_selected_legs.map((x:any)=>JSON.stringify(x)).join(' | '):''
-   marketMeta.set(ticker,[m.title,m.subtitle,m.yes_sub_title,legs].filter(Boolean).join(' | ').slice(0,900))
-  }catch{marketMeta.set(ticker,'')}
+ const uniqueTickers=[...new Set(all.map(rawTicker).filter(Boolean))]
+ // Include ALL filled tickers, not an arbitrary first 400; else later fills are falsely "unclassified".
+ // API retrieval is serial and cached across scans so repeat historical scans are cheaper.
+ let lookups=0,unresolved=0
+ for(const ticker of uniqueTickers){
+  if(metaCache.has(ticker))continue
+  if(lookups>=1200){unresolved++;continue}
+  await market(ticker);lookups++
+ }
+ // Fetch each component market's readable title rather than searching JSON strings
+ // containing only underlying market identifiers.
+ const parentLegTickers=[...new Set(uniqueTickers.flatMap(t=>asLegs(metaCache.get(t)).map(l=>String(l.market_ticker||'')).filter(Boolean)))]
+ let legLookups=0
+ for(const ticker of parentLegTickers){
+  if(metaCache.has(ticker))continue
+  if(legLookups>=1200)break
+  await market(ticker);legLookups++
  }
  const rows=all.map((f:any)=>{
-  const ticker=String(f.ticker||f.market_ticker||'')
-  const description=marketMeta.get(ticker)||''
-  const id=String(f.fill_id||f.trade_id||f.order_id||ticker+'-'+dateOf(f))
-  return {id,date:dateOf(f).slice(0,10),ticker,title:description||ticker,side:String(f.side||''),action:String(f.action||''),count:String(f.count_fp??f.count??''),price:String(f.yes_price_dollars??f.no_price_dollars??f.yes_price??f.no_price??''),fee:String(f.fee_cost_dollars??f.fee_cost??''),isNhl:hockey(description+' '+ticker)}
+  const ticker=rawTicker(f),m=metaCache.get(ticker)||{}
+  const legs=asLegs(m).map((l:any)=>{
+   const lt=String(l.market_ticker||'')
+   const lm=metaCache.get(lt)||{}
+   return {ticker:lt,side:String(l.side||''),title:[lm.title,lm.subtitle,lm.yes_sub_title].filter(Boolean).join(' | ')||lt,resolved:!!lm.title}
+  })
+  const description=[m.title,m.subtitle,m.yes_sub_title].filter(Boolean).join(' | ')
+  const classificationText=[ticker,description,...legs.flatMap(l=>[l.ticker,l.title])].join(' ')
+  const isNhl=hockey(classificationText)
+  const fillId=String(f.fill_id||f.trade_id||'')
+  const orderId=String(f.order_id||'')
+  // Never invent an external ID from date and ticker; the import engine must require a real ID.
+  const id=fillId||[orderId,ticker,dateOf(f),String(f.count_fp??f.count??'')].join('|')
+  const hasLegs=legs.length>0
+  const review=hasLegs&&legs.some(l=>!l.resolved)?'CHECK_LEGS':hasLegs?'COMBO_REVIEW':isNhl?'SINGLE_REVIEW':'UNCLASSIFIED'
+  return {id,fillId,orderId,date:dateOf(f).slice(0,10),ticker,title:description||ticker,side:String(f.side||''),action:String(f.action||''),count:String(f.count_fp??f.count??''),price:String(f.yes_price_dollars??f.no_price_dollars??f.yes_price??f.no_price??''),fee:String(f.fee_cost_dollars??f.fee_cost??''),isNhl,review,legs}
  })
  const nhl=rows.filter(r=>r.isNhl),unknown=rows.filter(r=>!r.isNhl)
- return {totalFills:all.length,nhl,unknown:unknown.slice(0,300),unclassified:unknown.length,pages,complete,marketLookups:Math.min(tickers.length,400),notice:'Read-only scan: '+nhl.length+' likely NHL fills; '+unknown.length+' other/unclassified. No wagers were imported.'}
+ const distinctOrders=new Set(nhl.map(r=>r.orderId).filter(Boolean))
+ // A single order may contain multiple fills. Only order-level grouping is proposed for review.
+ const combos=nhl.filter(r=>r.legs.length>=2)
+ return {totalFills:all.length,nhl,unknown:unknown.slice(0,500),unclassified:unknown.length,pages,complete,marketLookups:lookups,legLookups,unresolved:Math.max(unresolved,uniqueTickers.filter(t=>!metaCache.has(t)).length),distinctNhlOrders:distinctOrders.size,combos:combos.length,notice:'Read-only: '+nhl.length+' NHL-related fills, '+combos.length+' with multiple documented component legs, '+unknown.length+' other/unclassified. No wagers imported.'}
 }
 export function registerKalshiNHL(){
  ipcMain.handle('kalshi:settings',async()=>{
