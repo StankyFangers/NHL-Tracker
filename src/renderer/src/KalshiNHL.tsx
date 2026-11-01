@@ -38,7 +38,6 @@ export function KalshiNHLSettings({mode='settings'}:{mode?:'settings'|'history'}
 export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo,games,canSave}:{date:string;selectedSlate:string;bets:any[];setBets:any;unitSize:number;slateDfo:Record<string,any>;games:any[];canSave:boolean}){
  const [busy,setBusy]=useState(false),[msg,setMsg]=useState('')
  const [preview,setPreview]=useState<{date:string;items:Candidate[];skipped:number;orders:number}|null>(null)
- const signature=(b:any)=>String(b.date)+'|'+(b.legs||[]).map((l:any)=>String(l.player).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')+':'+l.qty+':'+l.stat).sort().join(';')
  const sync=async()=>{
   if(busy)return
   setBusy(true);setPreview(null);setMsg('Contacting Kalshi and reviewing today’s fills…')
@@ -109,7 +108,12 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
     return {id:x.id,date:f?.date||date,ticker:f?.ticker||'',description:f?.title||'',reason:x.reason}
    })
    if(flags.length)addKalshiFlags(flags)
-   if(!ready.length){setMsg('No eligible new wagers · '+totalGroups+' orders reviewed · '+skippedCount+' skipped or already recorded. Nothing changed.');return}
+   if(!ready.length){
+    const already=skipped.filter(x=>x.reason==='Already imported').length
+    const current=skipped.filter(x=>x.reason==='Already imported').map(x=>x.id)
+    setMsg('No new wagers · '+totalGroups+' Kalshi orders scanned · '+already+' exact order IDs still present in the loaded Bet Tracker · '+(skippedCount-already)+' other skipped. '+(current.length?'If these were deleted, confirm Cloud saved and reload the app before retrying.':''))
+    return
+   }
    setPreview({date,items:ready,skipped:skippedCount,orders:totalGroups})
    setMsg(ready.length+' new Kalshi wager'+(ready.length===1?'':'s')+' found. Review the batch below, then choose Import All.')
   }catch(e:any){setMsg('Kalshi sync blocked: '+String(e?.message||e))}finally{setBusy(false)}
@@ -121,8 +125,7 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
   // Keep the same ID and manually-entered-wager checks in the final React state update.
   setBets((old:any[])=>{
    const ids=new Set(old.map(b=>String(b.id)))
-   const existingManual=new Set(old.filter(b=>b.book==='Kalshi').map(signature))
-   const additions=newBets.filter(b=>!ids.has(b.id)&&!existingManual.has(signature(b)))
+   const additions=newBets.filter(b=>!ids.has(b.id))
    return additions.length?[...old,...additions]:old
   })
   clearKalshiFlags(preview.items.map(c=>c.id))
