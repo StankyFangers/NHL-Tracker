@@ -6,7 +6,6 @@ const rgb=(v:string)=>[1,3,5].map(i=>parseInt(v.slice(i,i+2),16))
 const hex=(v:number[])=>'#'+v.map(n=>Math.max(0,Math.min(255,Math.round(n))).toString(16).padStart(2,'0')).join('')
 const mix=(a:string,b:string,r:number)=>{const x=rgb(a),y=rgb(b);return hex(x.map((n,i)=>n*(1-r)+y[i]*r))}
 const luminance=(color:string)=>{const c=rgb(color).map(n=>{const v=n/255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4});return c[0]*.2126+c[1]*.7152+c[2]*.0722}
-const contrast=(a:string,b:string)=>{const x=luminance(a),y=luminance(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05)}
 export function smartPalette(background:string):Record<string,string>{
  const base=/^#[0-9a-f]{6}$/i.test(background)?background:'#0b1b29'
  // Layered, dark surfaces keep cards readable even when the selected backdrop is light.
