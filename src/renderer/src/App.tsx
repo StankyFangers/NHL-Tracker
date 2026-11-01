@@ -1137,7 +1137,7 @@ function TrackerApp({initialTestAccount,onTestLogout,liveAccount,onLiveLogout}:{
 {settingsSection==='Spoiler Shield'&&<div className="settingsCard spoilerSettings"><h2>Spoiler Shield</h2><p>Hiding a team hides its entire game — opponent goals, power plays, score, desktop notifications and sounds included.</p><TeamChips hidden={hidden} setHidden={setHidden}/></div>}
 {settingsSection==='Guide'&&<div className="settingsCard"><h2>Kalshi Sync Guide</h2><p>1. Go to Kalshi Sync Settings and enter your read-only API Key ID and PEM private key.</p><p>2. Save and test your connection once. Credentials are encrypted locally on this PC.</p><p>3. Use Kalshi Sync Historical Backfill to inspect earlier wagers and unclassified combo markets.</p><p>4. Use Sync Kalshi Bets from Bet Entry to check Kalshi activity.</p><p><strong>Current limitation:</strong> The button is read-only and does not import or settle wagers yet. Combo reconstruction and duplicate-safe importing are under development.</p></div>}
 {settingsSection==='Kalshi Sync Settings'&&<KalshiNHLSettings mode="settings"/>}
-{settingsSection==='Kalshi Sync Historical Backfill'&&<KalshiNHLSettings mode="history"/>}
+{settingsSection==='Kalshi Sync Historical Backfill'&&<KalshiNHLSettings mode="history" bets={bets} setBets={setBets} unitSize={unitSize} canSave={isTestMode?!!account&&devSyncRef.current.ready&&!devSyncRef.current.busy:!!liveAccount&&liveCloudStatus==='ready'}/>}
 {settingsSection==='Sync Review'&&<KalshiSyncReview betIds={bets.map(b=>b.id)}/> }
 {settingsSection==='Sportsbook Balances'&&<SportsbookBalanceSettings account={balanceAccount} bets={bets}/>}
 {settingsSection==='Bet Categories'&&<CategorySettings/>}
