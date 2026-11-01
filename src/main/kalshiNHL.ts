@@ -153,7 +153,7 @@ export function registerKalshiNHL(){
   try{const c=await stored();return {configured:true,keyId:c.id}}catch(e:any){return {configured:false,error:e?.code==='ENOENT'?'':String(e?.message||e)}}
  })
  ipcMain.handle('kalshi:choose-pem',async()=>{
-  const r=await dialog.showOpenDialog({title:'Select Kalshi private key',properties:['openFile'],filters:[{name:'PEM private key',extensions:['pem','key']}]})
+  const r=await dialog.showOpenDialog({title:'Select Kalshi private key',properties:['openFile'],filters:[{name:'PEM private key',extensions:['pem','key','txt']}]})
   return {cancelled:r.canceled,path:r.filePaths[0]||''}
  })
  ipcMain.handle('kalshi:save',async(_e,id:string,pemPath:string)=>{
