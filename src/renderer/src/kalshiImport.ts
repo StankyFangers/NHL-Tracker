@@ -72,7 +72,7 @@ function classify(legs:ParsedLeg[],dfo:Record<string,any>,games:any[]){
  return 'OTHER'
 }
 export type KalshiSlate={date:string;dfo:Record<string,any>;games:any[]}
-export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Record<string,any>,games:any[],unitSize:number,overnight:KalshiSlate[]=[]){
+export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Record<string,any>,games:any[],unitSize:number,overnight:KalshiSlate[]=[],currentSlateDate:string=''){
  const groups=new Map<string,KalshiFill[]>()
  const skipped:{id:string;reason:string}[]=[]
  const day=Array.from(new Set(fills.map(f=>f.date)))
@@ -93,7 +93,7 @@ export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Recor
   if(!legs){skipped.push({id,reason:'Cannot verify exact player thresholds'});continue}
   // Prefer a date-matched historical slate if the players cannot be found today.
   // Work on copies so a failed slate cannot leave partial player/game assignments.
-  const slates:KalshiSlate[]=[{date:fs[0].date,dfo,games},...overnight]
+  const slates:KalshiSlate[]=[{date:currentSlateDate||fs[0].date,dfo,games},...overnight]
   const matches=slates.flatMap(slate=>{
    const trial=legs.map(l=>({...l}))
    return attachNhlMatch(trial,slate.dfo,slate.games)?[{slate,legs:trial}]:[]
