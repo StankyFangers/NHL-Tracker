@@ -173,9 +173,12 @@ export function registerKalshiNHL(){
  ipcMain.handle('kalshi:history',async(_e,from:string)=>scan(from,30))
  ipcMain.handle('kalshi:sync-today',async(_e,date:string)=>{
   if(!/^20\d{2}-\d{2}-\d{2}$/.test(date))throw Error('Invalid sync date')
-  const result=await scan(date,10)
+  // Include the previous UTC calendar day so late-night games and after-midnight
+  // purchases can be resolved against the actual NHL slate.
+  const previous=new Date(Date.parse(date+'T12:00:00Z')-86400000).toISOString().slice(0,10)
+  const result=await scan(previous,30)
   if(!result.complete)throw Error('Incomplete Kalshi scan: import blocked to prevent partial order totals')
-  return {...result,nhl:result.nhl.filter(x=>x.date===date),unknown:[],notice:'Current-day scan complete. Review candidates before importing.'}
+  return {...result,nhl:result.nhl.filter(x=>x.date===date||x.date===previous),unknown:[],notice:'Today and overnight fills scanned; resolve against each NHL game date before importing.'}
  })
  ipcMain.handle('kalshi:sync-preview',async()=>{
   // Deliberately preview-only until fill -> wager grouping / settlements are verified.
