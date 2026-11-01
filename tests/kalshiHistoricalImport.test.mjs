@@ -33,3 +33,14 @@ test('historical imports skip exact Kalshi order but permit fresh identical-leg 
  assert.equal(r.candidates[0].id,'KALSHI-c|KXMVECROSSCATEGORY-c')
  assert.equal(r.skipped[0].reason,'Already imported')
 })
+
+test('matching a different historical day cannot inherit an unrelated current team',()=>{
+ const fill=make('2026-10-30','date-scoped',['Mark Jankowski','Seth Jarvis'])
+ const slate={date:'2026-10-30',dfo:{},games:[{id:10,awayTeam:{abbrev:'CAR'},homeTeam:{abbrev:'BOS'}}]}
+ const failed=prepareKalshiImports([fill],[],slate.dfo,slate.games,1,[],slate.date,{DET:['Mark Jankowski','Seth Jarvis']})
+ assert.equal(failed.candidates.length,0)
+ assert.match(failed.skipped[0].reason,/NHL game-day player\(s\) not found/)
+ const matched=prepareKalshiImports([fill],[],slate.dfo,slate.games,1,[],slate.date,{CAR:['Mark Jankowski','Seth Jarvis']})
+ assert.equal(matched.candidates.length,1)
+ assert.equal(matched.candidates[0].bet.groupKey,'10')
+})
