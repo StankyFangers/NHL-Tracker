@@ -5,7 +5,7 @@ import ts from 'typescript'
 
 const src=readFileSync('src/renderer/src/kalshiImport.ts','utf8')
 const js=ts.transpileModule(src,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText
-const {prepareKalshiImports}=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
+const {prepareKalshiImports,matchHistoricalBoxscores}=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
 const make=(date,order,players)=>({
  id:'fill-'+order,fillId:'fill-'+order,orderId:order,date,
  createdAt:date+'T20:00:00Z',ticker:'KXMVECROSSCATEGORY-'+order,
@@ -43,4 +43,27 @@ test('matching a different historical day cannot inherit an unrelated current te
  const matched=prepareKalshiImports([fill],[],slate.dfo,slate.games,1,[],slate.date,{CAR:['Mark Jankowski','Seth Jarvis']})
  assert.equal(matched.candidates.length,1)
  assert.equal(matched.candidates[0].bet.groupKey,'10')
+})
+
+test('October 31 wager matches only October 31 games and original boxscore IDs',()=>{
+ const wager=make('2026-10-31','box-match',['Rickard Rakell','Sidney Crosby'])
+ const games=[{id:31,awayTeam:{abbrev:'PIT'},homeTeam:{abbrev:'BOS'}}]
+ const october31=[
+  {gameId:'31',team:'PIT',player:'Rickard Rakell',playerId:8476483},
+  {gameId:'31',team:'PIT',player:'Sidney Crosby',playerId:8471675}
+ ]
+ const result=prepareKalshiImports([wager],[],{},games,1,[],'2026-10-31',{},october31)
+ assert.deepEqual(result.skipped,[])
+ assert.equal(result.candidates[0].bet.groupKey,'31')
+ assert.deepEqual(result.candidates[0].legs.map(l=>l.playerId),[8476483,8471675])
+ assert.deepEqual(result.candidates[0].legs.map(l=>l.team),['PIT','PIT'])
+ const wrong=prepareKalshiImports([wager],[],{},games,1,[],'2026-10-31',{},october31.map(p=>({...p,gameId:'30'})))
+ assert.equal(wrong.candidates.length,0)
+ assert.match(wrong.skipped[0].reason,/Player missing from game boxscores/)
+})
+test('boxscore matcher does not modify partial wagers on a failed leg',()=>{
+ const legs=[{player:'Sidney Crosby',qty:1,stat:'Point'},{player:'Missing Player',qty:1,stat:'Point'}]
+ const result=matchHistoricalBoxscores(legs,[{id:31,awayTeam:{abbrev:'PIT'},homeTeam:{abbrev:'BOS'}}],[{gameId:'31',team:'PIT',player:'Sidney Crosby',playerId:8471675}])
+ assert.equal(result.ok,false)
+ assert.equal(legs[0].gameId,undefined)
 })
