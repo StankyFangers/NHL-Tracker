@@ -1,4 +1,4 @@
-import {useEffect,useState} from 'react'
+import {useEffect,useState,type CSSProperties} from 'react'
 export type KalshiFlag={id:string;date:string;ticker:string;description:string;reason:string;category:'COMBOS'|'ASSISTS'|'OTHER'|'UNDETERMINED';notes:string;correctedDescription:string;status:'NEEDS_REVIEW'|'REVIEWED'|'DISMISSED';updatedAt:string}
 const KEY='nhl-tracker:kalshi:flagged-review:v1'
 export const readKalshiFlags=():KalshiFlag[]=>{try{const x=JSON.parse(localStorage.getItem(KEY)||'[]');return Array.isArray(x)?x.filter(v=>v&&typeof v.id==='string'):[]}catch{return []}}
@@ -25,9 +25,9 @@ export function KalshiSyncReview({betIds=[]}:{betIds?:string[]}){
  const included=new Set(betIds)
  const visible=items.filter(x=>(filter==='ALL'||x.status===filter)&&!included.has(x.id))
  const counts={review:items.filter(x=>x.status==='NEEDS_REVIEW'&&!included.has(x.id)).length,done:items.filter(x=>x.status==='REVIEWED'&&!included.has(x.id)).length}
- const panel:React.CSSProperties={padding:16,border:'1px solid #345664',background:'#0d2230',borderRadius:10,margin:'12px 0'}
- const field:React.CSSProperties={background:'#102b38',color:'#e5f5fa',border:'1px solid #456a79',borderRadius:6,padding:'8px 10px',width:'100%'}
- const action:React.CSSProperties={background:'#146c57',color:'#fff',border:'1px solid #278e75',borderRadius:7,padding:'8px 12px',cursor:'pointer'}
+ const panel:CSSProperties={padding:16,border:'1px solid #345664',background:'#0d2230',borderRadius:10,margin:'12px 0'}
+ const field:CSSProperties={background:'#102b38',color:'#e5f5fa',border:'1px solid #456a79',borderRadius:6,padding:'8px 10px',width:'100%'}
+ const action:CSSProperties={background:'#146c57',color:'#fff',border:'1px solid #278e75',borderRadius:7,padding:'8px 12px',cursor:'pointer'}
  return <section style={{maxWidth:1180,margin:'12px auto',color:'#e6f5fa'}}>
   <h2>Kalshi Sync Review</h2>
   <p style={{fontSize:13,color:'#a9c7d3'}}>Flagged wagers are held here instead of being added to your Bet Tracker. You can correct descriptions, record the intended category, and add notes. Marking a wager reviewed does not import it; the corrected wager must pass identity, cost and duplicate verification before import is enabled.</p>
