@@ -97,10 +97,12 @@ async function scan(from:string,limitPages:number){
   return {id,fillId,orderId,date:dateOf(f).slice(0,10),ticker,title:description||ticker,side:String(f.side||''),action:String(f.action||''),count:String(f.count_fp??f.count??''),price:String(f.yes_price_dollars??f.no_price_dollars??f.yes_price??f.no_price??''),fee:String(f.fee_cost_dollars??f.fee_cost??''),isNhl,review,legs}
  })
  const nhl=rows.filter(r=>r.isNhl),unknown=rows.filter(r=>!r.isNhl)
+ // Only a candidate if *every* leg is NHL; mixed-sport parlays must never be silently imported.
+ const mixedLegs=nhl.filter(r=>r.legs.length>0&&r.legs.some((l:any)=>!hockey(l.ticker+' '+l.title))).length
  const distinctOrders=new Set(nhl.map(r=>r.orderId).filter(Boolean))
  // A single order may contain multiple fills. Only order-level grouping is proposed for review.
  const combos=nhl.filter(r=>r.legs.length>=2)
- return {totalFills:all.length,nhl,unknown:unknown.slice(0,500),unclassified:unknown.length,pages,complete,marketLookups:lookups,legLookups,unresolved:Math.max(unresolved,uniqueTickers.filter(t=>!metaCache.has(t)).length),distinctNhlOrders:distinctOrders.size,combos:combos.length,notice:'Read-only: '+nhl.length+' NHL-related fills, '+combos.length+' with multiple documented component legs, '+unknown.length+' other/unclassified. No wagers imported.'}
+ return {totalFills:all.length,nhl,unknown:unknown.slice(0,500),unclassified:unknown.length,pages,complete,marketLookups:lookups,legLookups,unresolved:Math.max(unresolved,uniqueTickers.filter(t=>!metaCache.has(t)).length),distinctNhlOrders:distinctOrders.size,combos:combos.length,mixedLegs,notice:'Read-only: '+nhl.length+' NHL-related fills, '+combos.length+' with multiple documented component legs, '+unknown.length+' other/unclassified. No wagers imported.'}
 }
 export function registerKalshiNHL(){
  ipcMain.handle('kalshi:settings',async()=>{
