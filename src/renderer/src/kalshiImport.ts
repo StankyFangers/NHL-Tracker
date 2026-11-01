@@ -97,7 +97,6 @@ export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Recor
   groups.set(k,[...(groups.get(k)||[]),f])
  }
  const existingIds=new Set(existing.map(b=>String(b.id)))
- const existingSignatures=new Set(existing.filter(b=>b.book==='Kalshi').map(b=>String(b.date)+'|'+(b.legs||[]).map((l:any)=>normalized(l.player)+':'+l.qty+':'+l.stat).sort().join(';')))
  const candidates:Candidate[]=[]
  for(const [key,fs] of groups){
   const id='KALSHI-'+key
@@ -123,8 +122,8 @@ export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Recor
   if(!Number.isFinite(risk)||risk<=0||!Number.isFinite(unitSize)||unitSize<=0||risk>=count){
    skipped.push({id,reason:'Unsupported wager cost/return'});continue
   }
-  const signature=gameDate+'|'+legs.map(l=>normalized(l.player)+':'+l.qty+':'+l.stat).sort().join(';')
-  if(existingSignatures.has(signature)){skipped.push({id,reason:'Already recorded as a matching Kalshi bet'});continue}
+  // Only the Kalshi order + ticker is a reliable duplicate identity.
+  // Repeated purchases with identical player legs must remain independent wagers.
   const odds=Math.round(((count/risk)-1)*100)
   const category=classify(legs,matchingSlate.dfo,matchingSlate.games)
   const gameIds=[...new Set(legs.map(l=>String(l.gameId||'')).filter(Boolean))]
