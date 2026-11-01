@@ -54,6 +54,7 @@ export function cancelKalshiJob(){
  if(!current)return
  const kind=current.kind
  current=null
+ try{void (window as any).nhlTracker?.kalshiCancel?.()?.catch?.(()=>{})}catch{/* Cancel locally regardless of IPC availability. */}
  change(kind,{busy:false,phase:'cancelled',preview:null,msg:'Sync cancelled. No scan results were imported. Any in-flight API request may finish, but its results will be ignored.'})
 }
 export function dismissKalshiPreview(kind:KalshiKind,msg:string){
