@@ -5,7 +5,7 @@ type ParsedLeg={player:string;qty:number;stat:string;side:'OVER';kind:'PLAYER';t
 export type KalshiImport={id:string;date:string;legs:ParsedLeg[];book:string;units:number;unitSize:number;odds:number;createdAt:string;groupKey?:string;status:'PENDING';category:string;source:'LIVE'}
 export type Candidate={id:string;date:string;ticker:string;legs:ParsedLeg[];risk:number;units:number;odds:number;category:string;description:string;bet:KalshiImport}
 const normalized=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')
-const num=(v:string)=>Number(v)
+const num=(v:string)=>v.trim()===''?NaN:Number(v)
 const parseTitle=(raw:string,ticker=''):ParsedLeg|null=>{
  // Parent descriptions: "yes Owen Power: 1+"; leg metadata often includes NHL point/assist text.
  const s=raw.replace(/\s*\|.*/,'').replace(/^\s*(?:yes|if)\s+/i,'').trim()
@@ -105,7 +105,8 @@ export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Recor
   if(existingSignatures.has(signature)){skipped.push({id,reason:'Potential existing manual Kalshi bet — needs review'});continue}
   const odds=Math.round(((count/risk)-1)*100)
   const category=classify(legs,dfo,games)
-  const bet:KalshiImport={id,date:fs[0].date,legs,book:'Kalshi',units:risk/unitSize,unitSize,odds,createdAt:fs[0].createdAt||new Date().toISOString(),status:'PENDING',category,source:'LIVE'}
+  const gameIds=[...new Set(legs.map(l=>String(l.gameId||'')).filter(Boolean))]
+  const bet:KalshiImport={id,date:fs[0].date,legs,book:'Kalshi',units:risk/unitSize,unitSize,odds,createdAt:fs[0].createdAt||new Date().toISOString(),groupKey:gameIds.length===1?gameIds[0]:'MULTI',status:'PENDING',category,source:'LIVE'}
   candidates.push({id,date:fs[0].date,ticker:fs[0].ticker,legs,risk,units:bet.units,odds,category,description:fs[0].title,bet})
  }
  return {candidates,skipped,totalGroups:groups.size,days:day}
