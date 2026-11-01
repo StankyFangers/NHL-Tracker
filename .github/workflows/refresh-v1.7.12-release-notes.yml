@@ -1,0 +1,21 @@
+name: Correct NHL Tracker v1.7.12 release description
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/refresh-v1.7.12-release-notes.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  update-release-notes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify published v1.7.12 installer and update release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view v1.7.12 --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fx 'NHL Tracker Setup 1.7.12.exe'
+          gh release edit v1.7.12 --repo "$GITHUB_REPOSITORY" --notes-file docs/releases/v1.7.12.md --latest
