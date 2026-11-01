@@ -69,7 +69,7 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
     }
     if(previousGames.length&&Object.keys(historical).length)overnight.push({date:previous,dfo:historical,games:previousGames})
    }catch{/* No trusted old slate available: unmatched wagers remain flagged. */}
-   const {candidates,skipped,totalGroups}=prepareKalshiImports(res.nhl as KalshiFill[],bets,slateDfo,games,unitSize,overnight)
+   const {candidates,skipped,totalGroups}=prepareKalshiImports(res.nhl as KalshiFill[],bets,slateDfo,games,unitSize,overnight,date)
    const verified=await verifyKalshiIdentity(candidates,(team:string)=>(window as any).nhlTracker.roster(team))
    const ready=verified.accepted
    const skippedCount=skipped.length+verified.rejected.length
