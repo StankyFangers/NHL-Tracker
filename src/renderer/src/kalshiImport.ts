@@ -39,6 +39,21 @@ function extractLegs(row:KalshiFill):ParsedLeg[]|null{
  const p=parseTitle(row.title)
  return p?[p]:null
 }
+function attachNhlMatch(legs:ParsedLeg[],dfo:Record<string,any>,games:any[]):boolean{
+ const teamOf=(g:any,side:'away'|'home')=>String(g?.[side+'Team']?.abbrev?.default||g?.[side+'Team']?.abbrev||g?.[side+'Team']?.triCode||'').toUpperCase()
+ for(const leg of legs){
+  const player=normalized(leg.player)
+  const matchingTeams=Object.entries(dfo).filter(([_,info])=>[...(info?.forwardLines||[]).flat(),...(info?.defensePairs||[]).flat(),...(info?.pp1||[]),...(info?.pp2||[])].some((name:any)=>normalized(String(name))===player)).map(([team])=>team)
+  if(matchingTeams.length!==1)return false
+  const team=matchingTeams[0]
+  const matchedGames=games.filter(g=>teamOf(g,'away')===team||teamOf(g,'home')===team)
+  if(matchedGames.length!==1)return false
+  const game=matchedGames[0]
+  const isAway=teamOf(game,'away')===team
+  leg.team=team;leg.opponent=teamOf(game,isAway?'home':'away');leg.gameId=String(game.id)
+ }
+ return true
+}
 function classify(legs:ParsedLeg[],dfo:Record<string,any>,games:any[]){
  if(legs.every(l=>l.stat==='Assist'))return 'ASSISTS'
  if(legs.length<2||legs.some(l=>l.stat!=='Point'||l.qty!==1))return 'OTHER'
@@ -74,6 +89,7 @@ export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Recor
   if(fs.some(f=>f.ticker!==fs[0].ticker||f.date!==fs[0].date)){skipped.push({id,reason:'Inconsistent fills'});continue}
   const legs=extractLegs(fs[0])
   if(!legs){skipped.push({id,reason:'Cannot verify exact player thresholds'});continue}
+  if(!attachNhlMatch(legs,dfo,games)){skipped.push({id,reason:'Cannot unambiguously identify player team and NHL game from current slate'});continue}
   // An order can contain multiple fills, priced in dollars per contract. Preserve actual fee cost.
   const values=fs.map(f=>({count:num(f.count),price:num(f.price),fee:num(f.fee)}))
   if(values.some(x=>!Number.isFinite(x.count)||x.count<=0||!Number.isFinite(x.price)||x.price<=0||x.price>=1||!Number.isFinite(x.fee)||x.fee<0)){
