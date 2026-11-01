@@ -86,11 +86,9 @@ export function KalshiHistoricalImporter({bets,setBets,unitSize,canSave}:{bets:a
     const verified=await verifyKalshiIdentity(prepared.candidates,roster)
     accepted.push(...verified.accepted)
     skipped.push(...prepared.skipped,...verified.rejected)
-    if(!boxscoresLoaded&&prepared.candidates.length===0&&dayFills.length){
-     // Preserve each detailed error below, but distinguish a missing
-     // source from a legitimate player who did not appear in a game.
-     for(const error of skipped.filter(x=>x.reason==='Players could not be uniquely matched to NHL teams playing on '+slate.date)){
-      error.reason='Historical NHL boxscores unavailable or players absent for '+slate.date
+    if(!boxscoresLoaded&&dayFills.length){
+     for(const error of skipped.filter(x=>x.reason.includes('NHL game-day player(s) not found:')&&x.reason.includes(slate.date))){
+      error.reason='NHL boxscore player data unavailable for '+slate.date+' (0 of '+slate.games.length+' games returned player statistics). '+error.reason
      }
     }
    }
