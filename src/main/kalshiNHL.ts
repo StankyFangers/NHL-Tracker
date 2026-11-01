@@ -194,6 +194,10 @@ export function registerKalshiNHL(){
  ipcMain.handle('kalshi:history',async(_e,from:string)=>withScan(signal=>scan(from,30,signal)))
  ipcMain.handle('kalshi:sync-today',async(_e,date:string)=>withScan(async signal=>{
   if(!/^20\d{2}-\d{2}-\d{2}$/.test(date))throw Error('Invalid sync date')
+  const easternParts=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date())
+  const p=(k:string)=>easternParts.find(x=>x.type===k)?.value||''
+  const easternToday=p('year')+'-'+p('month')+'-'+p('day')
+  if(date!==easternToday)throw Error('Daily Sync is restricted to today ('+easternToday+' Eastern). Use Historical Backfill for older wagers.')
   // Kalshi timestamps use UTC while NHL slate dates are America/New_York.
   // Fetch from the prior UTC day to include early Eastern-calendar-day buys,
   // but return ONLY orders placed on the selected Eastern date.
