@@ -46,7 +46,6 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
    if(selectedSlate!==date)throw Error('Select today’s NHL slate before importing. Current DFO lineups belong to the selected slate.')
    if(!canSave)throw Error('Wait until account wager synchronization is ready.')
    if(!Number.isFinite(unitSize)||unitSize<=0)throw Error('Set a positive unit size in Settings.')
-   if(!Object.keys(slateDfo).length)throw Error('Load projected/confirmed lines first using Update Lines.')
    const res=await api().kalshiSyncToday(date)
    // Overnight purchases must use the original game date, never today's teams.
    // Historical snapshots are already persisted per day/team by the DFO collector.
@@ -70,8 +69,36 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
     }
     return {date:historicalDate,dfo:historicalDfo,games:historicalGames}
    }))
-   const {candidates,skipped,totalGroups}=prepareKalshiImports(res.nhl as KalshiFill[],bets,slateDfo,games,unitSize,overnight,date)
-   const verified=await verifyKalshiIdentity(candidates,(team:string)=>(window as any).nhlTracker.roster(team))
+   const allSlates=[{date,dfo:slateDfo,games},...overnight]
+   const teams=[...new Set(allSlates.flatMap(s=>s.games.flatMap(g=>['homeTeam','awayTeam'].map(side=>{
+    const t=g?.[side];return String(t?.abbrev?.default||t?.abbrev||t?.triCode||'').toUpperCase()
+   }).filter(Boolean))))]
+   const rosterCache=new Map<string,any>()
+   const roster=async(team:string)=>{
+    if(!rosterCache.has(team))rosterCache.set(team,await (window as any).nhlTracker.roster(team))
+    return rosterCache.get(team)
+   }
+   const rosterPlayers:Record<string,string[]>={}
+   await Promise.all(teams.map(async team=>{
+    try{
+     const raw=await roster(team)
+     const names=new Set<string>()
+     const seen=new WeakSet<object>()
+     const walk=(x:any)=>{
+      if(Array.isArray(x)){x.forEach(walk);return}
+      if(!x||typeof x!=='object'||seen.has(x))return
+      seen.add(x)
+      const label=(v:any)=>typeof v==='string'?v:typeof v?.default==='string'?v.default:''
+      const name=[label(x.firstName),label(x.lastName)].filter(Boolean).join(' ')||label(x.fullName)
+      if(name&&Number(x.id||x.playerId)>0)names.add(name)
+      Object.values(x).forEach(v=>{if(v&&typeof v==='object')walk(v)})
+     }
+     walk(raw)
+     rosterPlayers[team]=[...names]
+    }catch{/* Missing NHL roster is not evidence that the player is absent. */}
+   }))
+   const {candidates,skipped,totalGroups}=prepareKalshiImports(res.nhl as KalshiFill[],bets,slateDfo,games,unitSize,overnight,date,rosterPlayers)
+   const verified=await verifyKalshiIdentity(candidates,roster)
    const ready=verified.accepted
    const skippedCount=skipped.length+verified.rejected.length
    // Persist actionable import failures for Settings > Kalshi Sync > Sync Review.
