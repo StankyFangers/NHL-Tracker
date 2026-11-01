@@ -85,3 +85,18 @@ test('same-game play-by-play full names fix abbreviated boxscore player matching
  assert.deepEqual(resolved.skipped,[])
  assert.deepEqual(resolved.candidates[0].legs.map(l=>l.playerId),[8476483,8471675])
 })
+
+test('Thomas Novak Kalshi alias matches Tommy Novak in October 31 boxscore',()=>{
+ const wager=make('2026-10-31','novak-alias',['Rickard Rakell','Sidney Crosby','Thomas Novak'])
+ const games=[{id:2026020223,awayTeam:{abbrev:'PIT'},homeTeam:{abbrev:'MTL'}}]
+ const players=[
+  {gameId:'2026020223',team:'PIT',player:'Rickard Rakell',playerId:8476483},
+  {gameId:'2026020223',team:'PIT',player:'Sidney Crosby',playerId:8471675},
+  {gameId:'2026020223',team:'PIT',player:'Tommy Novak',playerId:8478438}
+ ]
+ const result=prepareKalshiImports([wager],[],{},games,1,[],'2026-10-31',{},players)
+ assert.deepEqual(result.skipped,[])
+ assert.equal(result.candidates.length,1)
+ assert.deepEqual(result.candidates[0].legs.map(l=>l.playerId),[8476483,8471675,8478438])
+ assert.equal(result.candidates[0].bet.groupKey,'2026020223')
+})
