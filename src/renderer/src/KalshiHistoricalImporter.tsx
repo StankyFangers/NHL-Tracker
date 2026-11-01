@@ -9,19 +9,6 @@ const eastern=()=>{
 const yesterday=()=>new Date(Date.parse(eastern()+'T12:00:00Z')-86400000).toISOString().slice(0,10)
 const team=(g:any,side:string)=>String(g?.[side]?.abbrev?.default||g?.[side]?.abbrev||g?.[side]?.triCode||'').toUpperCase()
 const snapshot=(d:string,t:string)=>{try{const x=localStorage.getItem('nhlTracker:dfoSnapshots:v1:'+d+':'+t),v=x?JSON.parse(x):null;return v?.confirmed||v?.latest||v?.baseline||null}catch{return null}}
-const names=(raw:any)=>{
- const result=new Set<string>(),seen=new WeakSet<object>()
- const word=(v:any)=>typeof v==='string'?v:typeof v?.default==='string'?v.default:''
- const walk=(v:any)=>{
-  if(!v||typeof v!=='object'||seen.has(v))return
-  seen.add(v)
-  if(Array.isArray(v)){v.forEach(walk);return}
-  const name=[word(v.firstName),word(v.lastName)].filter(Boolean).join(' ')||word(v.fullName)
-  if(Number(v.id||v.playerId)>0&&name)result.add(name)
-  Object.values(v).forEach(walk)
- }
- walk(raw);return [...result]
-}
 export function KalshiHistoricalImporter({bets,setBets,unitSize,canSave}:{bets:any[];setBets:any;unitSize:number;canSave:boolean}){
  const [from,setFrom]=useState('2026-10-01'),[to,setTo]=useState(yesterday)
  const [busy,setBusy]=useState(false),[msg,setMsg]=useState('')
@@ -47,13 +34,41 @@ export function KalshiHistoricalImporter({bets,setBets,unitSize,canSave}:{bets:a
     }
     slates.push({date,games,dfo})
    }
-   const teams=[...new Set(slates.flatMap(s=>s.games.flatMap(g=>[team(g,'awayTeam'),team(g,'homeTeam')]).filter(Boolean)))]
-   const cache=new Map<string,any>(),roster=async(t:string)=>{
-    if(!cache.has(t))cache.set(t,await api.roster(t))
-    return cache.get(t)
-   }
+   // Resolve each historical player against that game's actual boxscore,
+   // not a present-day roster that may have changed since the wager.
    const players:Record<string,string[]>={}
-   for(let i=0;i<teams.length;i+=5)await Promise.all(teams.slice(i,i+5).map(async t=>{try{players[t]=names(await roster(t))}catch{}}))
+   const historicalByTeam=new Map<string,Map<number,any>>()
+   const label=(v:any)=>typeof v==='string'?v:typeof v?.default==='string'?v.default:''
+   const collect=(root:any,teamCode:string)=>{
+    const found=historicalByTeam.get(teamCode)||new Map<number,any>()
+    const seen=new WeakSet<object>()
+    const walk=(v:any)=>{
+     if(!v||typeof v!=='object'||seen.has(v))return
+     seen.add(v)
+     if(Array.isArray(v)){v.forEach(walk);return}
+     const id=Number(v.playerId||v.id||0)
+     const full=[label(v.firstName),label(v.lastName)].filter(Boolean).join(' ')||label(v.name)||label(v.playerName)||label(v.fullName)
+     if(id>0&&full)found.set(id,{playerId:id,fullName:full})
+     Object.values(v).forEach(walk)
+    }
+    walk(root)
+    historicalByTeam.set(teamCode,found)
+   }
+   for(const slate of slates){
+    for(const game of slate.games){
+     try{
+      const box=await api.boxscore(Number(game.id))
+      const root=box?.playerByGameStats||box?.boxscore?.playerByGameStats
+      if(!root)continue
+      collect(root.awayTeam,team(game,'awayTeam'))
+      collect(root.homeTeam,team(game,'homeTeam'))
+     }catch{/* Missing historical game data is held for review. */}
+    }
+   }
+   for(const [abbr,entries] of historicalByTeam){
+    players[abbr]=[...entries.values()].map(p=>p.fullName)
+   }
+   const roster=async(t:string)=>[...(historicalByTeam.get(t)?.values()||[])]
    const matched=prepareKalshiImports(fills,bets,{},[],unitSize,slates,'__history__',players)
    const checked=await verifyKalshiIdentity(matched.candidates,roster)
    const sources=new Map<string,KalshiFill>()
