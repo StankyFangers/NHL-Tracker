@@ -29,7 +29,7 @@ function extractLegs(row:KalshiFill):ParsedLeg[]|null{
   if(output.every(Boolean)&&new Set(output.map(x=>normalized(x!.player))).size===output.length)return output as ParsedLeg[]
   // Parent title can contain matching repeated "yes Name: N+" clauses.
   const chunks=[...row.title.matchAll(/\byes\s+([\p{L}\p{M}.' -]+?:\s*\d+\+)(?=\s+yes\s+|\s*\||$)/giu)].map(m=>m[1])
-  const distinctChunks=[...new Map(chunks.map(x=>[normalized(x),x])).values()]
+  const distinctChunks=[...new Map<string,string>(chunks.map(x=>[normalized(x),x] as const)).values()]
   if(distinctChunks.length===byMarket.length){
    const parsed=distinctChunks.map(x=>parseTitle(x))
    if(parsed.every(Boolean)&&new Set(parsed.map(x=>normalized(x!.player))).size===parsed.length)return parsed as ParsedLeg[]
@@ -108,4 +108,36 @@ export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Recor
   candidates.push({id,date:fs[0].date,ticker:fs[0].ticker,legs,risk,units:bet.units,odds,category,description:fs[0].title,bet})
  }
  return {candidates,skipped,totalGroups:groups.size,days:day}
+}
+
+const rosterName=(v:any)=>typeof v==='string'?v:typeof v?.default==='string'?v.default:''
+export async function verifyKalshiIdentity(candidates:Candidate[],roster:(team:string)=>Promise<any>){
+ const cache=new Map<string,Map<string,number[]>>()
+ const accepted:Candidate[]=[]
+ const rejected:{id:string;reason:string}[]=[]
+ for(const c of candidates){
+  let error=''
+  for(const l of c.bet.legs){
+   if(!l.team){error='Player team not resolved';break}
+   if(!cache.has(l.team)){
+    try{
+     const raw=await roster(l.team),names=new Map<string,number[]>()
+     const walk=(x:any)=>{
+      if(Array.isArray(x)){x.forEach(walk);return}
+      if(!x||typeof x!=='object')return
+      const id=Number(x.id||x.playerId||0)
+      const name=[rosterName(x.firstName),rosterName(x.lastName)].filter(Boolean).join(' ')||rosterName(x.fullName)
+      if(id>0&&name){const k=normalized(name);names.set(k,[...new Set([...(names.get(k)||[]),id])])}
+      Object.values(x).forEach(v=>{if(typeof v==='object'&&v!==null)walk(v)})
+     }
+     walk(raw);cache.set(l.team,names)
+    }catch{error='NHL roster could not load for '+l.team;break}
+   }
+   const ids=cache.get(l.team)?.get(normalized(l.player))||[]
+   if(ids.length!==1){error='NHL player identity cannot be verified for '+l.player;break}
+   ;(l as any).playerId=ids[0]
+  }
+  if(error)rejected.push({id:c.id,reason:error});else accepted.push(c)
+ }
+ return {accepted,rejected}
 }
