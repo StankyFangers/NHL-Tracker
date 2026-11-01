@@ -34,7 +34,9 @@ const placedNhlDate=(f:any)=>{
  const raw=dateOf(f)
  const value=/^\d{10}(?:\.\d+)?$/.test(raw)?Number(raw)*1000:/^\d{13}$/.test(raw)?Number(raw):Date.parse(raw)
  if(!Number.isFinite(value))return ''
- return new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value))
+ const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(value))
+ const piece=(kind:string)=>parts.find(p=>p.type===kind)?.value||''
+ return piece('year')+'-'+piece('month')+'-'+piece('day')
 }
 const hockey=(s:string)=>/\bNHL\b|hockey|ice hockey|KXNHL|KXNHLPTS|KXNHLAST|KXNHLGOALS/i.test(s)
 const rawTicker=(f:any)=>String(f.ticker||f.market_ticker||'')
