@@ -62,15 +62,25 @@ export function KalshiHistoricalImporter({bets,setBets,unitSize,canSave}:{bets:a
     let boxscoresLoaded=0
     for(const game of slate.games){
      try{
-      const box=await api.boxscore(Number(game.id))
+      const [box,pbp]=await Promise.all([api.boxscore(Number(game.id)),api.playByPlay(Number(game.id))])
       const root=box?.playerByGameStats||box?.boxscore?.playerByGameStats
       if(!root)continue
+      // Boxscore skaters are usually abbreviated (e.g. "S. Crosby").
+      // Same-game play-by-play rosterSpots supplies full legal names keyed
+      // by NHL player ID; only use full names from this exact game.
+      const fullNames=new Map<number,string>()
+      for(const spot of (Array.isArray(pbp?.rosterSpots)?pbp.rosterSpots:[])){
+       const id=Number(spot.playerId||0)
+       const full=[label(spot.firstName),label(spot.lastName)].filter(Boolean).join(' ')
+       if(id>0&&full)fullNames.set(id,full)
+      }
       boxscoresLoaded++
       for(const side of ['awayTeam','homeTeam']){
        const abbr=team(game,side)
        if(!abbr)continue
        for(const player of extract(root[side])){
-        dayPlayers.push({gameId:String(game.id),team:abbr,player:player.fullName,playerId:player.playerId})
+        const fullName=fullNames.get(player.playerId)||player.fullName
+        dayPlayers.push({gameId:String(game.id),team:abbr,player:fullName,playerId:player.playerId})
        }
       }
      }catch{/* Failed boxscore stays in review; no guessed identity. */}
