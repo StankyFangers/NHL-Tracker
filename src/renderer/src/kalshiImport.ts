@@ -78,8 +78,20 @@ function attachNhlMatch(legs:ParsedLeg[],dfo:Record<string,any>,games:any[],rost
  }
  return true
 }
+/** A 2P - 1P wager has exactly one 2+ Point leg and at least one
+ *  1+ Point leg on a different player. No extra thresholds or markets.
+ *  Use the stored legs, never the title, so history can be reclassified.
+ */
+export function isTwoPointOnePoint(legs:readonly {player:string;qty:number;stat:string;kind?:string;side?:string;voided?:boolean}[]):boolean{
+ if(!Array.isArray(legs)||legs.length<2)return false
+ if(legs.some(l=>l.kind==='TEAM'||l.stat!=='Point'||l.side==='UNDER'||l.voided||![1,2].includes(Number(l.qty))))return false
+ if(legs.filter(l=>Number(l.qty)===2).length!==1)return false
+ if(!legs.some(l=>Number(l.qty)===1))return false
+ return new Set(legs.map(l=>normalized(String(l.player)))).size===legs.length
+}
 function classify(legs:ParsedLeg[],dfo:Record<string,any>,games:any[]){
  if(legs.length&&legs.every(l=>l.stat==='Assist'))return 'ASSISTS'
+ if(isTwoPointOnePoint(legs))return '2P - 1P'
  // Correlated forward combos are multiple 1+ point legs for one NHL team.
  // When DFO lines exist, retain the strict forward-line + PP relationship rule.
  if(legs.length<2||legs.some(l=>l.stat!=='Point'||l.qty!==1))return 'OTHER'
