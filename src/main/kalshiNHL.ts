@@ -187,11 +187,10 @@ export function registerKalshiNHL(){
   const previousUtc=new Date(Date.parse(date+'T12:00:00Z')-86400000).toISOString().slice(0,10)
   const result=await scan(previousUtc,30)
   if(!result.complete)throw Error('Incomplete Kalshi scan: import blocked to prevent partial order totals')
-  const previousDate=new Date(Date.parse(date+'T12:00:00Z')-86400000).toISOString().slice(0,10)
-  // Overnight settlements can arrive on the next Eastern calendar day.
-  // Include both purchase dates, but retain each fill's ORIGINAL placement date
-  // so the renderer can resolve the appropriate historical NHL slate.
-  return {...result,nhl:result.nhl.filter(x=>x.date===date||x.date===previousDate),unknown:[],notice:'NHL purchases from '+previousDate+' and '+date+' (Eastern) are included. Each wager remains assigned to its purchase-day NHL slate.'}
+  // Daily Sync imports ONLY wagers placed on the selected Eastern calendar day.
+  // The prior UTC scan boundary is retrieval padding for Eastern midnight,
+  // NOT permission to include yesterday's wagers. Older purchases belong to History.
+  return {...result,nhl:result.nhl.filter(x=>x.date===date),unknown:[],notice:'Daily Sync: only NHL bets placed on '+date+' (Eastern). Older wagers must use Historical Sync.'}
  })
  ipcMain.handle('kalshi:sync-preview',async()=>{
   // Deliberately preview-only until fill -> wager grouping / settlements are verified.
