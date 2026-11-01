@@ -17,5 +17,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh release view v1.7.12 --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fx 'NHL Tracker Setup 1.7.12.exe'
+          gh release view v1.7.12 --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -E 'NHL[.]Tracker[.]Setup[.]1[.]7[.]12[.]exe|NHL Tracker Setup 1[.]7[.]12[.]exe'
           gh release edit v1.7.12 --repo "$GITHUB_REPOSITORY" --notes-file docs/releases/v1.7.12.md --latest
