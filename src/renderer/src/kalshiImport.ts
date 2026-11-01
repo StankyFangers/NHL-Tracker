@@ -71,7 +71,8 @@ function classify(legs:ParsedLeg[],dfo:Record<string,any>,games:any[]){
  }
  return 'OTHER'
 }
-export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Record<string,any>,games:any[],unitSize:number){
+export type KalshiSlate={date:string;dfo:Record<string,any>;games:any[]}
+export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Record<string,any>,games:any[],unitSize:number,overnight:KalshiSlate[]=[]){
  const groups=new Map<string,KalshiFill[]>()
  const skipped:{id:string;reason:string}[]=[]
  const day=Array.from(new Set(fills.map(f=>f.date)))
@@ -90,7 +91,18 @@ export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Recor
   if(fs.some(f=>f.ticker!==fs[0].ticker||f.date!==fs[0].date)){skipped.push({id,reason:'Inconsistent fills'});continue}
   const legs=extractLegs(fs[0])
   if(!legs){skipped.push({id,reason:'Cannot verify exact player thresholds'});continue}
-  if(!attachNhlMatch(legs,dfo,games)){skipped.push({id,reason:'Cannot unambiguously identify player team and NHL game from current slate'});continue}
+  // Prefer a date-matched historical slate if the players cannot be found today.
+  // Work on copies so a failed slate cannot leave partial player/game assignments.
+  const slates:KalshiSlate[]=[{date:fs[0].date,dfo,games},...overnight]
+  const matches=slates.flatMap(slate=>{
+   const trial=legs.map(l=>({...l}))
+   return attachNhlMatch(trial,slate.dfo,slate.games)?[{slate,legs:trial}]:[]
+  })
+  const distinct=[...new Map(matches.map(m=>[m.legs.map(l=>l.gameId).join('|'),m])).values()]
+  if(distinct.length!==1){skipped.push({id,reason:distinct.length?'Multiple NHL game dates matched; review game assignment':'Player not found on current or overnight NHL lineups; historical lineup review needed'});continue}
+  const match=distinct[0]
+  legs.splice(0,legs.length,...match.legs)
+  const gameDate=match.slate.date
   // An order can contain multiple fills, priced in dollars per contract. Preserve actual fee cost.
   const values=fs.map(f=>({count:num(f.count),price:num(f.price),fee:num(f.fee)}))
   if(values.some(x=>!Number.isFinite(x.count)||x.count<=0||!Number.isFinite(x.price)||x.price<=0||x.price>=1||!Number.isFinite(x.fee)||x.fee<0)){
@@ -101,13 +113,13 @@ export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Recor
   if(!Number.isFinite(risk)||risk<=0||!Number.isFinite(unitSize)||unitSize<=0||risk>=count){
    skipped.push({id,reason:'Unsupported wager cost/return'});continue
   }
-  const signature=fs[0].date+'|'+legs.map(l=>normalized(l.player)+':'+l.qty+':'+l.stat).sort().join(';')
+  const signature=gameDate+'|'+legs.map(l=>normalized(l.player)+':'+l.qty+':'+l.stat).sort().join(';')
   if(existingSignatures.has(signature)){skipped.push({id,reason:'Potential existing manual Kalshi bet — needs review'});continue}
   const odds=Math.round(((count/risk)-1)*100)
-  const category=classify(legs,dfo,games)
+  const category=classify(legs,match.slate.dfo,match.slate.games)
   const gameIds=[...new Set(legs.map(l=>String(l.gameId||'')).filter(Boolean))]
-  const bet:KalshiImport={id,date:fs[0].date,legs,book:'Kalshi',units:risk/unitSize,unitSize,odds,createdAt:fs[0].createdAt||new Date().toISOString(),groupKey:gameIds.length===1?gameIds[0]:'MULTI',status:'PENDING',category,source:'LIVE'}
-  candidates.push({id,date:fs[0].date,ticker:fs[0].ticker,legs,risk,units:bet.units,odds,category,description:fs[0].title,bet})
+  const bet:KalshiImport={id,date:gameDate,legs,book:'Kalshi',units:risk/unitSize,unitSize,odds,createdAt:fs[0].createdAt||new Date().toISOString(),groupKey:gameIds.length===1?gameIds[0]:'MULTI',status:'PENDING',category,source:'LIVE'}
+  candidates.push({id,date:gameDate,ticker:fs[0].ticker,legs,risk,units:bet.units,odds,category,description:fs[0].title,bet})
  }
  return {candidates,skipped,totalGroups:groups.size,days:day}
 }
