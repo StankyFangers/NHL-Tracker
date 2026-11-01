@@ -45,7 +45,8 @@ function attachNhlMatch(legs:ParsedLeg[],dfo:Record<string,any>,games:any[],rost
  const teamOf=(g:any,side:'away'|'home')=>String(g?.[side+'Team']?.abbrev?.default||g?.[side+'Team']?.abbrev||g?.[side+'Team']?.triCode||'').toUpperCase()
  for(const leg of legs){
   const player=normalized(leg.player)
-  // The game roster is the identity source. DFO lineup coverage is optional and used for classification.\n  const matchingTeams=Object.entries(rosterPlayers).filter(([_,names])=>names.some(name=>normalized(name)===player)).map(([team])=>team)
+  // The game roster is the identity source. DFO lineup coverage is optional and used for classification.
+  const matchingTeams=Object.entries(rosterPlayers).filter(([_,names])=>names.some(name=>normalized(name)===player)).map(([team])=>team)
   if(matchingTeams.length!==1)return false
   const team=matchingTeams[0]
   const matchedGames=games.filter(g=>teamOf(g,'away')===team||teamOf(g,'home')===team)
