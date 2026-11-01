@@ -130,7 +130,6 @@ async function scan(from:string,limitPages:number,signal?:AbortSignal){
   const orderId=String(f.order_id||'')
   // Never invent an external ID from date and ticker; the import engine must require a real ID.
   const id=fillId||[orderId,ticker,dateOf(f),String(f.count_fp??f.count??'')].join('|')
-  const hasLegs=legs.length>0
   const sportSignals=legs.map(l=>obviousSport(l.ticker,l.source==='MARKET_METADATA'?l.title:''))
   const detectedSport=legs.length>0
    ?(sportSignals.every(x=>x!=='UNKNOWN'&&x===sportSignals[0])?sportSignals[0]:sportSignals.some(x=>x==='UNKNOWN')?'UNRESOLVED':'MIXED')
