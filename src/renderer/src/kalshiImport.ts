@@ -4,7 +4,7 @@ export type KalshiFill={id:string;fillId:string;orderId:string;date:string;creat
 type ParsedLeg={player:string;qty:number;stat:string;side:'OVER';kind:'PLAYER';team?:string;gameId?:string;opponent?:string}
 export type KalshiImport={id:string;date:string;legs:ParsedLeg[];book:string;units:number;unitSize:number;odds:number;createdAt:string;groupKey?:string;status:'PENDING';category:string;source:'LIVE'}
 export type Candidate={id:string;date:string;ticker:string;legs:ParsedLeg[];risk:number;units:number;odds:number;category:string;description:string;bet:KalshiImport}
-const normalized=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')
+const normalized=(s:string)=>s.replace(/\s*\(#\d+\)\s*/g,' ').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')
 const num=(v:string)=>v.trim()===''?NaN:Number(v)
 const parseTitle=(raw:string,ticker=''):ParsedLeg|null=>{
  // Component metadata may be "yes Player: 1+ | Player points".
@@ -16,7 +16,7 @@ const parseTitle=(raw:string,ticker=''):ParsedLeg|null=>{
  const long=s.match(/^(.+?)\s+(\d+)\+\s+(points?|assists?|goals?)\b/i)
  const m=colon||long
  if(!m)return null
- const player=m[1].trim()
+ const player=m[1].trim().replace(/\s*\(#\d+\)\s*/g,' ').trim()
  if(!/^[\p{L}\p{M}.' -]{3,70}$/u.test(player)||!player.includes(' '))return null
  const qty=Number(m[2])
  if(!Number.isInteger(qty)||qty<1||qty>10)return null
@@ -32,7 +32,7 @@ export function parseKalshiParentLegs(raw:string):{player:string;qty:number}[] {
  // Kalshi has used comma separators, spaces, and mixed ", yes" between legs.
  // Parent descriptions can be repeated after "|"; take one complete copy.
  for(const part of raw.split(/\s*\|\s*/)){
-  const pattern=/\byes\s+([\p{L}\p{M}.' -]+?):\s*(\d+)\+(?=\s*(?:,|\byes\b|$))/giu
+  const pattern=/\byes\s+([\p{L}\p{M}.' #()\d-]+?):\s*(\d+)\+(?=\s*(?:,|\byes\b|$))/giu
   const matches=[...part.matchAll(pattern)]
   if(matches.length<2)continue
   // Reject descriptions with stray unparsed content rather than silently
@@ -40,7 +40,7 @@ export function parseKalshiParentLegs(raw:string):{player:string;qty:number}[] {
   if(part.replace(pattern,'').replace(/[\s,]+/g,'')!=='')continue
   const parsed=matches.map(m=>({player:m[1].trim(),qty:Number(m[2])}))
   if(parsed.every(v=>v.player.includes(' ')&&v.qty>=1&&v.qty<=10)&&
-     new Set(parsed.map(v=>normalized(v.player))).size===parsed.length)return parsed
+     new Set(parsed.map(v=>normalized(v.player)+':'+v.qty)).size===parsed.length)return parsed
  }
  return []
 }
@@ -49,13 +49,13 @@ function extractLegs(row:KalshiFill):ParsedLeg[]|null{
  if(byMarket.length){
   if(byMarket.some(l=>l.side.toLowerCase()!=='yes'||!l.nhlTicker))return null
   const output=byMarket.map(l=>parseTitle(l.title,l.ticker))
-  if(output.every(Boolean)&&new Set(output.map(x=>normalized(x!.player))).size===output.length)return output as ParsedLeg[]
+  if(output.every(Boolean)&&new Set(output.map(x=>normalized(x!.player)+':'+x!.qty+':'+x!.stat)).size===output.length)return output as ParsedLeg[]
   // Kalshi sometimes omits leg names in component metadata and only
   // provides them in the combined title. Require an exact leg count.
   const parent=parseKalshiParentLegs(row.title)
   if(parent.length!==byMarket.length)return null
   const parsed=parent.map((leg,i)=>parseTitle('yes '+leg.player+': '+leg.qty+'+',byMarket[i].ticker))
-  return parsed.every(Boolean)?parsed as ParsedLeg[]:null
+  return parsed.every(Boolean)&&new Set(parsed.map(x=>normalized(x!.player)+':'+x!.qty+':'+x!.stat)).size===parsed.length?parsed as ParsedLeg[]:null
  }
  // A combined market without component tickers cannot safely establish the
  // number and types of independent leg contracts.
