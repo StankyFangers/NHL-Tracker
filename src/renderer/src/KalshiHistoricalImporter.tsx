@@ -1,5 +1,5 @@
 import {useState} from 'react'
-import {prepareKalshiImports,type HistoricalGamePlayer,type Candidate,type KalshiFill,type KalshiSlate} from './kalshiImport'
+import {prepareKalshiImports,fullNamesFromGameRoster,type HistoricalGamePlayer,type Candidate,type KalshiFill,type KalshiSlate} from './kalshiImport'
 import {addKalshiFlags,clearKalshiFlags} from './KalshiSyncReview'
 const eastern=()=>{
  const p=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date())
@@ -68,12 +68,7 @@ export function KalshiHistoricalImporter({bets,setBets,unitSize,canSave}:{bets:a
       // Boxscore skaters are usually abbreviated (e.g. "S. Crosby").
       // Same-game play-by-play rosterSpots supplies full legal names keyed
       // by NHL player ID; only use full names from this exact game.
-      const fullNames=new Map<number,string>()
-      for(const spot of (Array.isArray(pbp?.rosterSpots)?pbp.rosterSpots:[])){
-       const id=Number(spot.playerId||0)
-       const full=[label(spot.firstName),label(spot.lastName)].filter(Boolean).join(' ')
-       if(id>0&&full)fullNames.set(id,full)
-      }
+      const fullNames=fullNamesFromGameRoster(pbp?.rosterSpots)
       boxscoresLoaded++
       for(const side of ['awayTeam','homeTeam']){
        const abbr=team(game,side)
