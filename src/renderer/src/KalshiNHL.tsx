@@ -41,35 +41,16 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
  const signature=(b:any)=>String(b.date)+'|'+(b.legs||[]).map((l:any)=>String(l.player).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')+':'+l.qty+':'+l.stat).sort().join(';')
  const sync=async()=>{
   if(busy)return
-  setBusy(true);setPreview(null);setMsg('Contacting Kalshi and reviewing today’s and overnight fills…')
+  setBusy(true);setPreview(null);setMsg('Contacting Kalshi and reviewing today’s fills…')
   try{
    if(selectedSlate!==date)throw Error('Select today’s NHL slate before importing. Current DFO lineups belong to the selected slate.')
    if(!canSave)throw Error('Wait until account wager synchronization is ready.')
    if(!Number.isFinite(unitSize)||unitSize<=0)throw Error('Set a positive unit size in Settings.')
    const res=await api().kalshiSyncToday(date)
-   // Overnight purchases must use the original game date, never today's teams.
-   // Historical snapshots are already persisted per day/team by the DFO collector.
-   const earlierDates=[...new Set(res.nhl.map(f=>f.date).filter(d=>d&&d!==date))]
-   const overnight=await Promise.all(earlierDates.map(async historicalDate=>{
-    const response=await (window as any).nhlTracker.score(historicalDate)
-    const historicalGames=Array.isArray(response?.games)?response.games:[]
-    const historicalDfo:Record<string,any>={}
-    for(const game of historicalGames){
-     for(const side of ['homeTeam','awayTeam']){
-      const team=game?.[side]
-      const abbr=String(team?.abbrev?.default||team?.abbrev||team?.triCode||'').toUpperCase()
-      if(!abbr)continue
-      try{
-       const raw=localStorage.getItem('nhlTracker:dfoSnapshots:v1:'+historicalDate+':'+abbr)
-       const record=raw?JSON.parse(raw):null
-       const snapshot=record?.confirmed||record?.latest||record?.baseline
-       if(snapshot?.forwardLines?.length)historicalDfo[abbr]=snapshot
-      }catch{/* Missing or corrupt historical lineup: importer flags for review. */}
-     }
-    }
-    return {date:historicalDate,dfo:historicalDfo,games:historicalGames}
-   }))
-   const allSlates=[{date,dfo:slateDfo,games},...overnight]
+   // Daily Sync is exclusively for the current placement date.
+   // Historical Sync handles all older wagers and their original game slates.
+   const todayFills=(res.nhl as KalshiFill[]).filter(f=>f.date===date)
+   const allSlates=[{date,dfo:slateDfo,games}]
    const teams=[...new Set(allSlates.flatMap(s=>s.games.flatMap(g=>['homeTeam','awayTeam'].map(side=>{
     const t=g?.[side];return String(t?.abbrev?.default||t?.abbrev||t?.triCode||'').toUpperCase()
    }).filter(Boolean))))]
@@ -97,14 +78,14 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
      rosterPlayers[team]=[...names]
     }catch{/* Missing NHL roster is not evidence that the player is absent. */}
    }))
-   const {candidates,skipped,totalGroups}=prepareKalshiImports(res.nhl as KalshiFill[],bets,slateDfo,games,unitSize,overnight,date,rosterPlayers)
+   const {candidates,skipped,totalGroups}=prepareKalshiImports(todayFills,bets,slateDfo,games,unitSize,[],date,rosterPlayers)
    const verified=await verifyKalshiIdentity(candidates,roster)
    const ready=verified.accepted
    const skippedCount=skipped.length+verified.rejected.length
    // Persist actionable import failures for Settings > Kalshi Sync > Sync Review.
    // Already imported IDs and ordinary sells are not errors to repair.
    const source=new Map<string,KalshiFill>()
-   for(const f of res.nhl as KalshiFill[]){
+   for(const f of todayFills){
     source.set(f.id,f)
     if(f.orderId&&f.ticker)source.set('KALSHI-'+f.orderId+'|'+f.ticker,f)
    }
