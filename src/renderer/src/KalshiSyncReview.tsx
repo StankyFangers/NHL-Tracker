@@ -13,6 +13,16 @@ export function addKalshiFlags(items:Pick<KalshiFlag,'id'|'date'|'ticker'|'descr
  window.dispatchEvent(new Event('kalshi-review-updated'))
  return result
 }
+/** Remove stale review entries once the corresponding wager is present in Bet Tracker. */
+export function clearKalshiFlags(ids:string[]){
+ if(!ids.length)return
+ const accepted=new Set(ids)
+ const old=readKalshiFlags()
+ const next=old.filter(flag=>!accepted.has(flag.id))
+ if(next.length===old.length)return
+ localStorage.setItem(KEY,JSON.stringify(next))
+ window.dispatchEvent(new Event('kalshi-review-updated'))
+}
 export function KalshiSyncReview({betIds=[]}:{betIds?:string[]}){
  const [items,setItems]=useState<KalshiFlag[]>(readKalshiFlags)
  const [filter,setFilter]=useState<'NEEDS_REVIEW'|'REVIEWED'|'DISMISSED'|'ALL'>('NEEDS_REVIEW')
