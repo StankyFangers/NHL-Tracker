@@ -63,6 +63,13 @@ function extractLegs(row:KalshiFill):ParsedLeg[]|null{
  return parseTitle(row.title,row.ticker)?[parseTitle(row.title,row.ticker)!]:null
 }
 export type HistoricalGamePlayer={gameId:string;team:string;player:string;playerId:number}
+/** Explicit, verified NHL display-name aliases, never fuzzy last-name guesses. */
+const HISTORICAL_NHL_ALIASES:Record<string,string>={'thomasnovak':'tommynovak','tommynovak':'thomasnovak'}
+const sameHistoricalPlayer=(fromBet:string,fromGame:string)=>{
+ const bet=normalized(fromBet),game=normalized(fromGame)
+ return bet===game||HISTORICAL_NHL_ALIASES[bet]===game
+}
+
 export function fullNamesFromGameRoster(spots:any[]):Map<number,string>{
  const result=new Map<number,string>()
  const label=(x:any)=>typeof x==='string'?x:typeof x?.default==='string'?x.default:''
@@ -82,7 +89,7 @@ export function matchHistoricalBoxscores(legs:ParsedLeg[],games:any[],players:Hi
  const knownGames=new Set(games.map(g=>String(g.id)))
  const picks:ParsedLeg[]=legs.map(l=>({...l}))
  for(const leg of picks){
-  const candidates=players.filter(p=>knownGames.has(String(p.gameId))&&normalized(p.player)===normalized(leg.player))
+  const candidates=players.filter(p=>knownGames.has(String(p.gameId))&&sameHistoricalPlayer(leg.player,p.player))
   const identities=new Map(candidates.map(p=>[String(p.gameId)+':'+p.playerId,p]))
   if(identities.size!==1)return {ok:false,reason:(identities.size?'Ambiguous player across game boxscores: ':'Player missing from game boxscores: ')+leg.player}
   const match=[...identities.values()][0]
