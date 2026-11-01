@@ -30,6 +30,12 @@ async function request(path:string,params?:URLSearchParams){
 }
 
 const dateOf=(f:any)=>String(f.created_time||f.ts||f.created_at||f.timestamp||'')
+const placedNhlDate=(f:any)=>{
+ const raw=dateOf(f)
+ const value=/^\d{10}(?:\.\d+)?$/.test(raw)?Number(raw)*1000:/^\d{13}$/.test(raw)?Number(raw):Date.parse(raw)
+ if(!Number.isFinite(value))return ''
+ return new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value))
+}
 const hockey=(s:string)=>/\bNHL\b|hockey|ice hockey|KXNHL|KXNHLPTS|KXNHLAST|KXNHLGOALS/i.test(s)
 const rawTicker=(f:any)=>String(f.ticker||f.market_ticker||'')
 const obviousSport=(ticker:string,title:string)=>{
@@ -124,7 +130,7 @@ async function scan(from:string,limitPages:number){
    ?(sportSignals.every(x=>x!=='UNKNOWN'&&x===sportSignals[0])?sportSignals[0]:sportSignals.some(x=>x==='UNKNOWN')?'UNRESOLVED':'MIXED')
    :obviousSport(ticker,description)
   const review=classification
-  return {detectedSport,id,fillId,orderId,date:dateOf(f).slice(0,10),createdAt:dateOf(f),ticker,title:description||ticker,side:String(f.side||''),action:String(f.action||''),count:String(f.count_fp??f.count??''),price:String(f.yes_price_dollars??f.no_price_dollars??f.yes_price??f.no_price??''),fee:String(f.fee_cost_dollars??f.fee_cost??''),isNhl,review,legs}
+  return {detectedSport,id,fillId,orderId,date:placedNhlDate(f),createdAt:dateOf(f),ticker,title:description||ticker,side:String(f.side||''),action:String(f.action||''),count:String(f.count_fp??f.count??''),price:String(f.yes_price_dollars??f.no_price_dollars??f.yes_price??f.no_price??''),fee:String(f.fee_cost_dollars??f.fee_cost??''),isNhl,review,legs}
  })
  const nhl=rows.filter(r=>r.isNhl),unknown=rows.filter(r=>!r.isNhl)
  const buckets={unresolved:unknown.filter(r=>r.detectedSport==='UNRESOLVED'||r.detectedSport==='UNKNOWN'),mixed:unknown.filter(r=>r.detectedSport==='MIXED'),otherSports:unknown.filter(r=>!['UNRESOLVED','UNKNOWN','MIXED'].includes(r.detectedSport))}
@@ -173,12 +179,13 @@ export function registerKalshiNHL(){
  ipcMain.handle('kalshi:history',async(_e,from:string)=>scan(from,30))
  ipcMain.handle('kalshi:sync-today',async(_e,date:string)=>{
   if(!/^20\d{2}-\d{2}-\d{2}$/.test(date))throw Error('Invalid sync date')
-  // Include the previous UTC calendar day so late-night games and after-midnight
-  // purchases can be resolved against the actual NHL slate.
-  const previous=new Date(Date.parse(date+'T12:00:00Z')-86400000).toISOString().slice(0,10)
-  const result=await scan(previous,30)
+  // Kalshi timestamps use UTC while NHL slate dates are America/New_York.
+  // Fetch from the prior UTC day to include early Eastern-calendar-day buys,
+  // but return ONLY orders placed on the selected Eastern date.
+  const previousUtc=new Date(Date.parse(date+'T12:00:00Z')-86400000).toISOString().slice(0,10)
+  const result=await scan(previousUtc,30)
   if(!result.complete)throw Error('Incomplete Kalshi scan: import blocked to prevent partial order totals')
-  return {...result,nhl:result.nhl.filter(x=>x.date===date||x.date===previous),unknown:[],notice:'Today and overnight fills scanned; resolve against each NHL game date before importing.'}
+  return {...result,nhl:result.nhl.filter(x=>x.date===date),unknown:[],notice:'Only NHL bets placed on '+date+' (Eastern) are included. Previous-night wagers belong to historical backfill.'}
  })
  ipcMain.handle('kalshi:sync-preview',async()=>{
   // Deliberately preview-only until fill -> wager grouping / settlements are verified.
