@@ -34,12 +34,13 @@ export function KalshiNHLSettings({mode='settings'}:{mode?:'settings'|'history'}
  <div style={{display:'flex',gap:10,alignItems:'end',flexWrap:'wrap'}}><label style={{display:'grid',gap:5}}>Backfill from<input type="date" style={input} value={from} onChange={e=>setFrom(e.target.value)}/></label><button style={button} disabled={busy||!state.configured} onClick={()=>run(async()=>{const r=await api().kalshiHistory(from);setResult(r);setMsg(r.notice)})}>{busy?'Scanning…':'Scan Kalshi History'}</button></div>
  {msg&&<p role="status" style={{padding:10,background:'#173441',borderRadius:6}}>{msg}</p>}{result&&<Results data={result}/>}</div>}</section>
 }
-export function KalshiNHLSync({date,bets,setBets,unitSize,slateDfo,games,canSave}:{date:string;bets:any[];setBets:any;unitSize:number;slateDfo:Record<string,any>;games:any[];canSave:boolean}){
+export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo,games,canSave}:{date:string;selectedSlate:string;bets:any[];setBets:any;unitSize:number;slateDfo:Record<string,any>;games:any[];canSave:boolean}){
  const [busy,setBusy]=useState(false),[msg,setMsg]=useState('')
  const sync=async()=>{
   if(busy)return
   setBusy(true);setMsg('Contacting Kalshi and reviewing today’s fills…')
   try{
+   if(selectedSlate!==date)throw Error('Select today’s NHL slate before importing. Current DFO lineups belong to the selected slate, not necessarily today.')
    if(!canSave)throw Error('Account wager synchronization is not ready. Sign in and wait for cloud status before importing.')
    if(!Number.isFinite(unitSize)||unitSize<=0)throw Error('Set a positive unit size in Settings before importing.')
    if(!Object.keys(slateDfo).length)throw Error('Load the projected/confirmed lines before importing. Use Update Lines on Bet Entry.')
