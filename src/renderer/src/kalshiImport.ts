@@ -57,7 +57,7 @@ function attachNhlMatch(legs:ParsedLeg[],dfo:Record<string,any>,games:any[]):boo
 }
 function classify(legs:ParsedLeg[],dfo:Record<string,any>,games:any[]){
  if(legs.every(l=>l.stat==='Assist'))return 'ASSISTS'
- if(legs.length<2||legs.some(l=>l.stat!=='Point'||l.qty!==1))return 'OTHER'
+ if(legs.length<2||legs.some(l=>l.stat!=='Point'))return 'OTHER'
  // A combo must be in the same forward line AND same power-play unit.
  const names=legs.map(l=>normalized(l.player))
  for(const [team,info] of Object.entries(dfo)){
