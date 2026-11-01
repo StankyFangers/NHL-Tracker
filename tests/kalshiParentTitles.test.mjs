@@ -54,3 +54,17 @@ test('reject incomplete or ambiguous parent descriptions',()=>{
  assert.deepEqual(parseKalshiParentLegs('yes Mark Jankowski: 1+ nonsense yes Seth Jarvis: 1+'),[])
  assert.deepEqual(parseKalshiParentLegs('yes Mark Jankowski: 1+,yes Mark Jankowski: 1+'),[])
 })
+
+test('Kalshi parent titles preserve two thresholds for each player',()=>{
+ const raw='yes Connor McDavid: 1+,yes Leon Draisaitl: 1+,yes Connor McDavid: 2+,yes Leon Draisaitl: 2+'
+ assert.deepEqual(parseKalshiParentLegs(raw),[
+  {player:'Connor McDavid',qty:1},{player:'Leon Draisaitl',qty:1},
+  {player:'Connor McDavid',qty:2},{player:'Leon Draisaitl',qty:2}
+ ])
+})
+test('Kalshi jersey-number note does not break player identification',()=>{
+ const raw='yes Elias Pettersson (#40): 1+,yes Jake DeBrusk: 1+'
+ assert.deepEqual(parseKalshiParentLegs(raw),[
+  {player:'Elias Pettersson (#40)',qty:1},{player:'Jake DeBrusk',qty:1}
+ ])
+})
