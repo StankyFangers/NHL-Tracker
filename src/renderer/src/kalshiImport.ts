@@ -138,7 +138,19 @@ export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Recor
   const matchingSlate=[{date:currentSlateDate||fs[0].date,dfo,games},...overnight].find(slate=>slate.date===fs[0].date)
   if(!matchingSlate){skipped.push({id,reason:'No NHL slate loaded for Kalshi bet placement date '+fs[0].date});continue}
   if(!attachNhlMatch(legs,matchingSlate.dfo,matchingSlate.games,rosterPlayers)){
-   skipped.push({id,reason:'Players could not be uniquely matched to NHL teams playing on '+fs[0].date});continue
+   const available=Object.entries(rosterPlayers).filter(([t])=>matchingSlate.games.some(g=>{
+    const away=String(g?.awayTeam?.abbrev?.default||g?.awayTeam?.abbrev||'').toUpperCase()
+    const home=String(g?.homeTeam?.abbrev?.default||g?.homeTeam?.abbrev||'').toUpperCase()
+    return t===away||t===home
+   }))
+   const missing=legs.filter(l=>!available.some(([_,names])=>names.some(n=>normalized(n)===normalized(l.player)))).map(l=>l.player)
+   const searched=matchingSlate.games.map(g=>{
+    const n=(t:any)=>String(t?.abbrev?.default||t?.abbrev||t?.triCode||'').toUpperCase()
+    return n(g.awayTeam)+'@'+n(g.homeTeam)
+   }).join(', ')
+   skipped.push({id,reason:missing.length?
+    'NHL game-day player(s) not found: '+[...new Set(missing)].join(', ')+' on '+fs[0].date+' · games '+(searched||'none'):
+    'Player team/game match ambiguous on '+fs[0].date+' · games '+(searched||'none')});continue
   }
   const gameDate=fs[0].date
   // An order can contain multiple fills, priced in dollars per contract. Preserve actual fee cost.
