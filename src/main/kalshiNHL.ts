@@ -102,7 +102,7 @@ async function scan(from:string,limitPages:number){
   const everyLegNhl=legs.length>0&&legs.every(l=>l.nhlTicker || (l.resolved&&hockey(l.title)))
   const allLegsResolved=legs.length>0&&legs.every(l=>l.resolved)
   const isNhl=legs.length>0?everyLegNhl:anyNhl
-  const classification=legs.length>0?(everyLegNhl?(allLegsResolved?'NHL_COMBO_VERIFIED':'NHL_COMBO_TICKERS_CONFIRMED') :!allLegsResolved?'UNRESOLVED_COMBO':anyNhl?'MIXED_OR_UNVERIFIED_COMBO':'OTHER_COMBO'):(isNhl?'NHL_SINGLE':'UNCLASSIFIED'):(isNhl?'NHL_SINGLE':'UNCLASSIFIED')
+  const classification=legs.length>0?(everyLegNhl?(allLegsResolved?'NHL_COMBO_VERIFIED':'NHL_COMBO_TICKERS_CONFIRMED') :!allLegsResolved?'UNRESOLVED_COMBO':anyNhl?'MIXED_OR_UNVERIFIED_COMBO':'OTHER_COMBO'):(isNhl?'NHL_SINGLE':'UNCLASSIFIED')
   const fillId=String(f.fill_id||f.trade_id||'')
   const orderId=String(f.order_id||'')
   // Never invent an external ID from date and ticker; the import engine must require a real ID.
