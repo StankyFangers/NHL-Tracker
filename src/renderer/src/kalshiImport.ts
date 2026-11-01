@@ -79,6 +79,12 @@ function classify(legs:ParsedLeg[],dfo:Record<string,any>,games:any[]){
  // solely because the optional correlation metadata is missing.
  return 'COMBOS'
 }
+
+export function classifyExistingKalshiBet(bet:any,dfo:Record<string,any>):string{
+ if(!Array.isArray(bet?.legs)||!bet.legs.length)return 'OTHER'
+ return classify(bet.legs as ParsedLeg[],dfo,[])
+}
+
 export type KalshiSlate={date:string;dfo:Record<string,any>;games:any[]}
 export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Record<string,any>,games:any[],unitSize:number,overnight:KalshiSlate[]=[],currentSlateDate:string='',rosterPlayers:Record<string,string[]>={}){
  const groups=new Map<string,KalshiFill[]>()
