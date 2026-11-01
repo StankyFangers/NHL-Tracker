@@ -7,24 +7,43 @@ export type Candidate={id:string;date:string;ticker:string;legs:ParsedLeg[];risk
 const normalized=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')
 const num=(v:string)=>v.trim()===''?NaN:Number(v)
 const parseTitle=(raw:string,ticker=''):ParsedLeg|null=>{
- // Each leg can carry its market type in its own title; parent combo tickers
- // (KXMVE...) do not identify whether a leg is points, assists or goals.
- const segments=raw.split(/\\s*\\|\\s*/).map(x=>x.trim()).filter(Boolean)
- const text=segments.join(' ')
- const s=(segments.find(x=>/\\b(?:yes|if)\\s+.+?:\\s*\\d+\\+|^.+?:\\s*\\d+\\+/.test(x))||segments[0]||'').replace(/^\\s*(?:yes|if)\\s+/i,'').trim()
- const colon=s.match(/^(.+?):\\s*(\\d+)\\+\\s*(?:points?|assists?|goals?)?\\s*$/i)
- const long=s.match(/^(.+?)\\s+(\\d+)\\+\\s+(points?|assists?|goals?)\\b/i)
+ // Component metadata may be "yes Player: 1+ | Player points".
+ const segments=raw.split(/\s*\|\s*/).map(x=>x.trim()).filter(Boolean)
+ const clause=segments.find(x=>/^(?:yes\s+)?[^,:|]+:\s*\d+\+\s*(?:points?|assists?|goals?)?$/i.test(x))
+ const short=clause||segments[0]||''
+ const s=short.replace(/^\s*(?:yes|if)\s+/i,'').trim()
+ const colon=s.match(/^(.+?):\s*(\d+)\+\s*(points?|assists?|goals?)?\s*$/i)
+ const long=s.match(/^(.+?)\s+(\d+)\+\s+(points?|assists?|goals?)\b/i)
  const m=colon||long
  if(!m)return null
- const player=m[1].trim().replace(/^(?:yes|if)\\s+/i,'')
- if(!/^[\\p{L}\\p{M}.' -]{3,70}$/u.test(player)||!player.includes(' '))return null
+ const player=m[1].trim()
+ if(!/^[\p{L}\p{M}.' -]{3,70}$/u.test(player)||!player.includes(' '))return null
  const qty=Number(m[2])
  if(!Number.isInteger(qty)||qty<1||qty>10)return null
  const market=ticker.toUpperCase()
- const explicitStat=long?.[3]||s.match(/(?:\\d+\\+\\s*)(points?|assists?|goals?)\\b/i)?.[1]||''
- const hint=[explicitStat,...segments.filter(x=>/\\b(assist|goal|point)s?\\b/i.test(x))].join(' ').toLowerCase()
- const stat=/^KXNHLAST(?:-|$)/.test(market)||/\\bassists?\\b/.test(hint)?'Assist':/^KXNHLGOAL/.test(market)||/\\bgoals?\\b/.test(hint)?'Goal':'Point'
+ const explicit=String(m[3]||'')
+ const hint=[explicit,...segments.slice(1)].join(' ').toLowerCase()
+ const stat=/^KXNHLAST(?:-|$)/.test(market)||/\bassists?\b/.test(hint)?'Assist':/^KXNHLGOAL/.test(market)||/\bgoals?\b/.test(hint)?'Goal':'Point'
  return {player,qty,stat,side:'OVER',kind:'PLAYER'}
+}
+/** Parse repeated Kalshi multi-view event descriptions, without confusing
+    duplicate title/subtitle copies with additional player legs. */
+export function parseKalshiParentLegs(raw:string):{player:string;qty:number}[] {
+ const parts=raw.split(/\s*\|\s*/)
+ // Parent title may be repeated in subtitle; use the first complete copy.
+ for(const part of parts){
+  const clauses=part.split(/\s*,\s*/)
+  if(!clauses.length)return []
+  const parsed=clauses.map(clause=>{
+   const m=clause.trim().match(/^yes\s+([\p{L}\p{M}.' -]+):\s*(\d+)\+$/iu)
+   if(!m||!m[1].trim().includes(' '))return null
+   const qty=Number(m[2])
+   return qty>=1&&qty<=10?{player:m[1].trim(),qty}:null
+  })
+  if(parsed.length>1&&parsed.every(Boolean)&&new Set(parsed.map(v=>normalized(v!.player))).size===parsed.length)
+   return parsed as {player:string;qty:number}[]
+ }
+ return []
 }
 function extractLegs(row:KalshiFill):ParsedLeg[]|null{
  const byMarket=row.legs||[]
@@ -32,18 +51,17 @@ function extractLegs(row:KalshiFill):ParsedLeg[]|null{
   if(byMarket.some(l=>l.side.toLowerCase()!=='yes'||!l.nhlTicker))return null
   const output=byMarket.map(l=>parseTitle(l.title,l.ticker))
   if(output.every(Boolean)&&new Set(output.map(x=>normalized(x!.player))).size===output.length)return output as ParsedLeg[]
-  // Parent title can contain matching repeated "yes Name: N+" clauses.
-  const chunks=[...row.title.matchAll(/\byes\s+([\p{L}\p{M}.' -]+?:\s*\d+\+)(?=\s+yes\s+|\s*\||$)/giu)].map(m=>m[1])
-  const distinctChunks=[...new Map<string,string>(chunks.map(x=>[normalized(x),x] as const)).values()]
-  if(distinctChunks.length===byMarket.length){
-   const parsed=distinctChunks.map((x,i)=>parseTitle(x,byMarket[i].ticker))
-   if(parsed.every(Boolean)&&new Set(parsed.map(x=>normalized(x!.player))).size===parsed.length)return parsed as ParsedLeg[]
-  }
-  return null
+  // Kalshi sometimes omits leg names in component metadata and only
+  // provides them in the combined title. Require an exact leg count.
+  const parent=parseKalshiParentLegs(row.title)
+  if(parent.length!==byMarket.length)return null
+  const parsed=parent.map((leg,i)=>parseTitle('yes '+leg.player+': '+leg.qty+'+',byMarket[i].ticker))
+  return parsed.every(Boolean)?parsed as ParsedLeg[]:null
  }
- // Single market title must explicitly indicate the player and target.
- const p=parseTitle(row.title,row.ticker)
- return p?[p]:null
+ // A combined market without component tickers cannot safely establish the
+ // number and types of independent leg contracts.
+ if(parseKalshiParentLegs(row.title).length>1)return null
+ return parseTitle(row.title,row.ticker)?[parseTitle(row.title,row.ticker)!]:null
 }
 function attachNhlMatch(legs:ParsedLeg[],dfo:Record<string,any>,games:any[],rosterPlayers:Record<string,string[]>={}):boolean{
  const teamOf=(g:any,side:'away'|'home')=>String(g?.[side+'Team']?.abbrev?.default||g?.[side+'Team']?.abbrev||g?.[side+'Team']?.triCode||'').toUpperCase()
