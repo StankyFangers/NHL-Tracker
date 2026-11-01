@@ -1,5 +1,5 @@
 import {useState} from 'react'
-import {prepareKalshiImports,verifyKalshiIdentity,type Candidate,type KalshiFill,type KalshiSlate} from './kalshiImport'
+import {prepareKalshiImports,type HistoricalGamePlayer,type Candidate,type KalshiFill,type KalshiSlate} from './kalshiImport'
 import {addKalshiFlags,clearKalshiFlags} from './KalshiSyncReview'
 const eastern=()=>{
  const p=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date())
@@ -58,7 +58,7 @@ export function KalshiHistoricalImporter({bets,setBets,unitSize,canSave}:{bets:a
    let totalGroups=0
    for(const slate of slates){
     const dayFills=fills.filter(f=>f.date===slate.date)
-    const byTeam=new Map<string,Map<number,{playerId:number;fullName:string}>>()
+    const dayPlayers:HistoricalGamePlayer[]=[]
     let boxscoresLoaded=0
     for(const game of slate.games){
      try{
@@ -69,25 +69,19 @@ export function KalshiHistoricalImporter({bets,setBets,unitSize,canSave}:{bets:a
       for(const side of ['awayTeam','homeTeam']){
        const abbr=team(game,side)
        if(!abbr)continue
-       const players=extract(root[side])
-       const map=byTeam.get(abbr)||new Map<number,{playerId:number;fullName:string}>()
-       for(const player of players)map.set(player.playerId,player)
-       byTeam.set(abbr,map)
+       for(const player of extract(root[side])){
+        dayPlayers.push({gameId:String(game.id),team:abbr,player:player.fullName,playerId:player.playerId})
+       }
       }
-     }catch{/* Keep unverified history out of import. */}
+     }catch{/* Failed boxscore stays in review; no guessed identity. */}
     }
-    const players:Record<string,string[]>={}
-    for(const [abbr,records] of byTeam)players[abbr]=[...records.values()].map(x=>x.fullName)
-    const prepared=prepareKalshiImports(dayFills,bets,slate.dfo,slate.games,unitSize,[],slate.date,players)
+    const prepared=prepareKalshiImports(dayFills,bets,slate.dfo,slate.games,unitSize,[],slate.date,{},dayPlayers)
     totalGroups+=prepared.totalGroups
-    // The existing verifier requires a roster-style object, but these records
-    // are historical boxscore identities for this specific slate only.
-    const roster=async(abbr:string)=>[...(byTeam.get(abbr)?.values()||[])]
-    const verified=await verifyKalshiIdentity(prepared.candidates,roster)
+    const verified={accepted:prepared.candidates,rejected:[] as {id:string;reason:string}[]}
     accepted.push(...verified.accepted)
     skipped.push(...prepared.skipped,...verified.rejected)
     if(!boxscoresLoaded&&dayFills.length){
-     for(const error of skipped.filter(x=>x.reason.includes('NHL game-day player(s) not found:')&&x.reason.includes(slate.date))){
+     for(const error of skipped.filter(x=>x.reason.includes('Player missing from game boxscores:')&&x.reason.includes(slate.date))){
       error.reason='NHL boxscore player data unavailable for '+slate.date+' (0 of '+slate.games.length+' games returned player statistics). '+error.reason
      }
     }
