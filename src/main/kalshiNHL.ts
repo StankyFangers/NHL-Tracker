@@ -87,22 +87,28 @@ async function scan(from:string,limitPages:number){
   })
   const description=[m.title,m.subtitle,m.yes_sub_title].filter(Boolean).join(' | ')
   const classificationText=[ticker,description,...legs.flatMap(l=>[l.ticker,l.title])].join(' ')
-  const isNhl=hockey(classificationText)
+  const anyNhl=hockey(classificationText)
+  const everyLegNhl=legs.length>0&&legs.every(l=>l.resolved&&hockey(l.ticker+' '+l.title))
+  const allLegsResolved=legs.length>0&&legs.every(l=>l.resolved)
+  const isNhl=legs.length>0?everyLegNhl:anyNhl
+  const classification=legs.length>0?(everyLegNhl?'NHL_COMBO':!allLegsResolved?'UNRESOLVED_COMBO':anyNhl?'MIXED_OR_UNVERIFIED_COMBO':'OTHER_COMBO'):(isNhl?'NHL_SINGLE':'UNCLASSIFIED')
   const fillId=String(f.fill_id||f.trade_id||'')
   const orderId=String(f.order_id||'')
   // Never invent an external ID from date and ticker; the import engine must require a real ID.
   const id=fillId||[orderId,ticker,dateOf(f),String(f.count_fp??f.count??'')].join('|')
   const hasLegs=legs.length>0
-  const review=hasLegs&&legs.some(l=>!l.resolved)?'CHECK_LEGS':hasLegs?'COMBO_REVIEW':isNhl?'SINGLE_REVIEW':'UNCLASSIFIED'
+  const review=classification
   return {id,fillId,orderId,date:dateOf(f).slice(0,10),ticker,title:description||ticker,side:String(f.side||''),action:String(f.action||''),count:String(f.count_fp??f.count??''),price:String(f.yes_price_dollars??f.no_price_dollars??f.yes_price??f.no_price??''),fee:String(f.fee_cost_dollars??f.fee_cost??''),isNhl,review,legs}
  })
  const nhl=rows.filter(r=>r.isNhl),unknown=rows.filter(r=>!r.isNhl)
  // Only a candidate if *every* leg is NHL; mixed-sport parlays must never be silently imported.
- const mixedLegs=nhl.filter(r=>r.legs.length>0&&r.legs.some((l:any)=>!hockey(l.ticker+' '+l.title))).length
+ const mixedLegs=rows.filter(r=>r.review==='MIXED_OR_UNVERIFIED_COMBO').length
+ const unresolvedCombos=rows.filter(r=>r.review==='UNRESOLVED_COMBO').length
+ const otherCombos=rows.filter(r=>r.review==='OTHER_COMBO').length
  const distinctOrders=new Set(nhl.map(r=>r.orderId).filter(Boolean))
  // A single order may contain multiple fills. Only order-level grouping is proposed for review.
  const combos=nhl.filter(r=>r.legs.length>=2)
- return {totalFills:all.length,nhl,unknown:unknown.slice(0,500),unclassified:unknown.length,pages,complete,marketLookups:lookups,legLookups,unresolved:Math.max(unresolved,uniqueTickers.filter(t=>!metaCache.has(t)).length),distinctNhlOrders:distinctOrders.size,combos:combos.length,mixedLegs,notice:'Read-only: '+nhl.length+' NHL-related fills, '+combos.length+' with multiple documented component legs, '+unknown.length+' other/unclassified. No wagers imported.'}
+ return {totalFills:all.length,nhl,unknown:unknown.slice(0,500),unclassified:unknown.length,pages,complete,marketLookups:lookups,legLookups,unresolved:Math.max(unresolved,uniqueTickers.filter(t=>!metaCache.has(t)).length),distinctNhlOrders:distinctOrders.size,combos:combos.length,mixedLegs,unresolvedCombos,otherCombos,notice:'Read-only: '+nhl.length+' NHL-related fills, '+combos.length+' with multiple documented component legs, '+unknown.length+' review-required/other fills ('+mixedLegs+' mixed, '+unresolvedCombos+' unresolved combos). No wagers imported.'}
 }
 export function registerKalshiNHL(){
  ipcMain.handle('kalshi:settings',async()=>{
