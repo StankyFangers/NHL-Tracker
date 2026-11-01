@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('nhlTracker', {
   kalshiCheck: () => ipcRenderer.invoke('kalshi:check'),
   kalshiHistory: (from:string) => ipcRenderer.invoke('kalshi:history',from),
   kalshiSyncPreview: () => ipcRenderer.invoke('kalshi:sync-preview'),
+  kalshiSyncToday: (date:string) => ipcRenderer.invoke('kalshi:sync-today',date),
   saveLineComboPdf: (payload: {title:string;subtitle:string;lines:string[]}) => ipcRenderer.invoke('app:saveLineComboPdf',payload),
   score: (date?: string) => ipcRenderer.invoke('nhl:score', date),
   playByPlay: (gameId: number) => ipcRenderer.invoke('nhl:pbp', gameId),
