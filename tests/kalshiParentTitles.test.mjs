@@ -20,6 +20,10 @@ for(const [index,pair] of names.entries()){
   const title=pair.map(n=>'yes '+n+': 1+').join(',')
   const repeated=title+' | '+title
   assert.deepEqual(parseKalshiParentLegs(repeated),pair.map(player=>({player,qty:1})))
+  for(const separator of [' ', ', ', ' , ', ',']){
+   const variant=pair.map(n=>'yes '+n+': 1+').join(separator)
+   assert.deepEqual(parseKalshiParentLegs(variant),pair.map(player=>({player,qty:1})),separator)
+  }
   const fills=[{
    id:'fill-'+index,fillId:'fill-'+index,orderId:'order-'+index,
    date:'2026-11-01',createdAt:'2026-11-01T18:00:00Z',
@@ -44,4 +48,9 @@ test('refuse mismatched component counts',()=>{
  const row={id:'fill',fillId:'fill',orderId:'order',date:'2026-11-01',ticker:'KXMVECROSSCATEGORY-SAMPLE',title,side:'yes',action:'buy',count:'2',price:'0.4',fee:'0',isNhl:true,review:'NHL_COMBO_TICKERS_CONFIRMED',legs:[{ticker:'KXNHLPTS-SAMPLE',side:'yes',title:'missing metadata',resolved:false,source:'TICKER_ONLY',nhlTicker:true}]}
  const result=prepareKalshiImports([row],[],{},[],1,[],'2026-11-01',{})
  assert.equal(result.candidates.length,0)
+})
+
+test('reject incomplete or ambiguous parent descriptions',()=>{
+ assert.deepEqual(parseKalshiParentLegs('yes Mark Jankowski: 1+ nonsense yes Seth Jarvis: 1+'),[])
+ assert.deepEqual(parseKalshiParentLegs('yes Mark Jankowski: 1+,yes Mark Jankowski: 1+'),[])
 })
