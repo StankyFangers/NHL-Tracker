@@ -1,3 +1,4 @@
+import {registerKalshiNHL} from './kalshiNHL'
 import {fetchConfidenceTeamStats} from './confidenceTeamStats'
 import {fetchDfoStartingGoalies} from './dfoStartingGoalies'
 import {rememberLogin} from './rememberLogin'
@@ -110,6 +111,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  registerKalshiNHL()
   electronApp.setAppUserModelId(is.dev ? 'com.nhltracker.app.dev' : 'com.nhltracker.app')
   app.on('browser-window-created', (_, window) => optimizer.watchWindowShortcuts(window))
 
