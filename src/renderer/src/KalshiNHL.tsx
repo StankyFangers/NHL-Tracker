@@ -1,4 +1,4 @@
-import {prepareKalshiImports,type KalshiFill} from './kalshiImport'
+import {prepareKalshiImports,verifyKalshiIdentity,type KalshiFill} from './kalshiImport'
 import {useEffect,useState,type CSSProperties} from 'react'
 type Row={id:string;fillId:string;orderId:string;date:string;ticker:string;title:string;side:string;action:string;count:string;price:string;fee:string;isNhl:boolean;review:string;detectedSport:string;legs:{ticker:string;side:string;title:string;resolved:boolean;source:string;nhlTicker:boolean}[]}
 type Result={totalFills:number;nhl:Row[];unknown:Row[];unclassified:number;pages:number;complete:boolean;marketLookups:number;legLookups:number;unresolved:number;distinctNhlOrders:number;combos:number;categoryCounts:{unresolved:number;mixed:number;otherSports:number};comboTickerFallbacks:number;mixedLegs:number;unresolvedCombos:number;otherCombos:number;notice:string}
@@ -45,18 +45,21 @@ export function KalshiNHLSync({date,bets,setBets,unitSize,slateDfo,games,canSave
    if(!Object.keys(slateDfo).length)throw Error('Load the projected/confirmed lines before importing. Use Update Lines on Bet Entry.')
    const res=await api().kalshiSyncToday(date)
    const {candidates,skipped,totalGroups}=prepareKalshiImports(res.nhl as KalshiFill[],bets,slateDfo,games,unitSize)
-   if(!candidates.length){setMsg('No eligible new bets. Reviewed '+totalGroups+' orders; '+skipped.length+' skipped/previously recorded. No wagers changed.');return}
-   const preview=candidates.slice(0,8).map(x=>x.legs.map(l=>l.player+' '+l.qty+'+ '+l.stat).join(' + ')+' · '+x.category+' · $'+x.risk.toFixed(2)).join('\n')
-   const ok=window.confirm('Import '+candidates.length+' NEW Kalshi wagers?\n\n'+preview+(candidates.length>8?'\n…plus '+(candidates.length-8)+' more':'')+'\n\n'+skipped.length+' fills/orders skipped for safety.\n\nOnly verified YES buys are included. Imported wagers start PENDING; settlements are not yet reconciled.\n\nProceed?')
+   const verified=await verifyKalshiIdentity(candidates,(team:string)=>(window as any).nhlTracker.roster(team))
+   const ready=verified.accepted
+   const skippedCount=skipped.length+verified.rejected.length
+   if(!ready.length){setMsg('No eligible new bets. Reviewed '+totalGroups+' orders; '+skipped.length+' skipped/previously recorded. No wagers changed.');return}
+   const preview=ready.slice(0,8).map(x=>x.legs.map(l=>l.player+' '+l.qty+'+ '+l.stat).join(' + ')+' · '+x.category+' · $'+x.risk.toFixed(2)).join('\n')
+   const ok=window.confirm('Import '+ready.length+' NEW Kalshi wagers?\n\n'+preview+(ready.length>8?'\n…plus '+(ready.length-8)+' more':'')+'\n\n'+skippedCount+' fills/orders skipped for safety.\n\nOnly verified YES buys are included. Imported wagers start PENDING; settlements are not yet reconciled.\n\nProceed?')
    if(!ok){setMsg('Import cancelled; no wagers changed.');return}
-   const newBets=candidates.map(c=>c.bet)
+   const newBets=ready.map(c=>c.bet)
    // Repeat the ID guard against the most current React state.
    setBets((old:any[])=>{
     const ids=new Set(old.map(b=>String(b.id)))
     const additions=newBets.filter(b=>!ids.has(b.id))
     return additions.length?[...old,...additions]:old
    })
-   setMsg('Submitted '+newBets.length+' Kalshi wagers to Bet Tracker ('+skipped.length+' skipped). Check cloud sync status before closing NHL Tracker. All imported wagers are PENDING.')
+   setMsg('Submitted '+newBets.length+' Kalshi wagers to Bet Tracker ('+skippedCount+' skipped). Check cloud sync status before closing NHL Tracker. All imported wagers are PENDING.')
   }catch(e:any){setMsg('Kalshi sync blocked: '+String(e?.message||e))}finally{setBusy(false)}
  }
  return <div style={{padding:'8px 16px',textAlign:'center'}}><button style={button} disabled={busy||!canSave} onClick={sync}>{busy?'↻ Syncing Kalshi…':'↻ Sync Kalshi Bets'}</button>{msg&&<p role="status" style={{color:'#b8d4e1',margin:'8px auto',maxWidth:900,whiteSpace:'pre-wrap'}}>{msg}</p>}</div>
