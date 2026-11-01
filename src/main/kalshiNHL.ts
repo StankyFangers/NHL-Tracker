@@ -159,7 +159,7 @@ async function withScan<T>(work:(signal:AbortSignal)=>Promise<T>):Promise<T>{
  finally{if(activeScan===controller)activeScan=null}
 }
 export function registerKalshiNHL(){
- ipcMain.handle('kalshi:cancel',async()=>{if(activeScan)activeScan.abort();return {cancelled:true}})
+ ipcMain.handle('kalshi:cancel',async()=>{const controller=activeScan;activeScan=null;controller?.abort();return {cancelled:!!controller}})
 
  ipcMain.handle('kalshi:settings',async()=>{
   if(!keySafe())return {configured:false,error:'Secure Windows encryption unavailable'}
