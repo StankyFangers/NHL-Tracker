@@ -63,6 +63,17 @@ function extractLegs(row:KalshiFill):ParsedLeg[]|null{
  return parseTitle(row.title,row.ticker)?[parseTitle(row.title,row.ticker)!]:null
 }
 export type HistoricalGamePlayer={gameId:string;team:string;player:string;playerId:number}
+export function fullNamesFromGameRoster(spots:any[]):Map<number,string>{
+ const result=new Map<number,string>()
+ const label=(x:any)=>typeof x==='string'?x:typeof x?.default==='string'?x.default:''
+ for(const spot of Array.isArray(spots)?spots:[]){
+  const id=Number(spot?.playerId||0)
+  const name=[label(spot?.firstName),label(spot?.lastName)].filter(Boolean).join(' ')
+  if(id>0&&name)result.set(id,name)
+ }
+ return result
+}
+
 /** Match only the NHL games played on the wager's original calendar date.
  *  A verified player is identified by game and official player ID, never by
  *  the team's present-day roster or a separate historical month-wide roster.
