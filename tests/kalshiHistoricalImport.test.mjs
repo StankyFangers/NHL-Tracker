@@ -5,7 +5,7 @@ import ts from 'typescript'
 
 const src=readFileSync('src/renderer/src/kalshiImport.ts','utf8')
 const js=ts.transpileModule(src,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText
-const {prepareKalshiImports,matchHistoricalBoxscores}=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
+const {prepareKalshiImports,matchHistoricalBoxscores,fullNamesFromGameRoster}=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
 const make=(date,order,players)=>({
  id:'fill-'+order,fillId:'fill-'+order,orderId:order,date,
  createdAt:date+'T20:00:00Z',ticker:'KXMVECROSSCATEGORY-'+order,
@@ -66,4 +66,22 @@ test('boxscore matcher does not modify partial wagers on a failed leg',()=>{
  const result=matchHistoricalBoxscores(legs,[{id:31,awayTeam:{abbrev:'PIT'},homeTeam:{abbrev:'BOS'}}],[{gameId:'31',team:'PIT',player:'Sidney Crosby',playerId:8471675}])
  assert.equal(result.ok,false)
  assert.equal(legs[0].gameId,undefined)
+})
+
+test('same-game play-by-play full names fix abbreviated boxscore player matching',()=>{
+ const roster=[
+  {playerId:8471675,firstName:{default:'Sidney'},lastName:{default:'Crosby'}},
+  {playerId:8476483,firstName:{default:'Rickard'},lastName:{default:'Rakell'}}
+ ]
+ const fullNames=fullNamesFromGameRoster(roster)
+ const boxSkaters=[
+  {playerId:8471675,name:{default:'S. Crosby'}},
+  {playerId:8476483,name:{default:'R. Rakell'}}
+ ]
+ const players=boxSkaters.map(x=>({gameId:'31',team:'PIT',player:fullNames.get(x.playerId)||x.name.default,playerId:x.playerId}))
+ const wager=make('2026-10-31','abbreviations',['Rickard Rakell','Sidney Crosby'])
+ const games=[{id:31,awayTeam:{abbrev:'PIT'},homeTeam:{abbrev:'BOS'}}]
+ const resolved=prepareKalshiImports([wager],[],{},games,1,[],'2026-10-31',{},players)
+ assert.deepEqual(resolved.skipped,[])
+ assert.deepEqual(resolved.candidates[0].legs.map(l=>l.playerId),[8476483,8471675])
 })
