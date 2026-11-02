@@ -232,10 +232,10 @@ function playerLegCompletionMap(pbp:any,game:Game){
  return out
 }
 
-function legProgress(l:Leg,stats:LiveStats){if(!l.playerId||!l.gameId)return{current:0,hit:false};const x=stats[`${l.gameId}:${l.playerId}`]||{goals:0,assists:0,points:0,shots:0,toi:'0:00',rostered:false};const st=l.stat.toLowerCase();const current=st.startsWith('goal')?x.goals:st.startsWith('assist')?x.assists:st.startsWith('shot')?x.shots:x.points;return{current,hit:l.side==='UNDER'?current<l.qty:current>=l.qty}}
+function legProgress(l:Leg,stats:LiveStats){if(!l.playerId||!l.gameId)return{current:0,hit:false};const x=stats[`${l.gameId}:${l.playerId}`]||{goals:0,assists:0,points:0,shots:0,toi:'0:00',rostered:false};const st=l.stat.toLowerCase();const current=st.startsWith('goal')?x.goals:st.startsWith('assist')?x.assists:st.startsWith('shot')?x.shots:x.points;return{current,hit:l.side==='UNDER'?false:current>=l.qty}}
 function betHit(b:Bet,stats:LiveStats){const active=b.legs.filter(l=>!l.voided);return active.length>0&&active.every(l=>l.kind==='TEAM'?false:l.side==='UNDER'?(b.status==='WON'):legProgress(l,stats).hit)}
 function teamLegHit(l:Leg,games:Game[]){const g=games.find(x=>String(x.id)===String(l.gameId));if(!g||!['FINAL','OFF'].includes(String(g.gameState)))return false;const away=abbr(g.awayTeam),home=abbr(g.homeTeam),as=Number(g.awayTeam?.score),hs=Number(g.homeTeam?.score);if(l.stat==='Moneyline')return l.team===away?as>hs:l.team===home?hs>as:false;if(l.stat==='Spread'){const score=l.team===away?as:l.team===home?hs:NaN;const opp=l.team===away?hs:l.team===home?as:NaN;return Number.isFinite(score)&&score+l.qty>opp}if(l.stat==='Game Total'){const total=as+hs;return l.side==='OVER'?total>l.qty:l.side==='UNDER'?total<l.qty:false}return false}
-function gradeBet(b:Bet,stats:LiveStats,games:Game[]){const active=b.legs.filter(l=>!l.voided);return active.length>0&&active.every(l=>l.kind==='TEAM'?teamLegHit(l,games):legProgress(l,stats).hit)}
+function gradeBet(b:Bet,stats:LiveStats,games:Game[]){const active=b.legs.filter(l=>!l.voided);return active.length>0&&active.every(l=>{if(l.kind==='TEAM')return teamLegHit(l,games);if(l.side==='UNDER'){const game=games.find(g=>String(g.id)===String(l.gameId));const record=stats[`${l.gameId}:${l.playerId}`];return !!game&&['FINAL','OFF'].includes(String(game.gameState))&&!!record?.rostered&&legProgress(l,stats).current<l.qty}return legProgress(l,stats).hit})}
 function authoritativeBetStatus(b:Bet,stats:LiveStats,games:Game[]):BetStatus{
  const active=b.legs.filter(l=>!l.voided);if(!active.length)return 'VOID';
  if(gradeBet(b,stats,games)&&active.every(l=>l.side!=='UNDER'||games.some(g=>String(g.id)===String(l.gameId)&&['FINAL','OFF'].includes(String(g.gameState)))))return 'WON';
@@ -247,7 +247,7 @@ function authoritativeBetStatus(b:Bet,stats:LiveStats,games:Game[]):BetStatus{
   if(l.kind==='TEAM'){const a=Number(g.awayTeam?.score),h=Number(g.homeTeam?.score);if(l.stat==='Game Total'&&a+h===Number(l.qty))continue;if(l.stat==='Spread'&&((l.team===abbr(g.awayTeam)?a-h:h-a)+Number(l.qty)===0))continue;if(!teamLegHit(l,games))return 'LOST';continue}
   if(!l.playerId||!l.gameId)continue;
   const record=stats[`${l.gameId}:${l.playerId}`];
-  if(record?.rostered&& !legProgress(l,stats).hit)return 'LOST';
+  if(record?.rostered&&(l.side==='UNDER'?legProgress(l,stats).current>=l.qty:!legProgress(l,stats).hit))return 'LOST';
  }
  return 'PENDING';
 }
