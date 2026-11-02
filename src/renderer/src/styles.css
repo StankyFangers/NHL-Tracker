@@ -1077,3 +1077,7 @@ html,body,#root,.app,main{scrollbar-width:thin;scrollbar-color:#3e7898 #0a1118}
 .commandCenter .betsTop{position:sticky!important;top:-12px!important;z-index:100!important;background:#0b1219!important;box-shadow:0 9px 14px rgba(0,0,0,.75);padding:12px 0 10px;isolation:isolate}
 .commandCenter .betsTop::before{content:"";position:absolute;inset:-12px -12px 0;background:#0b1219;z-index:-1}
 .entryRow .playerSideField select{min-width:90px}
+
+/* v1.8 QA subcategory P/L sign */
+.betsPane .matchupCategory>summary span.good{color:#54e6a0!important;font-weight:800}
+.betsPane .matchupCategory>summary span.bad{color:#ff6b80!important;font-weight:800}
