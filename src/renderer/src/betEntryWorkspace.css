@@ -95,3 +95,12 @@
 .entrySlip .betSlipDateUnit>strong{color:#68e0a7;font-size:12px}
 @media(max-width:1450px){.entrySlip .slipLeg{grid-template-columns:minmax(130px,1fr) 65px minmax(88px,105px) minmax(100px,1fr) 24px;gap:6px}}
 @media(max-width:900px){.entrySlip .slipLeg{grid-template-columns:minmax(125px,1fr) 64px minmax(90px,1fr) minmax(100px,1fr) 24px}}
+
+/* Bet Slip header QA: keep actions together and right-aligned. */
+.entrySlip .entrySlipHead{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.entrySlip .betSlipHeaderActions{display:flex;align-items:center;justify-content:flex-end;gap:16px;flex-wrap:wrap;margin-left:auto}
+.entrySlip .betSlipUnitInfo{font-size:12px;font-weight:800;color:#68e0a7;white-space:nowrap}
+.entrySlip .betSlipHeaderDate{display:flex;align-items:center;gap:9px;font-size:11px;font-weight:800;white-space:nowrap}
+.entrySlip .betSlipHeaderDate input{width:142px;min-width:142px}
+.entrySlip .betSlipHeaderActions>button{white-space:nowrap}
+@media(max-width:790px){.entrySlip .betSlipHeaderActions{gap:8px}.entrySlip .betSlipHeaderDate input{width:126px;min-width:126px}}
