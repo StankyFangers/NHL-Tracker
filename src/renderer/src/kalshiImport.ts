@@ -63,12 +63,22 @@ function extractLegs(row:KalshiFill):ParsedLeg[]|null{
  return parseTitle(row.title,row.ticker)?[parseTitle(row.title,row.ticker)!]:null
 }
 export type HistoricalGamePlayer={gameId:string;team:string;player:string;playerId:number}
-/** Explicit, verified NHL display-name aliases, never fuzzy last-name guesses. */
-const HISTORICAL_NHL_ALIASES:Record<string,string>={'thomasnovak':'tommynovak','tommynovak':'thomasnovak'}
-const sameHistoricalPlayer=(fromBet:string,fromGame:string)=>{
- const bet=normalized(fromBet),game=normalized(fromGame)
- return bet===game||HISTORICAL_NHL_ALIASES[bet]===game
+/** Verified, whole-player NHL name aliases shared by daily and historical import.
+ * Never guess a first-name expansion or match by surname alone.
+ * Identity still requires exactly one player/team and one NHL player ID.
+ */
+const VERIFIED_NHL_PLAYER_NAMES:Record<string,string>={
+ 'thomasnovak':'tommynovak',
+ 'tommynovak':'tommynovak',
+ 'maxshabanov':'maximshabanov',
+ 'maximshabanov':'maximshabanov'
 }
+export const kalshiNhlPlayerNameKey=(name:string)=>{
+ const key=normalized(name)
+ return VERIFIED_NHL_PLAYER_NAMES[key]||key
+}
+const sameHistoricalPlayer=(fromBet:string,fromGame:string)=>
+ kalshiNhlPlayerNameKey(fromBet)===kalshiNhlPlayerNameKey(fromGame)
 
 export function fullNamesFromGameRoster(spots:any[]):Map<number,string>{
  const result=new Map<number,string>()
@@ -108,9 +118,9 @@ export function matchHistoricalBoxscores(legs:ParsedLeg[],games:any[],players:Hi
 function attachNhlMatch(legs:ParsedLeg[],_dfo:Record<string,any>,games:any[],rosterPlayers:Record<string,string[]>={}):boolean{
  const teamOf=(g:any,side:'away'|'home')=>String(g?.[side+'Team']?.abbrev?.default||g?.[side+'Team']?.abbrev||g?.[side+'Team']?.triCode||'').toUpperCase()
  for(const leg of legs){
-  const player=normalized(leg.player)
+  const player=kalshiNhlPlayerNameKey(leg.player)
   // The game roster is the identity source. DFO lineup coverage is optional and used for classification.
-  const matchingTeams=Object.entries(rosterPlayers).filter(([_,names])=>names.some(name=>normalized(name)===player)).map(([team])=>team)
+  const matchingTeams=Object.entries(rosterPlayers).filter(([_,names])=>names.some(name=>kalshiNhlPlayerNameKey(name)===player)).map(([team])=>team)
   if(matchingTeams.length!==1)return false
   const team=matchingTeams[0]
   const matchedGames=games.filter(g=>teamOf(g,'away')===team||teamOf(g,'home')===team)
@@ -130,7 +140,7 @@ export function isTwoPointOnePoint(legs:readonly {player:string;qty:number;stat:
  if(legs.some(l=>l.kind==='TEAM'||l.stat!=='Point'||l.side==='UNDER'||l.voided||![1,2].includes(Number(l.qty))))return false
  if(legs.filter(l=>Number(l.qty)===2).length!==1)return false
  if(!legs.some(l=>Number(l.qty)===1))return false
- return new Set(legs.map(l=>normalized(String(l.player)))).size===legs.length
+ return new Set(legs.map(l=>kalshiNhlPlayerNameKey(String(l.player)))).size===legs.length
 }
 function classify(legs:ParsedLeg[],dfo:Record<string,any>,_games:any[]){
  if(legs.length&&legs.every(l=>l.stat==='Assist'))return 'ASSISTS'
@@ -140,11 +150,11 @@ function classify(legs:ParsedLeg[],dfo:Record<string,any>,_games:any[]){
  if(legs.length<2||legs.some(l=>l.stat!=='Point'||l.qty!==1))return 'OTHER'
  const team=legs[0].team
  if(!team||!legs.every(l=>l.team===team))return 'OTHER'
- const names=legs.map(l=>normalized(l.player))
+ const names=legs.map(l=>kalshiNhlPlayerNameKey(l.player))
  const info=dfo[team]
  const forwards=Array.isArray(info?.forwardLines)?info.forwardLines as string[][]:[]
  const ppUnits=[info?.pp1,info?.pp2].filter(Array.isArray) as string[][]
- const together=(unit:string[])=>names.every(n=>unit.some(p=>normalized(p)===n))
+ const together=(unit:string[])=>names.every(n=>unit.some(p=>kalshiNhlPlayerNameKey(p)===n))
  if(forwards.length&&ppUnits.length)return forwards.some(together)&&ppUnits.some(together)?'COMBOS':'OTHER'
  // DFO is sometimes unavailable on the current slate. A same-team 1+ points
  // combination is still a player-combo wager; do not silently relabel it OTHER
@@ -168,7 +178,7 @@ export function reconcileAlreadyLoggedKalshi(candidates:Candidate[],existing:any
  const signature=(legs:any[]):string=>{
   if(!Array.isArray(legs)||!legs.length)return ''
   const parts=legs.map(l=>{
-   const player=normalized(String(l?.player||''))
+   const player=kalshiNhlPlayerNameKey(String(l?.player||''))
    const qty=Number(l?.qty)
    const stat=normalized(String(l?.stat||'Point'))
    if(!player||!Number.isFinite(qty)||qty<=0||!stat)return ''
@@ -233,7 +243,7 @@ export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Recor
     const home=String(g?.homeTeam?.abbrev?.default||g?.homeTeam?.abbrev||'').toUpperCase()
     return t===away||t===home
    }))
-   const missing=legs.filter(l=>!available.some(([_,names])=>names.some(n=>normalized(n)===normalized(l.player)))).map(l=>l.player)
+   const missing=legs.filter(l=>!available.some(([_,names])=>names.some(n=>kalshiNhlPlayerNameKey(n)===kalshiNhlPlayerNameKey(l.player)))).map(l=>l.player)
    const searched=matchingSlate.games.map(g=>{
     const n=(t:any)=>String(t?.abbrev?.default||t?.abbrev||t?.triCode||'').toUpperCase()
     return n(g.awayTeam)+'@'+n(g.homeTeam)
@@ -284,13 +294,13 @@ export async function verifyKalshiIdentity(candidates:Candidate[],roster:(team:s
       if(!x||typeof x!=='object')return
       const id=Number(x.id||x.playerId||0)
       const name=[rosterName(x.firstName),rosterName(x.lastName)].filter(Boolean).join(' ')||rosterName(x.fullName)
-      if(id>0&&name){const k=normalized(name);names.set(k,[...new Set([...(names.get(k)||[]),id])])}
+      if(id>0&&name){const k=kalshiNhlPlayerNameKey(name);names.set(k,[...new Set([...(names.get(k)||[]),id])])}
       Object.values(x).forEach(v=>{if(typeof v==='object'&&v!==null)walk(v)})
      }
      walk(raw);cache.set(l.team,names)
     }catch{error='NHL roster could not load for '+l.team;break}
    }
-   const ids=cache.get(l.team)?.get(normalized(l.player))||[]
+   const ids=cache.get(l.team)?.get(kalshiNhlPlayerNameKey(l.player))||[]
    if(ids.length!==1){error='NHL player identity cannot be verified for '+l.player;break}
    ;(l as any).playerId=ids[0]
   }
