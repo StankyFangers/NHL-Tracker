@@ -1081,3 +1081,13 @@ html,body,#root,.app,main{scrollbar-width:thin;scrollbar-color:#3e7898 #0a1118}
 /* v1.8 QA subcategory P/L sign */
 .betsPane .matchupCategory>summary span.good{color:#54e6a0!important;font-weight:800}
 .betsPane .matchupCategory>summary span.bad{color:#ff6b80!important;font-weight:800}
+
+/* Category: label and bet count stay white; only running P/L changes color. */
+.betsPane .matchupCategory>summary .categorySummaryTotals{display:inline-flex;align-items:center;gap:6px;color:#fff;font-weight:800}
+.betsPane .matchupCategory>summary .categorySummaryTotals .categoryCount{color:#fff!important;font-weight:700}
+.betsPane .matchupCategory>summary .categorySummaryTotals span.good{color:#54e6a0!important;font-weight:800}
+.betsPane .matchupCategory>summary .categorySummaryTotals span.bad{color:#ff6b80!important;font-weight:800}
+.betsPane .matchupCategory>summary>b{color:#fff!important}
+.compactBetPrice.pending{color:#f0c95c}
+.compactBetPrice.hit{color:#5ee0a0}
+.compactBetPrice.miss{color:#ff6f80}
