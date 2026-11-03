@@ -8,4 +8,4 @@ crons = ["* * * * *"]
 [[d1_databases]]
 binding = "DB"
 database_name = "nhl-telegram-dev"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "3400aba5-4a5d-4c7b-ba11-0b9a6ddfcfaa"
