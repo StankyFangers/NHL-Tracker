@@ -20,6 +20,7 @@ export function command(raw){
   const x=String(raw||'').trim().replace(/^\//,'').replace(/@\w+$/,'').toUpperCase()
   if(['START','HELP',''].includes(x))return{type:'HELP'}
   if(x==='PING')return{type:'PING'}
+  if(x==='ID')return{type:'ID'}
   if(['STATUS','SLATE'].includes(x))return{type:'STATUS'}
   if(['NEXT','REMAINING'].includes(x))return{type:x}
   if(TEAM[x])return{type:'TEAM',team:x}
@@ -49,6 +50,7 @@ export async function answer(raw,now=new Date()){
   const c=command(raw)
   if(c.type==='HELP')return HELP
   if(c.type==='PING')return '🏒 NHL Tracker bot is online. Try Status or Next.'
+  if(c.type==='ID')return 'To see your chat ID, send /id to the running bot; the bot replies with the ID from your Telegram message.'
   const date=dateET(now),all=await slate(date)
   if(!all.length)return '🏒 No NHL games found for '+date+' ET.'
   let games=all
@@ -60,6 +62,19 @@ export async function answer(raw,now=new Date()){
   const label=c.type==='STATUS'?'Today’s lineup confirmations':c.type==='REMAINING'?'Unconfirmed teams':c.type==='TEAM'?c.team+' lineup':timeET(games[0].time)+' ET puck drop'
   const detail=c.type==='REMAINING'?(remaining.map(t=>(s[t]?.status==='PROJECTED'?'⏳ ':'❔ ')+t+' — '+s[t].status).join('\n')||'✅ All teams confirmed'):games.map(g=>g.teams.map(t=>(s[t]?.status==='CONFIRMED'?'✅':s[t]?.status==='PROJECTED'?'⏳':'❔')+' '+t).join(' vs ')).join('\n')
   return '🏒 '+label+'\n'+confirmed.length+'/'+teams.length+' teams confirmed ('+remaining.length+' remaining'+(unknown.length?', '+unknown.length+' unknown':'')+')\n\n'+detail+'\n\nChecked '+timeET(new Date())+' ET\nUnknown or stale sources are never counted as confirmed.'
+}
+
+
+async function checkCompleteStartGroups(state,games,call,save,now){
+ const future=[...new Set(games.filter(g=>g.time>now).map(g=>g.time.toISOString()))]
+ for(const start of future){
+  const group=games.filter(g=>g.time.toISOString()===start),teams=[...new Set(group.flatMap(g=>g.teams))];
+  if(!teams.length||!teams.every(t=>state.observed[state.date+':'+t]==='CONFIRMED'))continue;
+  const key=state.date+':GROUP:'+start;if(state.delivered[key])continue;
+  const text='✅ '+timeET(new Date(start))+' ET — ALL LINES CONFIRMED!\n'+teams.length+'/'+teams.length+' teams confirmed\n'+teams.join(', ');
+  let done=true;for(const chat of state.subscribers){try{await call('sendMessage',{chat_id:chat,text})}catch(e){done=false;console.error('Group notification failed:',e.message)}}
+  if(done){state.delivered[key]=true;await save();console.log('Completed puck-drop group:',start)}
+ }
 }
 
 const ALERT_FILE=join(homedir(),'.nhl-tracker','telegram-dev-alerts.json')
@@ -99,7 +114,7 @@ async function startAlertMonitor(call){
        if(now.getTime()-last>=interval&&!due.includes(t)){due.push(t);lastCheck.set(key,now.getTime())}
      }
    }
-   if(!due.length)return
+   if(!due.length){await checkCompleteStartGroups(state,games,call,save,now);return}
    const toCheck=games.filter(g=>g.teams.some(t=>due.includes(t)))
    const results=await statuses(toCheck,date)
    const events=[]
@@ -111,6 +126,7 @@ async function startAlertMonitor(call){
      if(current==='PROJECTED'||current==='CONFIRMED')state.observed[key]=current
    }
    await save()
+   await checkCompleteStartGroups(state,games,call,save,now)
    for(const event of events){
      const game=games.find(g=>g.teams.includes(event.team))
      const next=gameGroups(games)[0]||[]
@@ -163,7 +179,7 @@ async function main(){
       const allowed=(process.env.TELEGRAM_ALLOWED_CHAT_IDS||'').split(',').map(s=>s.trim()).filter(Boolean)
       if(allowed.length&&!allowed.includes(String(msg.chat.id))){await call('sendMessage',{chat_id:msg.chat.id,text:'Not authorized. Your chat ID is '+msg.chat.id+'. Add it to TELEGRAM_ALLOWED_CHAT_IDS locally.'});continue}
       let reply
-      try{reply=await alerts.handle(msg.chat.id,msg.text) ?? await answer(msg.text)}catch(e){console.error('Status request failed:',e.message);reply='Lineup data is unavailable right now. Please try again.'}
+      try{reply=command(msg.text).type==='ID'?'Your Telegram chat ID: '+msg.chat.id:(await alerts.handle(msg.chat.id,msg.text) ?? await answer(msg.text))}catch(e){console.error('Status request failed:',e.message);reply='Lineup data is unavailable right now. Please try again.'}
       await call('sendMessage',{chat_id:msg.chat.id,text:reply.slice(0,4000)})
     }
   }catch(e){console.error('Polling error:',e.message);await sleep(3000)}

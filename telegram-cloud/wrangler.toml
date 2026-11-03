@@ -1,0 +1,11 @@
+name = "nhl-tracker-telegram-dev"
+main = "src/worker.mjs"
+compatibility_date = "2026-10-15"
+
+[triggers]
+crons = ["* * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "nhl-telegram-dev"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
