@@ -1,4 +1,7 @@
 import {setTimeout as sleep} from 'node:timers/promises'
+import {readFile,writeFile,mkdir} from 'node:fs/promises'
+import {join} from 'node:path'
+import {homedir} from 'node:os'
 const TEAM={ANA:'anaheim-ducks',BOS:'boston-bruins',BUF:'buffalo-sabres',CAR:'carolina-hurricanes',CBJ:'columbus-blue-jackets',CGY:'calgary-flames',CHI:'chicago-blackhawks',COL:'colorado-avalanche',DAL:'dallas-stars',DET:'detroit-red-wings',EDM:'edmonton-oilers',FLA:'florida-panthers',LAK:'los-angeles-kings',MIN:'minnesota-wild',MTL:'montreal-canadiens',NJD:'new-jersey-devils',NSH:'nashville-predators',NYI:'new-york-islanders',NYR:'new-york-rangers',OTT:'ottawa-senators',PHI:'philadelphia-flyers',PIT:'pittsburgh-penguins',SEA:'seattle-kraken',SJS:'san-jose-sharks',STL:'st-louis-blues',TBL:'tampa-bay-lightning',TOR:'toronto-maple-leafs',UTA:'utah-mammoth',VAN:'vancouver-canucks',VGK:'vegas-golden-knights',WPG:'winnipeg-jets',WSH:'washington-capitals'}
 const plain=s=>String(s).replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&amp;/g,'&').replace(/&nbsp;/g,' ').replace(/\s+/g,' ').trim()
 export function dateET(d=new Date()){const p=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d).filter(x=>['year','month','day'].includes(x.type)).map(x=>[x.type,x.value]));return p.year+'-'+p.month+'-'+p.day}
@@ -41,7 +44,7 @@ async function statuses(games,date){
 }
 function gameGroups(games){const map=new Map();for(const g of games){const key=g.time.toISOString();if(!map.has(key))map.set(key,[]);map.get(key).push(g)}return [...map.values()]}
 function matchTime(date,c){const text=timeET(date),m=text.match(/^(\d+):(\d+)\s*(AM|PM)$/i);return m&&Number(m[1])===c.hour&&Number(m[2])===c.minute&&(!c.ampm||m[3].toUpperCase()===c.ampm)}
-const HELP='🏒 NHL Tracker Telegram DEV\n\nStatus — today’s confirmed team totals\nNext — next upcoming puck-drop group\nRemaining — unconfirmed and unavailable teams\n7:00 — start-time status (Eastern)\nCAR — team status\nPing — bot connectivity test\nHelp — this menu\n\nAutomatic alerts are not enabled in local testing.'
+const HELP='🏒 NHL Tracker Telegram DEV\n\nAlerts on — subscribe to automatic confirmations\nAlerts off — pause automatic confirmations\nAlerts test — send a sample alert\nAlerts status — check subscription\n\nStatus — today’s confirmed team totals\nNext — next upcoming puck-drop group\nRemaining — unconfirmed and unavailable teams\n7:00 — start-time status (Eastern)\nCAR — team status\nPing — bot connectivity test\nHelp — this menu\n\nAutomatic confirmations run only while this DEV bot is running.'
 export async function answer(raw,now=new Date()){
   const c=command(raw)
   if(c.type==='HELP')return HELP
@@ -58,6 +61,88 @@ export async function answer(raw,now=new Date()){
   const detail=c.type==='REMAINING'?(remaining.map(t=>(s[t]?.status==='PROJECTED'?'⏳ ':'❔ ')+t+' — '+s[t].status).join('\n')||'✅ All teams confirmed'):games.map(g=>g.teams.map(t=>(s[t]?.status==='CONFIRMED'?'✅':s[t]?.status==='PROJECTED'?'⏳':'❔')+' '+t).join(' vs ')).join('\n')
   return '🏒 '+label+'\n'+confirmed.length+'/'+teams.length+' teams confirmed ('+remaining.length+' remaining'+(unknown.length?', '+unknown.length+' unknown':'')+')\n\n'+detail+'\n\nChecked '+timeET(new Date())+' ET\nUnknown or stale sources are never counted as confirmed.'
 }
+
+const ALERT_FILE=join(homedir(),'.nhl-tracker','telegram-dev-alerts.json')
+async function loadAlertState(){
+ try{const x=JSON.parse(await readFile(ALERT_FILE,'utf8'));return {
+   date:typeof x.date==='string'?x.date:'',
+   subscribers:Array.isArray(x.subscribers)?x.subscribers.map(String):[],
+   observed:x.observed&&typeof x.observed==='object'?x.observed:{},
+   delivered:x.delivered&&typeof x.delivered==='object'?x.delivered:{}
+ }}catch(e){if(e.code!=='ENOENT')console.error('Alert state reset:',e.message);return {date:'',subscribers:[],observed:{},delivered:{}}}
+}
+async function startAlertMonitor(call){
+ const state=await loadAlertState()
+ let queue=Promise.resolve()
+ const save=()=>{queue=queue.catch(()=>{}).then(async()=>{await mkdir(join(homedir(),'.nhl-tracker'),{recursive:true});await writeFile(ALERT_FILE+'.tmp',JSON.stringify(state,null,2));const {rename}=await import('node:fs/promises');await rename(ALERT_FILE+'.tmp',ALERT_FILE)});return queue}
+ const setSubscription=async(id,on)=>{
+   const key=String(id);state.subscribers=state.subscribers.filter(x=>x!==key)
+   if(on)state.subscribers.push(key)
+   await save()
+ }
+ const intervalFor=mins=>mins<=15?60000:mins<=60?300000:1800000
+ const lastCheck=new Map()
+ const check=async()=>{
+   if(!state.subscribers.length)return
+   const now=new Date(),date=dateET(now)
+   if(state.date!==date){state.date=date;state.observed={};state.delivered={};lastCheck.clear();await save()}
+   const hour=Number(new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',hour:'numeric',hourCycle:'h23'}).format(now))
+   if(hour<10)return
+   const games=(await slate(date)).filter(g=>g.time>now)
+   if(!games.length)return
+   const due=[]
+   for(const g of games){
+     const mins=(g.time-now)/60000,interval=intervalFor(mins)
+     for(const t of g.teams){
+       const key=date+':'+t,last=lastCheck.get(key)||0
+       if(state.delivered[key]||state.observed[key]==='CONFIRMED')continue
+       if(now.getTime()-last>=interval&&!due.includes(t)){due.push(t);lastCheck.set(key,now.getTime())}
+     }
+   }
+   if(!due.length)return
+   const toCheck=games.filter(g=>g.teams.some(t=>due.includes(t)))
+   const results=await statuses(toCheck,date)
+   const events=[]
+   for(const team of due){
+     const current=results[team]?.status||'UNKNOWN',key=date+':'+team,previous=state.observed[key]
+     // Only a directly observed PROJECTED -> CONFIRMED transition produces an alert.
+     // An initial CONFIRMED observation is baseline, not a newly detected event.
+     if(previous==='PROJECTED'&&current==='CONFIRMED'&&!state.delivered[key])events.push({team,key})
+     if(current==='PROJECTED'||current==='CONFIRMED')state.observed[key]=current
+   }
+   await save()
+   for(const event of events){
+     const game=games.find(g=>g.teams.includes(event.team))
+     const next=gameGroups(games)[0]||[]
+     const nextTeams=[...new Set(next.flatMap(g=>g.teams))]
+     const confirmed=nextTeams.filter(t=>state.observed[date+':'+t]==='CONFIRMED').length
+     const footer=next.length?'\n\n🏒 Next puck drop '+timeET(next[0].time)+' ET — '+confirmed+'/'+nextTeams.length+' teams confirmed':''
+     const text='✅ '+event.team+' — Lines Confirmed\nDaily Faceoff has published a same-day named-source lineup.'+footer
+     // Save delivery only after Telegram accepts it; failed sends retry next pass.
+     let delivered=true
+     for(const chatId of state.subscribers){
+       try{await call('sendMessage',{chat_id:chatId,text})}catch(e){delivered=false;console.error('Alert delivery to',chatId,'failed:',e.message)}
+     }
+     if(delivered){state.delivered[event.key]=true;await save();console.log('Line confirmation alert:',event.team)}
+   }
+ }
+ let running=true
+ const watchLoop=(async()=>{while(running){try{await check()}catch(e){console.error('Monitor:',e.message)}await sleep(30000)}})()
+ return {
+   async handle(chatId,input){
+     const x=String(input||'').trim().replace(/^\//,'').toLowerCase()
+     if(!['alerts on','alerts off','alerts status','alerts test'].includes(x))return null
+     const id=String(chatId)
+     if(x==='alerts status')return state.subscribers.includes(id)?'🔔 Automatic team confirmation alerts are ON.':'🔕 Automatic alerts are OFF. Send Alerts on to subscribe.'
+     if(x==='alerts off'){await setSubscription(id,false);return '🔕 Automatic lineup alerts turned OFF.'}
+     if(x==='alerts on'){await setSubscription(id,true);return '🔔 Automatic lineup alerts are ON for this Telegram chat. The monitor will check today’s remaining games and notify on observed projected-to-confirmed transitions. Your computer and this terminal must stay running in DEV mode.'}
+     if(x==='alerts test')return '✅ TEST ONLY — CAR Lines Confirmed\n🏒 Next puck drop: 7:00 PM ET — 3/4 teams confirmed\n\nThis is a sample alert, not real lineup information.'
+     return null
+   },
+   stop:async()=>{running=false;await watchLoop}
+ }
+}
+
 async function main(){
   const token=process.env.TELEGRAM_BOT_TOKEN
   if(!token)throw Error('Missing TELEGRAM_BOT_TOKEN; see TELEGRAM_DEV_SETUP.md')
@@ -65,6 +150,8 @@ async function main(){
   const call=async(method,body)=>{const r=await fetch(url+'/'+method,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(40000)});const x=await r.json();if(!x.ok)throw Error(x.description||'Telegram request failed');return x.result}
   const bot=await call('getMe',{})
   console.log('Telegram local DEV bot online: @'+bot.username+'. Press Ctrl+C to stop.')
+  const alerts=await startAlertMonitor(call)
+  console.log('Automatic alert monitor enabled. In Telegram send: Alerts on')
   let offset=0
   while(true)try{
     const updates=await call('getUpdates',{offset,timeout:25,allowed_updates:['message']})
@@ -75,7 +162,7 @@ async function main(){
       const allowed=(process.env.TELEGRAM_ALLOWED_CHAT_IDS||'').split(',').map(s=>s.trim()).filter(Boolean)
       if(allowed.length&&!allowed.includes(String(msg.chat.id))){await call('sendMessage',{chat_id:msg.chat.id,text:'Not authorized. Your chat ID is '+msg.chat.id+'. Add it to TELEGRAM_ALLOWED_CHAT_IDS locally.'});continue}
       let reply
-      try{reply=await answer(msg.text)}catch(e){console.error('Status request failed:',e.message);reply='Lineup data is unavailable right now. Please try again.'}
+      try{reply=await alerts.handle(msg.chat.id,msg.text) ?? await answer(msg.text)}catch(e){console.error('Status request failed:',e.message);reply='Lineup data is unavailable right now. Please try again.'}
       await call('sendMessage',{chat_id:msg.chat.id,text:reply.slice(0,4000)})
     }
   }catch(e){console.error('Polling error:',e.message);await sleep(3000)}
