@@ -124,6 +124,7 @@ async function startAlertMonitor(call){
        try{await call('sendMessage',{chat_id:chatId,text})}catch(e){delivered=false;console.error('Alert delivery to',chatId,'failed:',e.message)}
      }
      if(delivered){state.delivered[event.key]=true;await save();console.log('Line confirmation alert:',event.team)}
+     else{state.observed[event.key]='PROJECTED';lastCheck.delete(event.key);await save()}
    }
  }
  let running=true
