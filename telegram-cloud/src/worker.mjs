@@ -31,7 +31,7 @@ export function parseLineSnapshot(html){
  const rows=(xs,n)=>Array.from({length:Math.ceil(xs.length/n)},(_,i)=>xs.slice(i*n,(i+1)*n).join(', '));
  return {'Forward lines':rows(f,3),'Defensive pairs':rows(d,2),'PP1':[p1.join(', ')],'PP2':[p2.join(', ')]};
 }
-function lineupChanges(oldValue,newValue){
+export function lineupChanges(oldValue,newValue){
  const before=JSON.parse(oldValue),out=[];
  for(const label of Object.keys(newValue)){
   const prev=before[label]||[],next=newValue[label]||[];
