@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('nhlTracker', {
   roster: (team: string) => ipcRenderer.invoke('nhl:roster', team),
   playerSearch: (query: string) => ipcRenderer.invoke('nhl:playerSearch', query),
   devBetsRequest: (payload: {method:'GET'|'PUT'|'DELETE';bets?:unknown[];revision?:number;confirm?:string}) => ipcRenderer.invoke('dev-bets:request', payload),
+  telegramOpenLink: (url:string) => ipcRenderer.invoke('telegram:open-link',url),
   telegramAccountRequest: (payload: {action:string;preferences?:unknown;date?:string;teams?:string[]}) => ipcRenderer.invoke('telegram-account:request',payload),
   liveAccountRequest: (payload: {action:string;username?:string;email?:string;login?:string;password?:string}) => ipcRenderer.invoke('live-account:request', payload),
   livePlayersRequest: (payload: {method:'GET'|'POST';id?:number;name?:string;team?:string}) => ipcRenderer.invoke('live-players:request', payload),
