@@ -23,3 +23,17 @@ test('No scheduled monitoring before 10 AM Eastern',async()=>{
  assert.equal(result.checked,0);
  assert.match(result.note,/Before 10 AM/);
 });
+
+test('Actual lineup difference detector ignores unchanged lineups',async()=>{
+ const {lineupChanges}=await import('../src/worker.mjs');
+ const old={'Forward lines':['A, B, C'],'Defensive pairs':['X, Y'],PP1:['A, X'],PP2:['B, Y']};
+ assert.deepEqual(lineupChanges(JSON.stringify(old),structuredClone(old)),[]);
+ const altered={...old,PP1:['C, X']};
+ const changes=lineupChanges(JSON.stringify(old),altered);
+ assert.equal(changes.length,1);
+ assert.match(changes[0],/PP1:[\s\S]*Before: A, X[\s\S]*Now: C, X/);
+});
+test('Incomplete or missing lineup pages never create a speculative snapshot',async()=>{
+ const {parseLineSnapshot}=await import('../src/worker.mjs');
+ assert.equal(parseLineSnapshot('<html>unavailable</html>'),null);
+});
