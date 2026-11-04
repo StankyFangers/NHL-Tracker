@@ -202,6 +202,37 @@ app.whenReady().then(() => {
   }))
   // Phase 2H: LIVE wager transport only. This deliberately does NOT mount cloud
   // wagers into the renderer, migrate local history, or run background sync.
+  // Every notification request uses the signed-in user's existing token.
+  // No Telegram bot token or Cloudflare admin secret is stored in the client.
+  ipcMain.handle('telegram-account:request', async (_e, request:{action:string;preferences?:unknown;date?:string;teams?:string[]}) => {
+    const routes:Record<string,{path:string;method:string}>={
+      status:{path:'/account/status',method:'GET'},
+      start:{path:'/account/link/start',method:'POST'},
+      preferences:{path:'/account/preferences',method:'PUT'},
+      test:{path:'/account/test',method:'POST'},
+      disconnect:{path:'/account/disconnect',method:'POST'},
+      pending:{path:'/account/pending',method:'PUT'}
+    }
+    const action=String(request?.action||''),route=routes[action];
+    if(!route)return {error:'Unsupported notification action'};
+    const token=testEnvironment?devAccountToken:liveAccountToken;
+    if(!token)return {error:'Sign in to your NHL Tracker account first'};
+    if(action==='pending'&&(!Array.isArray(request.teams)||request.teams.length>32||
+      request.teams.some(t=>typeof t!=='string'||!/^[A-Z]{3}$/.test(t))||
+      !/^\d{4}-\d{2}-\d{2}$/.test(request.date||'')))return {error:'Invalid pending team snapshot'};
+    const body=action==='preferences'?request.preferences:action==='pending'?{date:request.date,teams:request.teams}:undefined;
+    try{
+      const response=await net.fetch('https://nhl-tracker-telegram-dev.nhl-tracker.workers.dev'+route.path,{
+        method:route.method,cache:'no-store',signal:AbortSignal.timeout(16000),
+        headers:{Authorization:'Bearer '+token,'X-NHL-Environment':testEnvironment?'TEST':'LIVE',
+          Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},
+        ...(body?{body:JSON.stringify(body)}:{})
+      });
+      const data:any=await response.json();
+      if(token!==(testEnvironment?devAccountToken:liveAccountToken))return {error:'Account changed. Please retry'};
+      return response.ok?data:{error:String(data?.error||'Telegram service error '+response.status)};
+    }catch(e:any){return {error:'Telegram cloud unavailable: '+String(e?.message||e)}}
+  });
   // Authentication token never leaves Electron's main process.
   // Separate LIVE player registry transport; LIVE auth token stays in main process.
   ipcMain.handle('live-players:request', async (_e, request: {method:'GET'|'POST';id?:number;name?:string;team?:string}) => {
