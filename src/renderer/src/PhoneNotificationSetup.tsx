@@ -92,7 +92,7 @@ export default function PhoneNotificationSetup({ section }: { section: 'Instruct
         <legend style={{ padding: '0 6px', fontWeight: 700 }}>Notify me for</legend>
         <label style={{ display: 'block', padding: '7px 0', cursor: 'pointer' }}><input type="radio" checked={settings.scope === 'ALL'} onChange={() => update({ scope: 'ALL' })}/> All NHL teams playing that day</label>
         <label style={{ display: 'block', padding: '7px 0', cursor: 'pointer' }}><input type="radio" checked={settings.scope === 'WAGERED'} onChange={() => update({ scope: 'WAGERED' })}/> Only teams with pending wagers</label>
-        <label style={{ display: 'block', padding: '12px 0 0', cursor: 'pointer' }}><input type="checkbox" disabled checked={false}/> Notify me when confirmed lines change afterward (not available until lineup-diff monitoring is verified)</label>
+        <label style={{ display: 'block', padding: '12px 0 0', cursor: 'pointer' }}><input type="checkbox" checked={settings.lineupChanges} onChange={e=>update({lineupChanges:e.target.checked})}/> Notify me when confirmed lines change afterward</label>
       </fieldset>
       <fieldset style={{ border: '1px solid #345363', borderRadius: 9, padding: 14 }} disabled={!settings.enabled}>
         <legend style={{ padding: '0 6px', fontWeight: 700 }}>Next puck-drop confirmation progress</legend>
