@@ -51,20 +51,62 @@ export async function tick(env,now=new Date()){
  }
  await deliver(env);return {date,checked:due.length,newConfirmations:changed.length,upcomingGroups:list.length};
 }
+
+function checkedTimeET(d){return new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',hour:'numeric',minute:'2-digit',hour12:true}).format(d).replace(/\u202f/g,' ')}
+async function refreshOnDemand(env,date,teams){
+ const checkedAt=new Date(),stamp=checkedAt.getTime(),results=new Map();
+ const before=new Map((await rows(env,date)).map(r=>[r.team,r.status]));
+ for(let i=0;i<teams.length;i+=6){
+  const batch=await Promise.all(teams.slice(i,i+6).map(async team=>{
+   try{return {team,...parseLineStatus(await getText('https://www.dailyfaceoff.com/teams/'+SLUGS[team]+'/line-combinations'),date),success:true}}
+   catch(e){console.error('On-demand source failed',team,String(e));return {team,status:'UNKNOWN',source:'Unavailable',success:false}}
+  }));
+  for(const item of batch)results.set(item.team,item);
+ }
+ for(const r of results.values())if(r.success){
+  await env.DB.prepare('INSERT INTO line_status(game_date,team,status,last_checked_at,source) VALUES(?,?,?,?,?) ON CONFLICT(game_date,team) DO UPDATE SET status=excluded.status,last_checked_at=excluded.last_checked_at,source=excluded.source')
+   .bind(date,r.team,r.status,stamp,r.source).run();
+  if(r.status==='CONFIRMED'&&before.get(r.team)==='PROJECTED')
+   await queue(env,keyTeam(date,r.team),'TEAM','✅ '+r.team+' — Lines Confirmed\nDaily Faceoff has a same-day named-source lineup.');
+ }
+ return {checkedAt,results};
+}
+
 function parseCmd(raw){const x=String(raw||'').trim().replace(/^\//,'').replace(/@\w+$/,'').toUpperCase(),m=x.match(/^(\d{1,2}):([0-5]\d)(?:\s*(AM|PM))?$/);if(['STATUS','SLATE','NEXT','REMAINING','HELP','START','PING','ID'].includes(x))return{type:x};if(SLUGS[x])return{type:'TEAM',team:x};if(m&&+m[1]>0&&+m[1]<=12)return{type:'TIME',h:+m[1],m:+m[2],ampm:m[3]||''};return{type:'HELP'}}
 async function answer(env,message,chat){
- const cmd=parseCmd(message);if(cmd.type==='PING')return '🏒 NHL Tracker cloud bot is online.';
+ const cmd=parseCmd(message);
+ if(cmd.type==='PING')return '🏒 NHL Tracker cloud bot is online.';
  if(cmd.type==='ID')return 'Your Telegram chat ID is '+chat;
- if(['START','HELP'].includes(cmd.type))return '🏒 NHL Tracker Cloud\nStatus — daily confirmations\nNext — next puck drop\nRemaining — not yet confirmed\n7:00 — start-time status ET\nCAR — team lookup\nPing — bot test';
- const date=dateET(new Date()),all=await getGames(date),existing=await rows(env,date),now=Date.now(),g=groups(all,existing,now),states=new Map(existing.map(x=>[x.team,x.status]));
- let games=all;if(cmd.type==='NEXT')games=all.filter(x=>x.start===g[0]?.start);
- if(cmd.type==='TEAM')games=all.filter(x=>[x.away,x.home].includes(cmd.team));
- if(cmd.type==='TIME'){const starts=[...new Set(all.map(x=>x.start))],found=starts.find(x=>{const m=timeET(new Date(x)).match(/^(\d+):(\d+)\s*(AM|PM)$/i);return m&&+m[1]===cmd.h&&+m[2]===cmd.m&&(!cmd.ampm||m[3].toUpperCase()===cmd.ampm)});games=all.filter(x=>x.start===found)}
- if(!games.length)return '🏒 No matching games today.';
- const teams=[...new Set(games.flatMap(x=>[x.away,x.home]))],confirmed=teams.filter(t=>states.get(t)==='CONFIRMED');
- const selected=cmd.type==='REMAINING'?teams.filter(x=>!confirmed.includes(x)):teams;
- return '🏒 '+(cmd.type==='NEXT'?'Next puck drop':cmd.type==='TEAM'?cmd.team:cmd.type==='TIME'?'Puck-drop group':'Today')+': '+confirmed.length+'/'+teams.length+' confirmed\n'+(selected.map(t=>(states.get(t)==='CONFIRMED'?'✅':states.get(t)==='PROJECTED'?'⏳':'❔')+' '+t+' — '+(states.get(t)||'UNKNOWN')).join('\n')||'All confirmed')+'\n\nLast monitored snapshot (not a live recheck).';
+ if(['START','HELP'].includes(cmd.type))return '🏒 NHL Tracker Cloud\nStatus — live daily confirmations\nNext — live next puck drop\nRemaining — live unconfirmed teams\n7:00 — live start-time status ET\nCAR — live team lookup\nPing — bot test';
+ const now=new Date(),date=dateET(now),all=await getGames(date);
+ let games=all;
+ if(cmd.type==='NEXT'){
+  const start=all.find(g=>g.start>now.getTime())?.start;
+  games=all.filter(g=>g.start===start);
+ }
+ if(cmd.type==='TEAM')games=all.filter(g=>[g.away,g.home].includes(cmd.team));
+ if(cmd.type==='TIME'){
+  const found=[...new Set(all.map(g=>g.start))].find(x=>{
+   const m=timeET(new Date(x)).match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+   return m&&+m[1]===cmd.h&&+m[2]===cmd.m&&(!cmd.ampm||m[3].toUpperCase()===cmd.ampm)
+  });
+  games=all.filter(g=>g.start===found);
+ }
+ if(!games.length)return '🏒 No matching games today.\nLast Checked: '+checkedTimeET(new Date())+' ET (NHL schedule)';
+ const teams=[...new Set(games.flatMap(g=>[g.away,g.home]))];
+ const {results,checkedAt}=await refreshOnDemand(env,date,teams);
+ const confirmed=teams.filter(t=>results.get(t)?.status==='CONFIRMED');
+ const unknown=teams.filter(t=>results.get(t)?.status==='UNKNOWN');
+ const selected=cmd.type==='REMAINING'?teams.filter(t=>results.get(t)?.status!=='CONFIRMED'):teams;
+ const detail=selected.map(t=>{
+  const r=results.get(t),status=r?.status||'UNKNOWN';
+  return (status==='CONFIRMED'?'✅':status==='PROJECTED'?'⏳':'❔')+' '+t+' — '+(r?.success?status:'UNAVAILABLE');
+ }).join('\n')||'✅ All confirmed';
+ const count=confirmed.length+'/'+teams.length+' confirmed'+(unknown.length?' ('+unknown.length+' unknown/unavailable; count incomplete)':'');
+ const label=cmd.type==='NEXT'?'Next puck drop':cmd.type==='TEAM'?cmd.team:cmd.type==='TIME'?'Puck-drop group':cmd.type==='REMAINING'?'Remaining':'Today';
+ return '🏒 '+label+': '+count+'\n'+detail+'\n\nLast Checked: '+checkedTimeET(checkedAt)+' ET (Daily Faceoff)'+(unknown.length?'\n❔ Unknown or unavailable sources were not counted as confirmed.':'');
 }
+
 export default {
  async scheduled(_event,env,ctx){ctx.waitUntil(tick(env).catch(e=>console.error('Monitor failed',String(e))))},
  async fetch(req,env,ctx){const u=new URL(req.url);
