@@ -11,7 +11,7 @@ export function parseLineStatus(html,gameDate){
  const projection=!source||/^(?:DFO\s*Projections?|Last\s*Game)(?:\b|\s*\()/i.test(source)||/^Daily Faceoff$/i.test(source);
  return {status:valid&&!projection?'CONFIRMED':raw&&projection?'PROJECTED':'UNKNOWN',source:source||'Unattributed'};
 }
-export function pollingInterval(ms){return ms<=0?Infinity:ms<=900000?60000:ms<=3600000?300000:1800000}
+export function pollingInterval(ms){return ms<=0||ms>9*3600000?Infinity:ms<=15*60000?60000:ms<=3600000?300000:ms<=4*3600000?900000:ms<=7*3600000?1800000:3600000}
 const keyTeam=(date,team)=>date+':team:'+team;
 const keyGroup=(date,start)=>date+':group:'+start;
 async function getText(url){const r=await fetch(url,{headers:{'User-Agent':'NHL-Tracker-Telegram/1.0'},signal:AbortSignal.timeout(12000)});if(!r.ok)throw Error('HTTP '+r.status);return r.text()}
@@ -30,7 +30,7 @@ export async function tick(env,now=new Date()){
  const games=(await getGames(date)).filter(g=>g.start>at);if(!games.length){await deliver(env);return{date,checked:0,note:'No remaining games'};}
  const existing=await rows(env,date),known=new Map(existing.map(x=>[x.team,x])),starts=new Map();
  for(const g of games)for(const t of [g.away,g.home])starts.set(t,Math.min(starts.get(t)||Infinity,g.start));
- const due=[];for(const [team,start] of starts){const prev=known.get(team);if(prev?.status==='CONFIRMED')continue;if(!prev||at-Number(prev.last_checked_at)>=pollingInterval(start-at))due.push(team)}
+ const due=[];for(const [team,start] of starts){const prev=known.get(team);if(prev?.status==='CONFIRMED')continue;const interval=pollingInterval(start-at);if(Number.isFinite(interval)&&(!prev||at-Number(prev.last_checked_at)>=interval))due.push(team)}
  const changed=[];
  for(let i=0;i<due.length;i+=5){
   const results=await Promise.all(due.slice(i,i+5).map(async team=>{try{return {team,...parseLineStatus(await getText('https://www.dailyfaceoff.com/teams/'+SLUGS[team]+'/line-combinations'),date)}}catch(e){console.error('DFO unavailable',team,String(e));return{team,status:'UNKNOWN',source:'Unavailable'}}}));
