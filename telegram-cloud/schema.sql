@@ -28,3 +28,11 @@ CREATE TABLE IF NOT EXISTS telegram_pending_teams (
  PRIMARY KEY(account_key, game_date, team)
 );
 CREATE INDEX IF NOT EXISTS telegram_pending_by_day ON telegram_pending_teams(game_date,team,account_key);
+
+CREATE TABLE IF NOT EXISTS confirmed_lineups (
+ game_date TEXT NOT NULL,
+ team TEXT NOT NULL,
+ snapshot TEXT NOT NULL,
+ checked_at INTEGER NOT NULL,
+ PRIMARY KEY(game_date,team)
+);
