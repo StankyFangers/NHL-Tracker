@@ -109,7 +109,7 @@ export default function PhoneNotificationSetup({ section }: { section: 'Instruct
       </fieldset>
       <div style={{ ...panel, padding: 14 }}>
         <strong>Telegram account linking</strong>
-        <p style={{ ...faint, margin: '7px 0 10px' }}>The connection link and test message will become available after the Telegram bot and secure backend are configured. No secret bot credentials belong in the desktop app.</p>
+        <p style={{ ...faint, margin: '7px 0 10px' }}>Connect your signed-in NHL Tracker account to Telegram using a private, one-time code. After linking, save your notification preferences and send a test message. Bot credentials stay securely in the cloud.</p>
         <button type="button" onClick={connect} disabled={loading||connected} style={button}>Connect Telegram</button>
         <button type="button" onClick={()=>void run(async()=>{const ok=await refresh();setNotice(ok?'Telegram is connected.':'Not linked yet. Open Telegram and press Start.')})} disabled={loading} style={{...button,marginLeft:8}}>Refresh Connection</button>
         <button type="button" onClick={test} disabled={loading||!connected} style={{...button,marginLeft:8}}>Send Test Notification</button>
