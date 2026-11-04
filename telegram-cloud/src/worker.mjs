@@ -52,7 +52,7 @@ async function linkChat(env,chat,code){
  const used=await env.DB.prepare('SELECT account_key FROM telegram_accounts WHERE chat_id=?').bind(chat).first();
  if(used&&used.account_key!==row.account_key)return 'This Telegram chat is already linked to another NHL Tracker account. Disconnect that account first.';
  await env.DB.batch([
-  env.DB.prepare('INSERT INTO telegram_accounts(account_key,chat_id,enabled,scope,lineup_changes,progress_mode,created_at,updated_at) VALUES(?,?,1,\'ALL\',0,\'OFF\',?,?) ON CONFLICT(account_key) DO UPDATE SET chat_id=excluded.chat_id,updated_at=excluded.updated_at').bind(row.account_key,chat,now,now),
+  env.DB.prepare('INSERT INTO telegram_accounts(account_key,chat_id,enabled,scope,lineup_changes,progress_mode,created_at,updated_at) VALUES(?,?,0,\'ALL\',0,\'OFF\',?,?) ON CONFLICT(account_key) DO UPDATE SET chat_id=excluded.chat_id,updated_at=excluded.updated_at').bind(row.account_key,chat,now,now),
   env.DB.prepare('DELETE FROM telegram_link_codes WHERE account_key=?').bind(row.account_key)
  ]);
  return '✅ Telegram linked to NHL Tracker. Set your notification preferences in the desktop app. Send Ping or Status here to test commands.';
