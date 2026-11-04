@@ -1,7 +1,7 @@
 import {useKalshiJob,startKalshiJob,cancelKalshiJob,dismissKalshiPreview,setKalshiJobStatus} from './kalshiSyncJobs'
 import {KalshiHistoricalImporter} from './KalshiHistoricalImporter'
 import {addKalshiFlags,clearKalshiFlags} from './KalshiSyncReview'
-import {prepareKalshiImports,reconcileAlreadyLoggedKalshi,verifyKalshiIdentity,classifyExistingKalshiBet,type KalshiFill,type Candidate} from './kalshiImport'
+import {prepareKalshiImports,reconcileAlreadyLoggedKalshi,verifyKalshiIdentity,type KalshiFill,type Candidate} from './kalshiImport'
 import {useEffect,useState,type CSSProperties} from 'react'
 type Row={id:string;fillId:string;orderId:string;date:string;ticker:string;title:string;side:string;action:string;count:string;price:string;fee:string;isNhl:boolean;review:string;detectedSport:string;legs:{ticker:string;side:string;title:string;resolved:boolean;source:string;nhlTicker:boolean}[]}
 type Result={totalFills:number;nhl:Row[];unknown:Row[];unclassified:number;pages:number;complete:boolean;marketLookups:number;legLookups:number;unresolved:number;distinctNhlOrders:number;combos:number;categoryCounts:{unresolved:number;mixed:number;otherSports:number};comboTickerFallbacks:number;mixedLegs:number;unresolvedCombos:number;otherCombos:number;notice:string}
@@ -80,20 +80,11 @@ export function KalshiNHLSync({date,selectedSlate,bets,setBets,unitSize,slateDfo
    const verified=await verifyKalshiIdentity(candidates,roster)
    ctx.assertActive()
    ctx.assertActive()
-   // Repair categories from earlier versions without creating new wagers.
-   // Restrict this to today's identifiable Kalshi imports; leave manually entered
-   // OTHER wagers and wagers from historical dates untouched.
-   let repaired=0
-   setBets((old:any[])=>{
-    const next=old.map(b=>{
-     if(b.date!==date||b.book!=='Kalshi'||!String(b.id||'').startsWith('KALSHI-')||b.category!=='OTHER')return b
-     const category=classifyExistingKalshiBet(b,slateDfo)
-     if(category==='OTHER')return b
-     repaired++
-     return {...b,category}
-    })
-    return repaired?next:old
-   })
+   // IMPORTANT: Existing wagers are immutable during a daily Kalshi import.
+   // Live DFO lineups can change or become unavailable after puck drop, so
+   // reclassifying an already-saved OTHER bet on the next sync can turn it into
+   // COMBOS. Only user-initiated editing may change a saved category.
+   // Deduplicate existing Kalshi order IDs; import only genuinely new wagers.
    const ready=verified.accepted
    const skippedCount=skipped.length+verified.rejected.length
    // Expose the actual reason for each skipped order; do not mislabel all failures
