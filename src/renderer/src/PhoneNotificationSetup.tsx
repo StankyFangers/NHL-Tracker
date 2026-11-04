@@ -116,7 +116,7 @@ export default function PhoneNotificationSetup({ section }: { section: 'Instruct
         <button type="button" onClick={disconnect} disabled={loading||!connected} style={{...button,marginLeft:8}}>Disconnect</button>
         {link&&<div style={{marginTop:14,background:'#173342',border:'1px solid #3b6a79',padding:12,borderRadius:8}}>
           <strong>Link code: {link.code}</strong><p style={faint}>Expires in {link.expiresInMinutes} minutes. This code is private; do not share it.</p>
-          <a href={link.url} target="_blank" rel="noopener noreferrer" style={{color:'#81e0f5'}}>Open NHL Tracker Bot in Telegram</a>
+          <button type="button" style={button} onClick={()=>void (window.nhlTracker as any).telegramOpenLink(link.url)}>Open NHL Tracker Bot in Telegram</button>
           <p style={{...faint,marginBottom:0}}>If the link does not open automatically, send <code>/start {link.code}</code> to the NHL Tracker bot. Then click Refresh Connection.</p>
         </div>}
         {notice&&<p role="status" style={{...faint,marginTop:12}}>{notice}</p>}
