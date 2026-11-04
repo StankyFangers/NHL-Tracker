@@ -1,23 +1,27 @@
-name: NHL Tracker 1.8.0 Boys Tester Installer
+name: NHL Tracker v1.8.1 Windows Release
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - feature/telegram-notifications
     paths:
       - .github/workflows/nhl-tester-installer.yml
+  workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: nhl-tracker-v1.8.1-release
+  cancel-in-progress: false
 
 jobs:
-  build-windows:
-    name: Build Windows NSIS installer
+  release-windows:
+    name: Verify, build and publish Windows installer
     runs-on: windows-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
-      - name: Checkout tester branch
+      - name: Checkout release branch
         uses: actions/checkout@v4
 
       - name: Set up Node.js
@@ -26,32 +30,83 @@ jobs:
           node-version: '20'
           cache: npm
 
-      - name: Install dependencies
+      - name: Confirm release version
+        shell: bash
+        run: |
+          node -e "const p=require('./package.json');if(p.version!=='1.8.1')process.exit(1)"
+          node -e "const p=require('./package-lock.json');if(p.version!=='1.8.1'||p.packages[''].version!=='1.8.1')process.exit(1)"
+
+      - name: Install exact lockfile dependencies
         run: npm ci
 
-      - name: Kalshi repeat-sync regression checks
+      - name: Prevent repeat Kalshi sync from changing existing categories
         run: node --test tests/kalshiCategoryPreservation.test.mjs
 
-      - name: Build Electron production files
+      - name: Run cloud monitoring unit tests
+        working-directory: telegram-cloud
+        run: npm test
+
+      - name: Build production Electron app
         run: npm run build
 
-      - name: Package unsigned Windows installer
+      - name: Create Windows NSIS installer
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npx electron-builder --win nsis --x64 --publish never
 
-      - name: Verify installer exists
+      - name: Verify release installer
         shell: pwsh
         run: |
-          $exe = Get-ChildItem -Path release -Filter '*.exe' -File -ErrorAction Stop
-          if (-not $exe -or $exe.Count -lt 1) { throw "No Windows installer was created." }
-          $exe | ForEach-Object { Write-Host "Installer: $($_.Name), bytes: $($_.Length)" }
+          $exe = @(Get-ChildItem -Path release -Filter '*.exe' -File -ErrorAction Stop)
+          if ($exe.Count -ne 1) { throw "Expected one Windows installer, found $($exe.Count)" }
+          if ($exe[0].Name -ne 'NHL Tracker Setup 1.8.1.exe') { throw "Unexpected installer filename: $($exe[0].Name)" }
+          if ($exe[0].Length -lt 1000000) { throw "Installer is unexpectedly small" }
+          Write-Host "Verified: $($exe[0].Name), $($exe[0].Length) bytes"
 
-      - name: Upload boys' installer
+      - name: Upload backup Actions artifact
         uses: actions/upload-artifact@v4
         with:
-          name: NHL-Tracker-v1.8.0-BOYS-TESTER-Windows
+          name: NHL-Tracker-v1.8.1-Windows-Installer
           path: release/*.exe
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
+
+      - name: Publish GitHub Release (Check for Updates)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > release-notes.md <<'EOF'
+          ## NHL Tracker v1.8.1 — Windows tester release
+
+          What's included:
+          - Cloud Telegram notifications: account linking, test messages, preferences, lineup-confirmation and lineup-change monitoring.
+          - Cloud monitoring starts no earlier than 10:00 AM Eastern and increases frequency as puck drop approaches.
+          - Sportsbook Management: balance corrections, transaction history, and performance reporting.
+          - Kalshi daily sync: repeat scans preserve categories of already imported wagers.
+          - Other fixes and improvements committed to this NHL Tracker tester branch.
+
+          **Tester notes**
+          - Automatic lineup-change alerts and repeat-sync behavior require continued live-game testing.
+          - Sportsbook balance adjustments are currently stored locally on the device; they are not synchronized across devices.
+          - Only changes committed to GitHub are included; unpublished local edits are not part of the installer.
+          - Windows may show an unsigned-app SmartScreen warning. Only install from this repository's official Releases page.
+          EOF
+          if gh release view "v1.8.1" >/dev/null 2>&1; then
+            gh release upload "v1.8.1" release/*.exe --clobber
+            gh release edit "v1.8.1" --title "NHL Tracker v1.8.1 — Boys Tester Release" --notes-file release-notes.md --latest
+          else
+            gh release create "v1.8.1" release/*.exe \
+              --target "$GITHUB_SHA" \
+              --title "NHL Tracker v1.8.1 — Boys Tester Release" \
+              --notes-file release-notes.md \
+              --latest
+          fi
+
+      - name: Confirm GitHub Release is visible
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "v1.8.1" --json tagName,isDraft,isPrerelease,assets,url
