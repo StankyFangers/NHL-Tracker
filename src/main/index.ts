@@ -204,6 +204,12 @@ app.whenReady().then(() => {
   // wagers into the renderer, migrate local history, or run background sync.
   // Every notification request uses the signed-in user's existing token.
   // No Telegram bot token or Cloudflare admin secret is stored in the client.
+  ipcMain.handle('telegram:open-link',async (_e,url:string)=>{
+    const target=String(url||'');
+    if(!/^https:\/\/t\.me\/[A-Za-z0-9_]{5,40}\?start=[a-f0-9]{32}$/.test(target))throw Error('Blocked Telegram link');
+    await shell.openExternal(target);
+    return true;
+  });
   ipcMain.handle('telegram-account:request', async (_e, request:{action:string;preferences?:unknown;date?:string;teams?:string[]}) => {
     const routes:Record<string,{path:string;method:string}>={
       status:{path:'/account/status',method:'GET'},
