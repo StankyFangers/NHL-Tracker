@@ -11,6 +11,34 @@ export function parseLineStatus(html,gameDate){
  const projection=!source||/^(?:DFO\s*Projections?|Last\s*Game)(?:\b|\s*\()/i.test(source)||/^Daily Faceoff$/i.test(source);
  return {status:valid&&!projection?'CONFIRMED':raw&&projection?'PROJECTED':'UNKNOWN',source:source||'Unattributed'};
 }
+
+function sectionHtml(html,start,end){
+ const a=html.search(new RegExp(start,'i'));
+ if(a<0)return '';
+ const rest=html.slice(a),b=rest.search(new RegExp(end,'i'));
+ return b>0?rest.slice(0,b):rest;
+}
+function namesIn(html){
+ return [...html.matchAll(/<a[^>]+href=["'][^"']*\/players\/[^"']+["'][^>]*>([\s\S]*?)<\/a>/gi)]
+  .map(m=>clean(m[1])).filter(Boolean);
+}
+export function parseLineSnapshot(html){
+ const f=namesIn(sectionHtml(html,'>Forwards<|Forwards','Defensive Pairings')).slice(0,12);
+ const d=namesIn(sectionHtml(html,'Defensive Pairings','1st Powerplay Unit|1st Power Play Unit')).slice(0,6);
+ const p1=namesIn(sectionHtml(html,'1st Powerplay Unit|1st Power Play Unit','2nd Powerplay Unit|2nd Power Play Unit')).slice(0,5);
+ const p2=namesIn(sectionHtml(html,'2nd Powerplay Unit|2nd Power Play Unit','1st Penalty Kill Unit')).slice(0,5);
+ if(f.length!==12||d.length!==6||p1.length!==5||p2.length!==5)return null;
+ const rows=(xs,n)=>Array.from({length:Math.ceil(xs.length/n)},(_,i)=>xs.slice(i*n,(i+1)*n).join(', '));
+ return {'Forward lines':rows(f,3),'Defensive pairs':rows(d,2),'PP1':[p1.join(', ')],'PP2':[p2.join(', ')]};
+}
+function lineupChanges(oldValue,newValue){
+ const before=JSON.parse(oldValue),out=[];
+ for(const label of Object.keys(newValue)){
+  const prev=before[label]||[],next=newValue[label]||[];
+  for(let i=0;i<next.length;i++)if(prev[i]!==next[i])out.push(label+(next.length>1?' '+(i+1):'')+':\nBefore: '+(prev[i]||'Unknown')+'\nNow: '+next[i]);
+ }
+ return out;
+}
 export function pollingInterval(ms){return ms<=0||ms>9*3600000?Infinity:ms<=15*60000?60000:ms<=3600000?300000:ms<=4*3600000?900000:ms<=7*3600000?1800000:3600000}
 const keyTeam=(date,team)=>date+':team:'+team;
 const keyGroup=(date,start)=>date+':group:'+start;
@@ -33,10 +61,11 @@ async function accountIdentity(req){
  if(!/^[A-Za-z0-9_.-]{2,80}$/.test(name))return null;
  return mode+':'+name.toLowerCase();
 }
-async function linkedRecipients(env,date,teams){
- const rows=(await env.DB.prepare("SELECT account_key,chat_id,scope,progress_mode FROM telegram_accounts WHERE enabled=1 AND chat_id IS NOT NULL").all()).results||[];
+async function linkedRecipients(env,date,teams,changesOnly=false){
+ const rows=(await env.DB.prepare("SELECT account_key,chat_id,scope,progress_mode,lineup_changes FROM telegram_accounts WHERE enabled=1 AND chat_id IS NOT NULL").all()).results||[];
  const selected=[];
  for(const row of rows){
+  if(changesOnly&&row.lineup_changes!==1)continue;
   if(row.scope!=='WAGERED'){selected.push(row);continue}
   if(!teams.length)continue;
   const pending=(await env.DB.prepare("SELECT team FROM telegram_pending_teams WHERE account_key=? AND game_date=?").bind(row.account_key,date).all()).results||[];
@@ -110,9 +139,9 @@ async function accountAPI(req,env,path){
 export function progress(g){return g.confirmed.length+'/'+g.teams.length+' teams confirmed ('+g.remaining.length+' remaining)'}
 function groups(games,items,now){const states=new Map(items.map(x=>[x.team,x.status]));return [...new Set(games.map(g=>g.start))].filter(t=>t>now).map(start=>{const teams=[...new Set(games.filter(g=>g.start===start).flatMap(g=>[g.away,g.home]))],confirmed=teams.filter(t=>states.get(t)==='CONFIRMED');return {start,teams,confirmed,remaining:teams.filter(t=>!confirmed.includes(t))}})}
 async function telegram(env,chat,text){const r=await fetch('https://api.telegram.org/bot'+env.TELEGRAM_BOT_TOKEN+'/sendMessage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:chat,text}),signal:AbortSignal.timeout(10000)});const result=await r.json();if(!result.ok)throw Error('Telegram: '+(result.description||r.status))}
-async function queue(env,key,kind,message,teams=[],footer='',progressKey=''){
+async function queue(env,key,kind,message,teams=[],footer='',progressKey='',changesOnly=false){
  const date=key.slice(0,10);
- const recipients=await linkedRecipients(env,date,teams);
+ const recipients=await linkedRecipients(env,date,teams,changesOnly);
  for(const row of recipients){
   const final=message+(row.progress_mode==='FOOTER'?footer:'');
   await env.DB.prepare('INSERT OR IGNORE INTO delivery(event_key,chat_id,kind,message,created_at) VALUES(?,?,?,?,?)').bind(key,row.chat_id,kind,final,Date.now()).run();
@@ -127,13 +156,23 @@ export async function tick(env,now=new Date()){
  const games=(await getGames(date)).filter(g=>g.start>at);if(!games.length){await deliver(env);return{date,checked:0,note:'No remaining games'};}
  const existing=await rows(env,date),known=new Map(existing.map(x=>[x.team,x])),starts=new Map();
  for(const g of games)for(const t of [g.away,g.home])starts.set(t,Math.min(starts.get(t)||Infinity,g.start));
- const due=[];for(const [team,start] of starts){const prev=known.get(team);if(prev?.status==='CONFIRMED')continue;const interval=pollingInterval(start-at);if(Number.isFinite(interval)&&(!prev||at-Number(prev.last_checked_at)>=interval))due.push(team)}
+ const watchingChanges=!!(await env.DB.prepare('SELECT 1 AS enabled FROM telegram_accounts WHERE enabled=1 AND lineup_changes=1 LIMIT 1').first());
+ const due=[];for(const [team,start] of starts){const prev=known.get(team);if(prev?.status==='CONFIRMED'&&!watchingChanges)continue;const interval=pollingInterval(start-at);if(Number.isFinite(interval)&&(!prev||at-Number(prev.last_checked_at)>=interval))due.push(team)}
  const changed=[];
  for(let i=0;i<due.length;i+=5){
-  const results=await Promise.all(due.slice(i,i+5).map(async team=>{try{return {team,...parseLineStatus(await getText('https://www.dailyfaceoff.com/teams/'+SLUGS[team]+'/line-combinations'),date)}}catch(e){console.error('DFO unavailable',team,String(e));return{team,status:'UNKNOWN',source:'Unavailable'}}}));
+  const results=await Promise.all(due.slice(i,i+5).map(async team=>{try{const html=await getText('https://www.dailyfaceoff.com/teams/'+SLUGS[team]+'/line-combinations');return {team,...parseLineStatus(html,date),lineup:parseLineSnapshot(html)}}catch(e){console.error('DFO unavailable',team,String(e));return{team,status:'UNKNOWN',source:'Unavailable'}}}));
   for(const fresh of results){
    const old=known.get(fresh.team),next=fresh.status==='UNKNOWN'&&old?old.status:fresh.status;
    if(old?.status==='PROJECTED'&&fresh.status==='CONFIRMED')changed.push(fresh.team);
+   if(fresh.status==='CONFIRMED'&&fresh.lineup){
+    const snapshot=JSON.stringify(fresh.lineup),prevLineup=await env.DB.prepare('SELECT snapshot FROM confirmed_lineups WHERE game_date=? AND team=?').bind(date,fresh.team).first();
+    if(prevLineup&&prevLineup.snapshot!==snapshot&&old?.status==='CONFIRMED'){
+     const changes=lineupChanges(prevLineup.snapshot,fresh.lineup);
+     if(changes.length)await queue(env,date+':lineup-change:'+fresh.team+':'+at,'CHANGE','🔁 '+fresh.team+' — Confirmed Lines Changed\n'+changes.join('\n\n'),[fresh.team],'','',true);
+    }
+    await env.DB.prepare('INSERT INTO confirmed_lineups(game_date,team,snapshot,checked_at) VALUES(?,?,?,?) ON CONFLICT(game_date,team) DO UPDATE SET snapshot=excluded.snapshot,checked_at=excluded.checked_at').bind(date,fresh.team,snapshot,at).run();
+   }
+
    await env.DB.prepare('INSERT INTO line_status(game_date,team,status,last_checked_at,source) VALUES(?,?,?,?,?) ON CONFLICT(game_date,team) DO UPDATE SET status=excluded.status,last_checked_at=excluded.last_checked_at,source=excluded.source').bind(date,fresh.team,next,at,fresh.source).run();
    known.set(fresh.team,{team:fresh.team,status:next,last_checked_at:at});
   }
