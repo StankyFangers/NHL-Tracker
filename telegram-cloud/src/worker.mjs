@@ -17,11 +17,108 @@ const keyGroup=(date,start)=>date+':group:'+start;
 async function getText(url){const r=await fetch(url,{headers:{'User-Agent':'NHL-Tracker-Telegram/1.0'},signal:AbortSignal.timeout(12000)});if(!r.ok)throw Error('HTTP '+r.status);return r.text()}
 async function getGames(date){const result=JSON.parse(await getText('https://api-web.nhle.com/v1/score/'+date));return (result.games||[]).map(g=>({start:Date.parse(g.startTimeUTC),away:g.awayTeam?.abbrev,home:g.homeTeam?.abbrev})).filter(g=>Number.isFinite(g.start)&&SLUGS[g.away]&&SLUGS[g.home]).sort((a,b)=>a.start-b.start)}
 async function rows(env,date){return (await env.DB.prepare('SELECT team,status,last_checked_at FROM line_status WHERE game_date=?').bind(date).all()).results||[]}
+
 const chats=env=>String(env.TELEGRAM_CHAT_IDS||'').split(',').map(x=>x.trim()).filter(x=>/^\d+$/.test(x));
+const noCache={'Cache-Control':'no-store'};
+const json=(data,status=200)=>Response.json(data,{status,headers:noCache});
+async function accountIdentity(req){
+ const token=(req.headers.get('Authorization')||'').match(/^Bearer\s+(.+)$/i)?.[1];
+ if(!token||token.length<16)return null;
+ const mode=req.headers.get('X-NHL-Environment')==='TEST'?'TEST':'LIVE';
+ const endpoint=mode==='TEST'?'https://nhl-tracker-vercel-api.vercel.app/api/account':'https://nhl-tracker-vercel-api.vercel.app/api/live-account';
+ const result=await fetch(endpoint,{method:'GET',headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:AbortSignal.timeout(10000),cache:'no-store'});
+ if(!result.ok)return null;
+ const data=await result.json();
+ const name=String(data?.account?.username||'');
+ if(!/^[A-Za-z0-9_.-]{2,80}$/.test(name))return null;
+ return mode+':'+name.toLowerCase();
+}
+async function linkedRecipients(env,date,teams){
+ const rows=(await env.DB.prepare("SELECT account_key,chat_id,scope,progress_mode FROM telegram_accounts WHERE enabled=1 AND chat_id IS NOT NULL").all()).results||[];
+ const selected=[];
+ for(const row of rows){
+  if(row.scope!=='WAGERED'){selected.push(row);continue}
+  if(!teams.length)continue;
+  const pending=(await env.DB.prepare("SELECT team FROM telegram_pending_teams WHERE account_key=? AND game_date=?").bind(row.account_key,date).all()).results||[];
+  if(pending.some(x=>teams.includes(x.team)))selected.push(row);
+ }
+ return selected;
+}
+async function linkChat(env,chat,code){
+ if(!/^[a-f0-9]{32}$/i.test(code))return 'Invalid or expired link code. Open NHL Tracker → Phone Notification Setup to generate a new one.';
+ const now=Date.now();
+ const row=await env.DB.prepare('SELECT account_key,expires_at FROM telegram_link_codes WHERE code=?').bind(code.toLowerCase()).first();
+ if(!row||Number(row.expires_at)<=now)return 'Link expired or already used. Generate a new code in NHL Tracker.';
+ const used=await env.DB.prepare('SELECT account_key FROM telegram_accounts WHERE chat_id=?').bind(chat).first();
+ if(used&&used.account_key!==row.account_key)return 'This Telegram chat is already linked to another NHL Tracker account. Disconnect that account first.';
+ await env.DB.batch([
+  env.DB.prepare('INSERT INTO telegram_accounts(account_key,chat_id,enabled,scope,lineup_changes,progress_mode,created_at,updated_at) VALUES(?,?,1,\'ALL\',0,\'OFF\',?,?) ON CONFLICT(account_key) DO UPDATE SET chat_id=excluded.chat_id,updated_at=excluded.updated_at').bind(row.account_key,chat,now,now),
+  env.DB.prepare('DELETE FROM telegram_link_codes WHERE account_key=?').bind(row.account_key)
+ ]);
+ return '✅ Telegram linked to NHL Tracker. Set your notification preferences in the desktop app. Send Ping or Status here to test commands.';
+}
+async function accountAPI(req,env,path){
+ let key;
+ try{key=await accountIdentity(req)}catch(e){console.error('Telegram account authentication unavailable',String(e));return json({error:'Account verification temporarily unavailable'},503)}
+ if(!key)return json({error:'Sign in to your NHL Tracker account first'},401);
+ const now=Date.now();
+ const existing=await env.DB.prepare('SELECT * FROM telegram_accounts WHERE account_key=?').bind(key).first();
+ if(path==='/account/status'&&req.method==='GET')return json({connected:!!existing?.chat_id,enabled:existing?.enabled===1,scope:existing?.scope||'ALL',lineupChanges:existing?.lineup_changes===1,confirmationProgress:existing?.progress_mode||'OFF'});
+ if(path==='/account/link/start'&&req.method==='POST'){
+  if(existing?.chat_id)return json({error:'Already connected. Disconnect before linking another chat.'},409);
+  const code=[...crypto.getRandomValues(new Uint8Array(16))].map(b=>b.toString(16).padStart(2,'0')).join('');
+  const bot=await (await fetch('https://api.telegram.org/bot'+env.TELEGRAM_BOT_TOKEN+'/getMe')).json();
+  if(!bot.ok||!bot.result?.username)return json({error:'Telegram bot unavailable'},503);
+  await env.DB.prepare('DELETE FROM telegram_link_codes WHERE account_key=?').bind(key).run();
+  await env.DB.prepare('INSERT INTO telegram_link_codes(code,account_key,expires_at,created_at) VALUES(?,?,?,?)').bind(code,key,now+10*60000,now).run();
+  return json({code,url:'https://t.me/'+bot.result.username+'?start='+code,expiresInMinutes:10});
+ }
+ if(path==='/account/preferences'&&req.method==='PUT'){
+  if(!existing?.chat_id)return json({error:'Link Telegram before enabling notifications'},409);
+  const prefs=await req.json().catch(()=>null);
+  if(!prefs||typeof prefs.enabled!=='boolean'||typeof prefs.lineupChanges!=='boolean'||!['ALL','WAGERED'].includes(prefs.scope)||!['OFF','FOOTER','SEPARATE'].includes(prefs.confirmationProgress))return json({error:'Invalid preferences'},400);
+  await env.DB.prepare('UPDATE telegram_accounts SET enabled=?,scope=?,lineup_changes=?,progress_mode=?,updated_at=? WHERE account_key=?').bind(+prefs.enabled,prefs.scope,+prefs.lineupChanges,prefs.confirmationProgress,now,key).run();
+  return json({ok:true});
+ }
+ if(path==='/account/test'&&req.method==='POST'){
+  if(!existing?.chat_id)return json({error:'Link Telegram first'},409);
+  await telegram(env,existing.chat_id,'🏒 NHL Tracker — Test notification\n✅ Your Telegram account is connected and messages are working.');
+  return json({ok:true});
+ }
+ if(path==='/account/disconnect'&&req.method==='POST'){
+  await env.DB.batch([
+   env.DB.prepare('DELETE FROM telegram_accounts WHERE account_key=?').bind(key),
+   env.DB.prepare('DELETE FROM telegram_link_codes WHERE account_key=?').bind(key),
+   env.DB.prepare('DELETE FROM telegram_pending_teams WHERE account_key=?').bind(key)
+  ]);
+  if(existing?.chat_id)await env.DB.prepare('DELETE FROM delivery WHERE chat_id=? AND delivered_at IS NULL').bind(existing.chat_id).run();
+  return json({ok:true});
+ }
+ if(path==='/account/pending'&&req.method==='PUT'){
+  const data=await req.json().catch(()=>null);
+  if(!data||!/^\d{4}-\d{2}-\d{2}$/.test(data.date)||!Array.isArray(data.teams)||data.teams.length>32||data.teams.some(x=>typeof x!=='string'||!SLUGS[x]))return json({error:'Invalid pending teams'},400);
+  const teams=[...new Set(data.teams)];
+  await env.DB.batch([
+   env.DB.prepare('DELETE FROM telegram_pending_teams WHERE account_key=? AND game_date=?').bind(key,data.date),
+   ...teams.map(team=>env.DB.prepare('INSERT INTO telegram_pending_teams(account_key,game_date,team,updated_at) VALUES(?,?,?,?)').bind(key,data.date,team,now))
+  ]);
+  return json({ok:true,count:teams.length});
+ }
+ return json({error:'Not found'},404);
+}
+
 export function progress(g){return g.confirmed.length+'/'+g.teams.length+' teams confirmed ('+g.remaining.length+' remaining)'}
 function groups(games,items,now){const states=new Map(items.map(x=>[x.team,x.status]));return [...new Set(games.map(g=>g.start))].filter(t=>t>now).map(start=>{const teams=[...new Set(games.filter(g=>g.start===start).flatMap(g=>[g.away,g.home]))],confirmed=teams.filter(t=>states.get(t)==='CONFIRMED');return {start,teams,confirmed,remaining:teams.filter(t=>!confirmed.includes(t))}})}
 async function telegram(env,chat,text){const r=await fetch('https://api.telegram.org/bot'+env.TELEGRAM_BOT_TOKEN+'/sendMessage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:chat,text}),signal:AbortSignal.timeout(10000)});const result=await r.json();if(!result.ok)throw Error('Telegram: '+(result.description||r.status))}
-async function queue(env,key,kind,message){for(const chat of chats(env))await env.DB.prepare('INSERT OR IGNORE INTO delivery(event_key,chat_id,kind,message,created_at) VALUES(?,?,?,?,?)').bind(key,chat,kind,message,Date.now()).run()}
+async function queue(env,key,kind,message,teams=[],footer='',progressKey=''){
+ const date=key.slice(0,10);
+ const recipients=await linkedRecipients(env,date,teams);
+ for(const row of recipients){
+  const final=message+(row.progress_mode==='FOOTER'?footer:'');
+  await env.DB.prepare('INSERT OR IGNORE INTO delivery(event_key,chat_id,kind,message,created_at) VALUES(?,?,?,?,?)').bind(key,row.chat_id,kind,final,Date.now()).run();
+  if(progressKey&&row.progress_mode==='SEPARATE')await env.DB.prepare('INSERT OR IGNORE INTO delivery(event_key,chat_id,kind,message,created_at) VALUES(?,?,?,?,?)').bind(progressKey,row.chat_id,'PROGRESS',footer.trim(),Date.now()).run();
+ }
+}
 async function deliver(env){const pending=(await env.DB.prepare('SELECT event_key,chat_id,message FROM delivery WHERE delivered_at IS NULL ORDER BY created_at LIMIT 10').all()).results||[];
  for(const p of pending)try{await telegram(env,p.chat_id,p.message);await env.DB.prepare('UPDATE delivery SET delivered_at=? WHERE event_key=? AND chat_id=? AND delivered_at IS NULL').bind(Date.now(),p.event_key,p.chat_id).run()}catch(e){console.error('Delivery failed',p.event_key,String(e))}
 }
@@ -43,11 +140,11 @@ export async function tick(env,now=new Date()){
  }
  const list=groups(games,[...known.values()],at),next=list[0];
  // Count baseline confirmations as soon as observed, even before any new transition.
- for(const g of list)if(g.remaining.length===0)await queue(env,keyGroup(date,g.start),'GROUP','✅ '+timeET(new Date(g.start))+' ET — ALL LINES CONFIRMED!\n'+progress(g)+'\n'+g.teams.join(', '));
+ for(const g of list)if(g.remaining.length===0)await queue(env,keyGroup(date,g.start),'GROUP','✅ '+timeET(new Date(g.start))+' ET — ALL LINES CONFIRMED!\n'+progress(g)+'\n'+g.teams.join(', '),g.teams);
  for(const team of changed){
   const start=games.find(g=>[g.away,g.home].includes(team))?.start,own=list.find(g=>g.start===start);
   const footer=next?'\n\n🏒 Next puck drop '+timeET(new Date(next.start))+' ET — '+progress(next):'';
-  await queue(env,keyTeam(date,team),'TEAM','✅ '+team+' — Lines Confirmed\nDaily Faceoff has a same-day named-source lineup.\n'+(own?timeET(new Date(own.start))+' ET group: '+progress(own):'')+footer);
+  await queue(env,keyTeam(date,team),'TEAM','✅ '+team+' — Lines Confirmed\nDaily Faceoff has a same-day named-source lineup.\n'+(own?timeET(new Date(own.start))+' ET group: '+progress(own):''),[team],footer,next?date+':progress:'+next.start+':'+next.confirmed.length:'');
  }
  await deliver(env);return {date,checked:due.length,newConfirmations:changed.length,upcomingGroups:list.length};
 }
@@ -67,7 +164,7 @@ async function refreshOnDemand(env,date,teams){
   await env.DB.prepare('INSERT INTO line_status(game_date,team,status,last_checked_at,source) VALUES(?,?,?,?,?) ON CONFLICT(game_date,team) DO UPDATE SET status=excluded.status,last_checked_at=excluded.last_checked_at,source=excluded.source')
    .bind(date,r.team,r.status,stamp,r.source).run();
   if(r.status==='CONFIRMED'&&before.get(r.team)==='PROJECTED')
-   await queue(env,keyTeam(date,r.team),'TEAM','✅ '+r.team+' — Lines Confirmed\nDaily Faceoff has a same-day named-source lineup.');
+   await queue(env,keyTeam(date,r.team),'TEAM','✅ '+r.team+' — Lines Confirmed\nDaily Faceoff has a same-day named-source lineup.',[r.team]);
  }
  return {checkedAt,results};
 }
@@ -111,11 +208,19 @@ export default {
  async scheduled(_event,env,ctx){ctx.waitUntil(tick(env).catch(e=>console.error('Monitor failed',String(e))))},
  async fetch(req,env,ctx){const u=new URL(req.url);
   if(u.pathname==='/health')return Response.json({ok:true,service:'NHL Telegram DEV'});
+  if(u.pathname.startsWith('/account/'))return accountAPI(req,env,u.pathname);
   if(u.pathname==='/telegram'&&req.method==='POST'){
    if(!env.TELEGRAM_WEBHOOK_SECRET||req.headers.get('X-Telegram-Bot-Api-Secret-Token')!==env.TELEGRAM_WEBHOOK_SECRET)return new Response('Unauthorized',{status:401});
    let update;try{update=await req.json()}catch{return new Response('Bad JSON',{status:400})}
    const m=update?.message;if(m?.chat?.type!=='private'||typeof m.text!=='string')return new Response('OK');
-   const chat=String(m.chat.id);if(!chats(env).includes(chat))return new Response('OK');
+   const chat=String(m.chat.id);
+   const link=m.text.trim().match(/^\/?(?:start|link)\s+([a-f0-9]{32})$/i);
+   if(link){
+    ctx.waitUntil(linkChat(env,chat,link[1]).then(reply=>telegram(env,chat,reply)).catch(e=>console.error('Link failed',String(e))));
+    return new Response('OK');
+   }
+   const linked=await env.DB.prepare('SELECT account_key FROM telegram_accounts WHERE chat_id=?').bind(chat).first();
+   if(!linked&&!chats(env).includes(chat))return new Response('OK');
    ctx.waitUntil((async()=>{try{await telegram(env,chat,await answer(env,m.text,chat))}catch(e){console.error('Command error',String(e))}})());
    return new Response('OK');
   }
