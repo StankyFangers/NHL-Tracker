@@ -42,7 +42,7 @@ jobs:
       - name: Prevent repeat Kalshi sync from changing existing categories
         run: node --test tests/kalshiCategoryPreservation.test.mjs
 
-      - name: Run cloud monitoring unit tests
+      - name: Run cloud monitoring unit tests (Windows-safe discovery)
         working-directory: telegram-cloud
         run: npm test
 
