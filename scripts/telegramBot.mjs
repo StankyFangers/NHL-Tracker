@@ -95,7 +95,7 @@ async function startAlertMonitor(call){
    if(on)state.subscribers.push(key)
    await save()
  }
- const intervalFor=mins=>mins<=15?60000:mins<=60?300000:1800000
+ const intervalFor=mins=>mins<=0||mins>540?Infinity:mins<=15?60000:mins<=60?300000:mins<=240?900000:mins<=420?1800000:3600000
  const lastCheck=new Map()
  const check=async()=>{
    if(!state.subscribers.length)return
@@ -111,7 +111,7 @@ async function startAlertMonitor(call){
      for(const t of g.teams){
        const key=date+':'+t,last=lastCheck.get(key)||0
        if(state.delivered[key]||state.observed[key]==='CONFIRMED')continue
-       if(now.getTime()-last>=interval&&!due.includes(t)){due.push(t);lastCheck.set(key,now.getTime())}
+       if(Number.isFinite(interval)&&now.getTime()-last>=interval&&!due.includes(t)){due.push(t);lastCheck.set(key,now.getTime())}
      }
    }
    if(!due.length){await checkCompleteStartGroups(state,games,call,save,now);return}
