@@ -35,6 +35,14 @@ contextBridge.exposeInMainWorld('nhlTracker', {
   dfoPlayerStats: (team: string, names: string[]) => ipcRenderer.invoke('dfo:playerStats', team, names),
   dfoGoalieToi: (team: string, names: string[]) => ipcRenderer.invoke('dfo:goalieToi', team, names),
   notify: (title: string, body: string) => ipcRenderer.invoke('app:notify', { title, body }),
+  downloadUpdate: () => ipcRenderer.invoke('app:downloadUpdate'),
+  cancelUpdate: () => ipcRenderer.invoke('app:cancelUpdate'),
+  installUpdate: () => ipcRenderer.invoke('app:installUpdate'),
+  onUpdateProgress: (callback:(value:any)=>void) => {
+    const listener=(_event:Electron.IpcRendererEvent,value:any)=>callback(value)
+    ipcRenderer.on('app:update-progress',listener)
+    return ()=>ipcRenderer.removeListener('app:update-progress',listener)
+  },
   updateInfo: () => ipcRenderer.invoke('app:updateInfo'),
   openUpdateUrl: (url: string) => ipcRenderer.invoke('app:openUpdateUrl', url)
 })
