@@ -399,12 +399,15 @@ app.whenReady().then(() => {
     if(release.draft||release.prerelease)throw Error('The latest release is not a public stable release.')
     const tag=String(release.tag_name||''),version=tag.replace(/^v/i,'')
     if(!/^\d+\.\d+\.\d+$/.test(version)||!isNewer(version,app.getVersion()))throw Error('No newer published version is available.')
-    const file='NHL Tracker Setup '+version+'.exe'
-    const asset=(release.assets||[]).find((a:any)=>a.name===file&&a.state==='uploaded')
+    // GitHub may normalize spaces in uploaded asset names to dots.
+    const allowedNames=['NHL Tracker Setup '+version+'.exe','NHL.Tracker.Setup.'+version+'.exe','NHL-Tracker-Setup-'+version+'.exe']
+    const asset=(release.assets||[]).find((a:any)=>allowedNames.includes(a.name)&&a.state==='uploaded')
     if(!asset||!Number.isSafeInteger(asset.size)||asset.size<1_000_000)throw Error('The official release has no usable Windows installer.')
-    const expected='https://github.com/StankyFangers/NHL-Tracker/releases/download/'+encodeURIComponent(tag)+'/'+encodeURIComponent(file)
+    const file=String(asset.name)
     const url=String(asset.browser_download_url||'')
-    if(url!==expected)throw Error('Unexpected installer download location. Update cancelled.')
+    const parsed=new URL(url)
+    const prefix='/StankyFangers/NHL-Tracker/releases/download/'+encodeURIComponent(tag)+'/'
+    if(parsed.protocol!=='https:'||parsed.hostname!=='github.com'||!parsed.pathname.startsWith(prefix)||decodeURIComponent(parsed.pathname.slice(prefix.length))!==file)throw Error('Unexpected installer download location. Update cancelled.')
     return {version,file,asset,url}
   }
   ipcMain.handle('app:downloadUpdate',async()=>{
