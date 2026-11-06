@@ -31,7 +31,7 @@ export default function SportsbookManagement({view,account,bets}:{view:View;acco
  const books=[...new Set([...getSportsbooks(account),...bets.map(b=>b.book).filter(Boolean)])]
  const wagers=useMemo(()=>bets.filter(w=>bookOf(w.book)===book).sort((a,b)=>dayOf(b).localeCompare(dayOf(a))||String(b.createdAt||'').localeCompare(String(a.createdAt||''))),[bets,book])
  const opening=readOpeningBalances(account)[book]
- const balance=getBookTotal(book as typeof BALANCE_BOOKS[number],opening,bets,adjustments)
+ const balance=getBookTotal(book,opening,bets,adjustments)
  const save=()=>{try{
   if(!opening)throw Error('Set an opening balance under Sportsbook Settings → Sportsbook Balances before making adjustments.')
   if(day<opening.date)throw Error('Adjustment date must be on or after the opening-balance date.')
