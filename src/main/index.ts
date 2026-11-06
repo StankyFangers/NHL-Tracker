@@ -432,7 +432,12 @@ app.whenReady().then(() => {
           const {done,value}=await reader.read()
           if(done)break
           if(updateController.signal.aborted)throw Error('Download cancelled.')
-          await file.write(value)
+          let offset=0
+          while(offset<value.byteLength){
+            const written=await file.write(value,offset,value.byteLength-offset)
+            if(written.bytesWritten<=0)throw Error('Unable to finish writing the update installer.')
+            offset+=written.bytesWritten
+          }
           hash.update(value)
           received+=value.byteLength
           if(received>total)throw Error('Installer download exceeded published file size.')
