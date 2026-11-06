@@ -201,7 +201,8 @@ export function reconcileAlreadyLoggedKalshi(candidates:Candidate[],existing:any
    if(consumed.has(i)||b.date!==candidate.date||signature(b.legs)!==sig)return false
    const stake=Number(b.units)*Number(b.unitSize)
    const centsMatch=Math.abs(stake-candidate.risk)<=0.021
-   const oddsMatch=Math.abs(Number(b.odds)-candidate.odds)<=1
+   const legacyOdds=Number(b.odds),normalizedOdds=legacyOdds>0&&legacyOdds<100?-Math.round(10000/legacyOdds):legacyOdds
+   const oddsMatch=Math.abs(normalizedOdds-candidate.odds)<=1
    const oldGames=[...new Set(b.legs.map((l:any)=>String(l?.gameId||'')).filter(Boolean))]
    const newGames=[...new Set(candidate.legs.map(l=>String(l.gameId||'')).filter(Boolean))]
    return centsMatch&&oddsMatch&&(!oldGames.length||!newGames.length||oldGames.join('|')===newGames.join('|'))
