@@ -6,6 +6,15 @@ on:
       - feature/telegram-notifications
     paths:
       - .github/workflows/nhl-v183-release.yml
+      - src/renderer/src/App.tsx
+      - src/renderer/src/SportsbookCatalogSettings.tsx
+      - src/renderer/src/sportsbookCatalog.ts
+      - src/renderer/src/sportsbookCatalog.css
+      - src/renderer/src/sportsbookBalances.tsx
+      - src/renderer/src/sportsbookBalances.css
+      - tests/sportsbookPricingFormats.test.mjs
+      - package.json
+      - package-lock.json
   workflow_dispatch:
 
 permissions:
@@ -71,6 +80,12 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
+
+      - name: Avoid publishing an outdated feature branch commit
+        shell: bash
+        run: |
+          latest=$(git ls-remote origin refs/heads/feature/telegram-notifications | cut -f1)
+          if [ "$latest" != "$GITHUB_SHA" ]; then echo "Newer branch revision exists; this run will not publish."; exit 1; fi
 
       - name: Publish GitHub Release (Check for Updates)
         shell: bash
