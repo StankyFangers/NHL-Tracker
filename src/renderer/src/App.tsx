@@ -1293,7 +1293,7 @@ function AppUpdates(){
    </div>
    <div style={{display:'flex',justifyContent:'space-between',flexWrap:'wrap',gap:8,fontSize:13}}><b>{pct.toFixed(1)}% complete</b><span>{speed} · Estimated time remaining: {eta}</span></div>
   </div>}
-  {progress.state==='READY'&&<div className="updateStatus good"><b>UPDATE DOWNLOADED · v{progress.version}</b><span>The installer is verified and ready. Choose Install & Restart to close the application, install quietly, and reopen NHL Tracker. Your wagers and settings are not deleted.</span></div>}
+  {progress.state==='READY'&&<div className="updateStatus good"><b>UPDATE DOWNLOADED · v{progress.version}</b><span>The official installer is downloaded and ready. Choose Install & Restart to close the application, install quietly, and reopen NHL Tracker. Your wagers and settings are not deleted.</span></div>}
   {progress.state==='ERROR'&&<div className="updateStatus bad"><b>UPDATE DOWNLOAD FAILED</b><span>{progress.message||'Try again after checking your connection.'}</span></div>}
   {lastInstall&&<div className={'updateStatus '+(lastInstall.ok?'good':'bad')}><b>{lastInstall.ok?'APP UPDATE INSTALLED':'APP INSTALLER FAILED'}</b><span>{lastInstall.ok?'NHL Tracker successfully installed v'+lastInstall.version+'.':String(lastInstall.message||'The installer could not complete. Your existing app installation was not intentionally modified.')}</span></div>}
   {state.kind==='NO_RELEASE'&&<div className="updateStatus neutral"><b>NO PUBLISHED RELEASE</b><span>No official GitHub Release is currently available.</span></div>}
@@ -1900,7 +1900,7 @@ function CompactLiveBet({b,liveStats,gameOptions,onPatch,onEdit,onDelete}:{b:Bet
 
 
 type PairDraft={seed:Bet;book:string;units:string;quote:string;locked:boolean};
-function defaultSportsbook(){const value=localStorage.getItem('defaultSportsbook')||'';return getSportsbooks().includes(value)?value:''}
+function defaultSportsbook(){const value=localStorage.getItem('defaultSportsbook')||'';return getSportsbooks().find(book=>book.toLowerCase()===value.toLowerCase())||''}
 const categoryUnitsKey='nhl:categoryUnitDefaults:v1';
 const categoryUnitKeys=['2P - 1P','2P - 2P','2P - 1A','2P - 1P - 1P','Assists Category','Other Category','Team Bet Category','Multi-Game Category'] as const;
 function categoryDefaultUnits(key:string,fallback:number){try{const v=Number(JSON.parse(localStorage.getItem(categoryUnitsKey)||'{}')[key]);return Number.isFinite(v)&&v>0?v:fallback}catch{return fallback}}
