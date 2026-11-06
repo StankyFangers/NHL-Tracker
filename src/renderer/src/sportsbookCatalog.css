@@ -1,0 +1,21 @@
+.sportsbook-catalog{max-width:930px;margin:0 auto;padding:24px!important;background:#112537;color:#e8f7ff;border:1px solid #345a6b;border-radius:12px}
+.sportsbook-catalog h2{font-size:22px;margin:0 0 12px}.sportsbook-catalog p{color:#a8c3d3;line-height:1.55;font-size:13px}
+.sportsbook-catalog-form{display:flex;align-items:end;flex-wrap:wrap;gap:12px;margin:22px 0}
+.sportsbook-catalog-name{flex:1;min-width:240px;display:grid;gap:8px;font-size:11px;font-weight:800;letter-spacing:.055em;color:#a3c2d5}
+.sportsbook-catalog-name input,.sportsbook-catalog select,.balance-pricing select{background:#071925!important;color:#e9f8ff!important;border:1px solid #486b7d!important;border-radius:7px!important;padding:10px 12px!important;font-size:13px!important;min-width:0;outline-offset:2px}
+.sportsbook-action{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:#11614e!important;color:#edfff9!important;border:1px solid #28ac8c!important;border-radius:8px!important;padding:10px 16px!important;font-weight:800!important;font-size:12px!important;cursor:pointer!important;min-height:38px}
+.sportsbook-action:hover{background:#187a61!important;border-color:#56d3a7!important}
+.sportsbook-action.secondary{background:#1c3341!important;border-color:#477082!important;color:#c9e6f4!important}
+.sportsbook-catalog-list{display:grid;gap:8px;margin-bottom:16px}
+.sportsbook-catalog-item{display:flex;align-items:center;gap:15px;padding:11px 14px;background:#0c2030;border:1px solid #2e5569;border-radius:9px;flex-wrap:wrap}
+.sportsbook-catalog-item>strong{flex:1;min-width:140px;font-size:14px}.sportsbook-catalog-item>small{color:#91b4c4;font-size:11px}
+.sportsbook-catalog-format{display:flex;align-items:center;gap:9px;color:#97c2d3;font-size:10px;font-weight:800;letter-spacing:.05em}.sportsbook-catalog-format select{min-width:165px}
+.balance-pricing{display:flex;align-items:center;gap:15px;flex-wrap:wrap;margin:5px 0 8px 28px}
+.balance-pricing label{display:flex;gap:10px;align-items:center;font-size:11px;font-weight:800;color:#99c7d8}
+.balance-pricing select{padding:6px 10px!important;font-size:12px!important}.balance-pricing small{color:#88afbe;font-size:10px}
+.balance-settings>.sportsbook-action{margin:4px 0 12px}
+.slate-day-controls{display:inline-flex!important;gap:5px!important;align-items:center!important}
+.slate-day-controls input[type=date]{background:#0a1c2a!important;border:1px solid #36576b!important;border-radius:6px!important;color:#ecf9ff!important;padding:6px 8px!important;min-height:29px!important;color-scheme:dark}
+.slate-day-arrow{width:30px!important;height:31px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;padding:0!important;background:#163345!important;color:#8de8ca!important;border:1px solid #327e76!important;border-radius:7px!important;font-size:21px!important;line-height:1!important;cursor:pointer!important;transition:background .15s ease,border-color .15s ease}
+.slate-day-arrow:hover,.slate-day-arrow:focus-visible{background:#20546a!important;border-color:#58d7af!important;color:white!important}
+@media(max-width:800px){.sportsbook-catalog-item{align-items:flex-start}.sportsbook-catalog-format{flex:1}.sportsbook-catalog-format select{min-width:145px}}
