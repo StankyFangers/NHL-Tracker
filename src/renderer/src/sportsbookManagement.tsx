@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useState} from 'react'
 import {addBookAdjustment,getBookTotal,readBookAdjustments,readOpeningBalances,type BookAdjustment} from './sportsbookBalances'
 import './sportsbookManagement.css'
-import {getSportsbooks,canonicalSportsbook} from './sportsbookCatalog'
+import {getSportsbooks} from './sportsbookCatalog'
 
 type Leg={player?:string;team?:string;opponent?:string;gameId?:string;kind?:string;stat?:string;qty?:number;side?:string;voided?:boolean}
 type Wager={id:string;date:string;book:string;category?:string;legs:Leg[];units:number;unitSize:number;status?:string;odds?:number;payout?:number;bonusBet?:boolean;createdAt?:string;settledAt?:string}
@@ -10,7 +10,6 @@ type Period='Month'|'Week'|'Day'
 const today=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')}
 const currency=(n:number)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n)
 const signed=(n:number)=>(n>0?'+':'')+currency(n)
-const bookOf=(book:string)=>canonicalSportsbook(book)
 const stake=(w:Wager)=>w.bonusBet?0:Math.max(0,Number(w.units||0)*Number(w.unitSize||0))
 const result=(w:Wager)=>{const s=Number(w.units||0)*Number(w.unitSize||0),risk=stake(w);if(w.status==='VOID')return 0;if(w.status!=='WON')return -risk;const gross=w.payout!=null?Number(w.payout):w.odds!=null?s*(1+(w.odds>0?w.odds/100:100/Math.abs(w.odds))):0;return Math.max(0,gross-(w.bonusBet?s:0))-risk}
 const dayOf=(w:Wager)=>/^\d{4}-\d{2}-\d{2}$/.test(w.date)?w.date:String(w.date||'').slice(0,10)
@@ -29,7 +28,7 @@ export default function SportsbookManagement({view,account,bets}:{view:View;acco
  const [period,setPeriod]=useState<Period>('Month'),[expanded,setExpanded]=useState<string[]>([]),[range,setRange]=useState('30D'),[from,setFrom]=useState(''),[until,setUntil]=useState(today())
  useEffect(()=>{setAdjustments(readBookAdjustments(account));setNotice('');const update=()=>setAdjustments(readBookAdjustments(account));window.addEventListener('nhl-sportsbook-balances-changed',update);return()=>window.removeEventListener('nhl-sportsbook-balances-changed',update)},[account])
  const books=[...new Set([...getSportsbooks(account),...bets.map(b=>b.book).filter(Boolean)])]
- const wagers=useMemo(()=>bets.filter(w=>bookOf(w.book)===book).sort((a,b)=>dayOf(b).localeCompare(dayOf(a))||String(b.createdAt||'').localeCompare(String(a.createdAt||''))),[bets,book])
+ const wagers=useMemo(()=>bets.filter(w=>String(w.book).toLowerCase()===book.toLowerCase()).sort((a,b)=>dayOf(b).localeCompare(dayOf(a))||String(b.createdAt||'').localeCompare(String(a.createdAt||''))),[bets,book])
  const opening=readOpeningBalances(account)[book]
  const balance=getBookTotal(book,opening,bets,adjustments)
  const save=()=>{try{
