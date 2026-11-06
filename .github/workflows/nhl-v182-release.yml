@@ -1,0 +1,112 @@
+name: NHL Tracker v1.8.2 Windows Release
+
+on:
+  push:
+    branches:
+      - feature/telegram-notifications
+    paths:
+      - .github/workflows/nhl-v182-release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nhl-tracker-v1.8.2-release
+  cancel-in-progress: false
+
+jobs:
+  release-windows:
+    name: Verify, build and publish Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Confirm release version
+        shell: bash
+        run: |
+          node -e "const p=require('./package.json');if(p.version!=='1.8.2')process.exit(1)"
+          node -e "const p=require('./package-lock.json');if(p.version!=='1.8.2'||p.packages[''].version!=='1.8.2')process.exit(1)"
+
+      - name: Install exact lockfile dependencies
+        run: npm ci
+
+      - name: Prevent repeat Kalshi sync from changing existing categories
+        run: node --test tests/kalshiCategoryPreservation.test.mjs tests/kalshiAmericanOdds.test.mjs
+
+      - name: Run cloud monitoring unit tests (Windows-safe discovery)
+        working-directory: telegram-cloud
+        run: npm test
+
+      - name: Build production Electron app
+        run: npm run build
+
+      - name: Create Windows NSIS installer
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder --win nsis --x64 --publish never
+
+      - name: Verify release installer
+        shell: pwsh
+        run: |
+          $exe = @(Get-ChildItem -Path release -Filter '*.exe' -File -ErrorAction Stop)
+          if ($exe.Count -ne 1) { throw "Expected one Windows installer, found $($exe.Count)" }
+          if ($exe[0].Name -ne 'NHL Tracker Setup 1.8.2.exe') { throw "Unexpected installer filename: $($exe[0].Name)" }
+          if ($exe[0].Length -lt 1000000) { throw "Installer is unexpectedly small" }
+          Write-Host "Verified: $($exe[0].Name), $($exe[0].Length) bytes"
+
+      - name: Upload backup Actions artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NHL-Tracker-v1.8.2-Windows-Installer
+          path: release/*.exe
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Publish GitHub Release (Check for Updates)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > release-notes.md <<'EOF'
+          ## NHL Tracker v1.8.2 — Windows tester release
+
+          What's new:
+          - Correct Kalshi American odds for newly imported bets and legacy display.
+          - Previous/next date navigation arrows alongside the calendar.
+          - Add custom sportsbooks to bet entry, balances and reports.
+          - In-app Windows updater with progress, ETA, installer consent and relaunch.
+          - Includes all previous v1.8.1 improvements.
+
+          **Tester notes**
+          - In-app updating, Start/taskbar pins, automatic lineup-change alerts and repeat-sync behavior need real-world tester validation.
+          - Sportsbook balances and custom lists are currently stored per account on the device.
+          - Only changes committed to GitHub are included; unpublished local edits are not part of the installer.
+          - Windows may show an unsigned-app SmartScreen warning. Only install from this repository's official Releases page.
+          EOF
+          if gh release view "v1.8.2" >/dev/null 2>&1; then
+            gh release upload "v1.8.2" release/*.exe --clobber
+            gh release edit "v1.8.2" --title "NHL Tracker v1.8.2 — Boys Tester Release" --notes-file release-notes.md --latest
+          else
+            gh release create "v1.8.2" release/*.exe \
+              --target "$GITHUB_SHA" \
+              --title "NHL Tracker v1.8.2 — Boys Tester Release" \
+              --notes-file release-notes.md \
+              --latest
+          fi
+
+      - name: Confirm GitHub Release is visible
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "v1.8.2" --json tagName,isDraft,isPrerelease,assets,url
