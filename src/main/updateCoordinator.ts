@@ -29,7 +29,7 @@ export async function launchUpdateCoordinator(config:UpdateConfig){
   'function Save-Result($ok,$message) {',
   '  try {',
   '    $payload = @{ok=[bool]$ok;version=$targetVersion;message=[string]$message}',
-  '    [System.IO.File]::WriteAllText($result,($payload | ConvertTo-Json -Compress),(New-Object System.Text.UTF8Encoding($false)))',
+  '    [System.IO.File]::WriteAllText($result,($payload | ConvertTo-Json -Compress),([System.Text.UTF8Encoding]::new($false)))',
   '  } catch { Log ("Could not save result: " + $_.Exception.Message) }',
   '}',
   'try {',
