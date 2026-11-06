@@ -34,7 +34,7 @@ jobs:
       - name: Install pinned dependencies
         run: npm ci
       - name: Verify NHL odds regression
-        run: node --test tests/kalshiCategoryPreservation.test.mjs
+        run: node --test tests/kalshiCategoryPreservation.test.mjs tests/kalshiAmericanOdds.test.mjs
       - name: Telegram monitoring tests
         working-directory: telegram-cloud
         run: npm test
