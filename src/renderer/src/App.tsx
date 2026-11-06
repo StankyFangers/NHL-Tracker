@@ -1236,6 +1236,8 @@ function AppUpdates(){
  const [state,setState]=useState<any>({kind:'IDLE',installed:installedAppVersion})
  const [checking,setChecking]=useState(false)
  const [working,setWorking]=useState(false)
+ const [lastInstall,setLastInstall]=useState<any>(null)
+ useEffect(()=>{void (window.nhlTracker as any).lastUpdateResult().then((value:any)=>{if(value)setLastInstall(value)}).catch(()=>{})},[])
  const [progress,setProgress]=useState<any>({state:'IDLE'})
  useEffect(()=>{
   const stop=(window.nhlTracker as any).onUpdateProgress((event:any)=>setProgress(event))
@@ -1290,6 +1292,7 @@ function AppUpdates(){
   </div>}
   {progress.state==='READY'&&<div className="updateStatus good"><b>UPDATE DOWNLOADED · v{progress.version}</b><span>The installer is verified and ready. Choose Install & Restart to close the application, install quietly, and reopen NHL Tracker. Your wagers and settings are not deleted.</span></div>}
   {progress.state==='ERROR'&&<div className="updateStatus bad"><b>UPDATE DOWNLOAD FAILED</b><span>{progress.message||'Try again after checking your connection.'}</span></div>}
+  {lastInstall&&<div className={'updateStatus '+(lastInstall.ok?'good':'bad')}><b>{lastInstall.ok?'APP UPDATE INSTALLED':'APP INSTALLER FAILED'}</b><span>{lastInstall.ok?'NHL Tracker successfully installed v'+lastInstall.version+'.':String(lastInstall.message||'The installer could not complete. Your existing app installation was not intentionally modified.')}</span></div>}
   {state.kind==='NO_RELEASE'&&<div className="updateStatus neutral"><b>NO PUBLISHED RELEASE</b><span>No official GitHub Release is currently available.</span></div>}
   {state.kind==='CURRENT'&&<div className="updateStatus good"><b>UP TO DATE</b><span>v{state.installed} is the latest published version.</span></div>}
   {state.kind==='UPDATE'&&progress.state!=='READY'&&<div className="updateStatus available"><b>UPDATE AVAILABLE · v{state.latest}</b><span>Installed: v{state.installed}. Choose Update App to download within NHL Tracker. Installation requires your confirmation.</span></div>}
