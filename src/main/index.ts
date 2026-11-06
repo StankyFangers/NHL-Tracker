@@ -5,6 +5,9 @@ import {rememberLogin} from './rememberLogin'
 import {fetchTeamOpportunityStats} from './teamOpportunityStats'
 import { app, BrowserWindow, ipcMain, Notification, shell, dialog, net } from 'electron'
 import { join } from 'path'
+import { mkdir, open, rename, unlink } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { spawn } from 'node:child_process'
 import { writeFile } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 
@@ -370,6 +373,123 @@ app.whenReady().then(() => {
   ipcMain.handle('dfo:playerStats', async (_e, team: string, names: string[]) => dfoPlayerStats(team,names))
   ipcMain.handle('dfo:goalieToi', async (_e, team: string, names: string[]) => goalieAverageToi(team,names))
   ipcMain.handle('app:notify', async (_e, payload: { title: string; body: string }) => { if (Notification.isSupported()) new Notification({ title: payload.title, body: payload.body, silent: true }).show(); return true })
+
+  // Official GitHub Releases only: download in the main process, verify the
+  // published asset digest (when GitHub supplies one), and request consent
+  // before handing installation to the existing NSIS setup.
+  type StagedUpdate={path:string;version:string}
+  let stagedUpdate:StagedUpdate|null=null
+  let updateBusy=false
+  let updateController:AbortController|null=null
+  const githubReleaseApi='https://api.github.com/repos/StankyFangers/NHL-Tracker/releases/latest'
+  const versionNumber=(value:string)=>String(value).replace(/^v/i,'').split('.').map(x=>Number(x)||0)
+  const isNewer=(v:string,current:string)=>{
+    const a=versionNumber(v),b=versionNumber(current)
+    for(let i=0;i<Math.max(a.length,b.length);i++)if((a[i]||0)!==(b[i]||0))return (a[i]||0)>(b[i]||0)
+    return false
+  }
+  const emitUpdate=(value:unknown)=>BrowserWindow.getAllWindows().forEach(w=>{if(!w.isDestroyed())w.webContents.send('app:update-progress',value)})
+  const officialLatest=async()=>{
+    const response=await net.fetch(githubReleaseApi,{
+      headers:{'User-Agent':'NHL-Tracker/'+app.getVersion(),Accept:'application/vnd.github+json'},
+      cache:'no-store',signal:AbortSignal.timeout(20000)
+    })
+    if(!response.ok)throw Error('GitHub release check failed: HTTP '+response.status)
+    const release:any=await response.json()
+    if(release.draft||release.prerelease)throw Error('The latest release is not a public stable release.')
+    const tag=String(release.tag_name||''),version=tag.replace(/^v/i,'')
+    if(!/^\d+\.\d+\.\d+$/.test(version)||!isNewer(version,app.getVersion()))throw Error('No newer published version is available.')
+    const file='NHL Tracker Setup '+version+'.exe'
+    const asset=(release.assets||[]).find((a:any)=>a.name===file&&a.state==='uploaded')
+    if(!asset||!Number.isSafeInteger(asset.size)||asset.size<1_000_000)throw Error('The official release has no usable Windows installer.')
+    const expected='https://github.com/StankyFangers/NHL-Tracker/releases/download/'+encodeURIComponent(tag)+'/'+encodeURIComponent(file)
+    const url=String(asset.browser_download_url||'')
+    if(url!==expected)throw Error('Unexpected installer download location. Update cancelled.')
+    return {version,file,asset,url}
+  }
+  ipcMain.handle('app:downloadUpdate',async()=>{
+    if(!app.isPackaged||process.platform!=='win32')return {error:'Updates can only be installed from the packaged Windows app.'}
+    if(updateBusy)return {error:'An update is already downloading.'}
+    updateBusy=true
+    updateController=new AbortController()
+    let tmp=''
+    try{
+      const release=await officialLatest()
+      const dir=join(app.getPath('userData'),'update-cache')
+      await mkdir(dir,{recursive:true})
+      const destination=join(dir,release.file),temp=destination+'.partial'
+      tmp=temp
+      const response=await net.fetch(release.url,{headers:{'User-Agent':'NHL-Tracker/'+app.getVersion()},signal:updateController.signal,cache:'no-store'})
+      if(!response.ok||!response.body)throw Error('Installer download failed: HTTP '+response.status)
+      const reader=response.body.getReader(),file=await open(temp,'w'),hash=createHash('sha256')
+      let received=0,noticeAt=0
+      const began=Date.now(),total=Number(release.asset.size)
+      try{
+        while(true){
+          const {done,value}=await reader.read()
+          if(done)break
+          if(updateController.signal.aborted)throw Error('Download cancelled.')
+          await file.write(value)
+          hash.update(value)
+          received+=value.byteLength
+          if(received>total)throw Error('Installer download exceeded published file size.')
+          const elapsed=Math.max(1,(Date.now()-began)/1000),speed=received/elapsed
+          if(Date.now()-noticeAt>=200||received===total){
+            noticeAt=Date.now()
+            emitUpdate({state:'DOWNLOADING',version:release.version,received,total,percent:Math.min(100,received/total*100),bytesPerSecond:speed,secondsRemaining:speed>0?Math.ceil((total-received)/speed):null})
+          }
+        }
+      }finally{await file.close()}
+      if(received!==total)throw Error('Downloaded installer size does not match GitHub Release.')
+      const publishedHash=String(release.asset.digest||'').match(/^sha256:([a-f0-9]{64})$/i)?.[1]
+      if(publishedHash&&hash.digest('hex').toLowerCase()!==publishedHash.toLowerCase())throw Error('Downloaded installer hash did not match GitHub Release.')
+      await rename(temp,destination)
+      tmp=''
+      stagedUpdate={path:destination,version:release.version}
+      emitUpdate({state:'READY',version:release.version,received,total,percent:100,secondsRemaining:0})
+      return {ready:true,version:release.version}
+    }catch(error:any){
+      stagedUpdate=null
+      const message=updateController?.signal.aborted?'Download cancelled.':String(error?.message||error)
+      emitUpdate({state:'ERROR',message})
+      return {error:message}
+    }finally{
+      updateController=null;updateBusy=false
+      if(tmp)await unlink(tmp).catch(()=>{})
+    }
+  })
+  ipcMain.handle('app:cancelUpdate',()=>{
+    if(!updateController)return {cancelled:false}
+    updateController.abort()
+    return {cancelled:true}
+  })
+  ipcMain.handle('app:installUpdate',()=>{
+    const pending=stagedUpdate
+    if(!pending||updateBusy)return {error:'Download the installer first.'}
+    if(!app.isPackaged||process.platform!=='win32')return {error:'Installation requires the packaged Windows app.'}
+    // Launch a detached installer coordinator. It waits until NHL Tracker has
+    // exited, silently upgrades using the same NSIS appId, then relaunches it.
+    // No user-data deletion or shortcut/pinning changes are requested.
+    const quote=(value:string)=>value.replace(/'/g,"''")
+    const script=[
+      "$ErrorActionPreference='Stop'",
+      '$originalPid='+process.pid,
+      'while(Get-Process -Id $originalPid -ErrorAction SilentlyContinue){Start-Sleep -Milliseconds 450}',
+      "$installer='"+quote(pending.path)+"'",
+      "$appExe='"+quote(process.execPath)+"'",
+      "try { $p=Start-Process -FilePath $installer -ArgumentList '/S' -Wait -PassThru; if($p.ExitCode -ne 0){throw ('Installer exited with code '+$p.ExitCode)} } catch { }",
+      'Start-Process -FilePath $appExe'
+    ].join('; ')
+    const args=['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand',Buffer.from(script,'utf16le').toString('base64')]
+    try{
+      const child=spawn('powershell.exe',args,{detached:true,stdio:'ignore',windowsHide:true})
+      child.on('error',e=>console.error('Update installer launcher failed',String(e)))
+      child.unref()
+      setImmediate(()=>app.quit())
+      return {started:true}
+    }catch(error:any){return {error:'Could not launch installer: '+String(error?.message||error)}}
+  })
+
   ipcMain.handle('app:updateInfo', async () => {
     const installedVersion = app.getVersion()
     try {
