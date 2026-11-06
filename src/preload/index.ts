@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('nhlTracker', {
   dfoPlayerStats: (team: string, names: string[]) => ipcRenderer.invoke('dfo:playerStats', team, names),
   dfoGoalieToi: (team: string, names: string[]) => ipcRenderer.invoke('dfo:goalieToi', team, names),
   notify: (title: string, body: string) => ipcRenderer.invoke('app:notify', { title, body }),
+  lastUpdateResult: () => ipcRenderer.invoke('app:lastUpdateResult'),
   downloadUpdate: () => ipcRenderer.invoke('app:downloadUpdate'),
   cancelUpdate: () => ipcRenderer.invoke('app:cancelUpdate'),
   installUpdate: () => ipcRenderer.invoke('app:installUpdate'),
