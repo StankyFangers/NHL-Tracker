@@ -5,7 +5,7 @@ import {rememberLogin} from './rememberLogin'
 import {fetchTeamOpportunityStats} from './teamOpportunityStats'
 import { app, BrowserWindow, ipcMain, Notification, shell, dialog, net } from 'electron'
 import { join } from 'path'
-import { mkdir, open, rename, unlink } from 'node:fs/promises'
+import { mkdir, open, rename, unlink, readFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { writeFile } from 'fs/promises'
@@ -477,7 +477,8 @@ app.whenReady().then(() => {
       'while(Get-Process -Id $originalPid -ErrorAction SilentlyContinue){Start-Sleep -Milliseconds 450}',
       "$installer='"+quote(pending.path)+"'",
       "$appExe='"+quote(process.execPath)+"'",
-      "try { $p=Start-Process -FilePath $installer -ArgumentList '/S' -Wait -PassThru; if($p.ExitCode -ne 0){throw ('Installer exited with code '+$p.ExitCode)} } catch { }",
+      "$resultFile='"+quote(join(app.getPath('userData'),'last-update-result.json'))+"'",
+      "try { $p=Start-Process -FilePath $installer -ArgumentList '/S' -Wait -PassThru; if($p.ExitCode -ne 0){throw ('Installer exited with code '+$p.ExitCode)}; @{ok=$true;version='"+quote(pending.version)+"'} | ConvertTo-Json -Compress | Set-Content -LiteralPath $resultFile -Encoding UTF8 } catch { @{ok=$false;message=$_.Exception.Message} | ConvertTo-Json -Compress | Set-Content -LiteralPath $resultFile -Encoding UTF8 }",
       'Start-Process -FilePath $appExe'
     ].join('; ')
     const args=['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand',Buffer.from(script,'utf16le').toString('base64')]
@@ -490,6 +491,14 @@ app.whenReady().then(() => {
     }catch(error:any){return {error:'Could not launch installer: '+String(error?.message||error)}}
   })
 
+  ipcMain.handle('app:lastUpdateResult',async()=>{
+    const file=join(app.getPath('userData'),'last-update-result.json')
+    try{
+      const value=JSON.parse((await readFile(file,'utf8')).replace(/^\uFEFF/,''))
+      await unlink(file).catch(()=>{})
+      return value
+    }catch{return null}
+  })
   ipcMain.handle('app:updateInfo', async () => {
     const installedVersion = app.getVersion()
     try {
