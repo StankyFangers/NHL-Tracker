@@ -266,7 +266,8 @@ export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Recor
   }
   // Only the Kalshi order + ticker is a reliable duplicate identity.
   // Repeated purchases with identical player legs must remain independent wagers.
-  const odds=Math.round(((count/risk)-1)*100)
+  const netRatio=(count/risk)-1
+  const odds=netRatio>=1?Math.round(netRatio*100):-Math.round(100/netRatio)
   const category=classify(legs,matchingSlate.dfo,matchingSlate.games)
   const gameIds=[...new Set(legs.map(l=>String(l.gameId||'')).filter(Boolean))]
   const bet:KalshiImport={id,date:gameDate,legs,book:'Kalshi',units:risk/unitSize,unitSize,odds,createdAt:fs[0].createdAt||new Date().toISOString(),groupKey:gameIds.length===1?gameIds[0]:'MULTI',status:'PENDING',category,source:'LIVE'}
