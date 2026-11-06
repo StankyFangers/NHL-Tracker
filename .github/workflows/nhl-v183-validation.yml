@@ -1,0 +1,58 @@
+name: NHL Tracker v1.8.3 Feature Validation
+
+on:
+  push:
+    branches:
+      - feature/telegram-notifications
+    paths:
+      - .github/workflows/nhl-v183-validation.yml
+      - src/main/**
+      - src/preload/**
+      - src/renderer/src/App.tsx
+      - src/renderer/src/sportsbook*.tsx
+      - src/renderer/src/sportsbookBalances.css
+      - src/renderer/src/sportsbookCatalog.ts
+      - src/renderer/src/sportsbookCatalog.css
+      - src/renderer/src/SportsbookCatalogSettings.tsx
+      - src/renderer/src/kalshiImport.ts
+      - tests/**
+      - package.json
+      - package-lock.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-package:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Install pinned dependencies
+        run: npm ci
+      - name: Verify NHL odds regression
+        run: node --test tests/kalshiCategoryPreservation.test.mjs tests/kalshiAmericanOdds.test.mjs
+      - name: Telegram monitoring tests
+        working-directory: telegram-cloud
+        run: npm test
+      - name: Build Electron app
+        run: npm run build
+      - name: Package unsigned Windows NSIS test installer
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder --win nsis --x64 --publish never
+      - name: Verify and upload v1.8.3 preview
+        shell: pwsh
+        run: |
+          $f = @(Get-ChildItem 'release/NHL Tracker Setup 1.8.3.exe')
+          if ($f.Count -ne 1 -or $f[0].Length -lt 1000000) { throw "Installer missing or suspiciously small" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NHL-Tracker-v1.8.3-Preview-Windows
+          path: release/NHL Tracker Setup 1.8.3.exe
+          if-no-files-found: error
