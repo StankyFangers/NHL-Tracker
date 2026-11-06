@@ -81,13 +81,20 @@ jobs:
           retention-days: 30
           compression-level: 0
 
-      - name: Avoid publishing an outdated feature branch commit
+      - name: Check whether this is the latest branch revision
+        id: freshness
         shell: bash
         run: |
           latest=$(git ls-remote origin refs/heads/feature/telegram-notifications | cut -f1)
-          if [ "$latest" != "$GITHUB_SHA" ]; then echo "Newer branch revision exists; this run will not publish."; exit 1; fi
+          if [ "$latest" = "$GITHUB_SHA" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "This build is superseded by a newer commit. Skipping publication safely."
+          fi
 
       - name: Publish GitHub Release (Check for Updates)
+        if: steps.freshness.outputs.publish == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -119,6 +126,7 @@ jobs:
           fi
 
       - name: Confirm GitHub Release is visible
+        if: steps.freshness.outputs.publish == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
