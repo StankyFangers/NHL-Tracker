@@ -7,7 +7,7 @@ import { app, BrowserWindow, ipcMain, Notification, shell, dialog, net } from 'e
 import { join } from 'path'
 import { mkdir, open, rename, unlink, readFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
-import { spawn } from 'node:child_process'
+import {launchUpdateCoordinator} from './updateCoordinator'
 import { writeFile } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 
@@ -471,32 +471,24 @@ app.whenReady().then(() => {
     updateController.abort()
     return {cancelled:true}
   })
-  ipcMain.handle('app:installUpdate',()=>{
+  ipcMain.handle('app:installUpdate',async()=>{
     const pending=stagedUpdate
     if(!pending||updateBusy)return {error:'Download the installer first.'}
     if(!app.isPackaged||process.platform!=='win32')return {error:'Installation requires the packaged Windows app.'}
-    // Launch a detached installer coordinator. It waits until NHL Tracker has
-    // exited, silently upgrades using the same NSIS appId, then relaunches it.
-    // No user-data deletion or shortcut/pinning changes are requested.
-    const quote=(value:string)=>value.replace(/'/g,"''")
-    const script=[
-      "$ErrorActionPreference='Stop'",
-      '$originalPid='+process.pid,
-      'while(Get-Process -Id $originalPid -ErrorAction SilentlyContinue){Start-Sleep -Milliseconds 450}',
-      "$installer='"+quote(pending.path)+"'",
-      "$appExe='"+quote(process.execPath)+"'",
-      "$resultFile='"+quote(join(app.getPath('userData'),'last-update-result.json'))+"'",
-      "try { $p=Start-Process -FilePath $installer -ArgumentList '/S' -Wait -PassThru; if($p.ExitCode -ne 0){throw ('Installer exited with code '+$p.ExitCode)}; @{ok=$true;version='"+quote(pending.version)+"'} | ConvertTo-Json -Compress | Set-Content -LiteralPath $resultFile -Encoding UTF8 } catch { @{ok=$false;message=$_.Exception.Message} | ConvertTo-Json -Compress | Set-Content -LiteralPath $resultFile -Encoding UTF8 }",
-      'Start-Process -FilePath $appExe'
-    ].join('; ')
-    const args=['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand',Buffer.from(script,'utf16le').toString('base64')]
     try{
-      const child=spawn('powershell.exe',args,{detached:true,stdio:'ignore',windowsHide:true})
-      child.on('error',e=>console.error('Update installer launcher failed',String(e)))
-      child.unref()
-      setImmediate(()=>app.quit())
-      return {started:true}
-    }catch(error:any){return {error:'Could not launch installer: '+String(error?.message||error)}}
+      const launched=await launchUpdateCoordinator({
+        installer:pending.path,version:pending.version,
+        appExecutable:process.execPath,userData:app.getPath('userData'),parentPid:process.pid
+      })
+      // The helper confirms it is running before we allow the app to close.
+      // It logs progress and restarts NHL Tracker on both success and failure.
+      setTimeout(()=>app.quit(),350)
+      return launched
+    }catch(error:any){
+      const message=String(error?.message||error)
+      emitUpdate({state:'ERROR',message})
+      return {error:message}
+    }
   })
 
   ipcMain.handle('app:lastUpdateResult',async()=>{
