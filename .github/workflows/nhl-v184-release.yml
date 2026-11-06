@@ -51,6 +51,16 @@ jobs:
       - name: Install exact lockfile dependencies
         run: npm ci
 
+      - name: Verify source revision contains updater files
+        shell: bash
+        run: |
+          echo "Build revision: $GITHUB_SHA"
+          git rev-parse HEAD
+          test -f tests/updateCoordinator.test.mjs
+          test -f src/main/updateCoordinator.ts
+          test -f src/main/index.ts
+          echo "Updater test and coordinator source are present."
+
       - name: Prevent repeat Kalshi sync from changing existing categories
         run: node --test tests/kalshiCategoryPreservation.test.mjs tests/kalshiAmericanOdds.test.mjs tests/sportsbookPricingFormats.test.mjs tests/updateCoordinator.test.mjs
 
