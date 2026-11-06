@@ -1233,11 +1233,70 @@ function TeamPerformance({bets,unitSize,leagueStandings}:{bets:Bet[],unitSize:nu
 function versionParts(v:string){return String(v||'').replace(/^v/i,'').split('.').map(x=>Number(x)||0)}
 function newerVersion(latest:string,current:string){const a=versionParts(latest),b=versionParts(current);for(let i=0;i<Math.max(a.length,b.length);i++){const d=(a[i]||0)-(b[i]||0);if(d!==0)return d>0}return false}
 function AppUpdates(){
- const [state,setState]=useState<any>({kind:'IDLE',installed:installedAppVersion});const [checking,setChecking]=useState(false)
- const check=async()=>{setChecking(true);setState((x:any)=>({...x,kind:'CHECKING'}));try{const r=await window.nhlTracker.updateInfo();const installed=String(r?.installedVersion||installedAppVersion).replace(/^v/i,'');if(r?.status==='NO_RELEASE')setState({kind:'NO_RELEASE',installed});else if(r?.status==='ERROR')setState({kind:'ERROR',installed,message:r?.message});else{const latest=String(r?.latestVersion||'').replace(/^v/i,'');setState({kind:newerVersion(latest,installed)?'UPDATE':'CURRENT',installed,latest,url:r?.releaseUrl})}}catch(e:any){setState({kind:'ERROR',installed:state.installed||installedAppVersion,message:e?.message||'Unable to check for updates.'})}finally{setChecking(false)}}
- return <section className="settingsCard appUpdates"><div className="appUpdatesHead"><div><h2>App Updates</h2><p>Check GitHub manually for a newer NHL Tracker release. Nothing downloads or installs automatically.</p></div><div className="installedVersion"><small>INSTALLED VERSION</small><b>v{state.installed||installedAppVersion}</b></div></div><div className="updateActions"><button onClick={check} disabled={checking}>{checking?'CHECKING…':'CHECK FOR UPDATES'}</button>{state.kind==='UPDATE'&&state.url&&<button className="downloadUpdate" onClick={()=>window.nhlTracker.openUpdateUrl(state.url)}>DOWNLOAD UPDATE</button>}</div>{state.kind==='NO_RELEASE'&&<div className="updateStatus neutral"><b>NO PUBLISHED RELEASE YET</b><span>The repository is connected correctly. Publish the first GitHub Release when v1.7.0 is ready.</span></div>}{state.kind==='CURRENT'&&<div className="updateStatus good"><b>UP TO DATE</b><span>v{state.installed} is the latest published version.</span></div>}{state.kind==='UPDATE'&&<div className="updateStatus available"><b>UPDATE AVAILABLE · v{state.latest}</b><span>Installed: v{state.installed}. Open the GitHub release to download the installer.</span></div>}{state.kind==='ERROR'&&<div className="updateStatus bad"><b>UNABLE TO CHECK FOR UPDATES</b><span>{state.message||'Check your internet connection and try again.'}</span></div>}</section>
+ const [state,setState]=useState<any>({kind:'IDLE',installed:installedAppVersion})
+ const [checking,setChecking]=useState(false)
+ const [working,setWorking]=useState(false)
+ const [progress,setProgress]=useState<any>({state:'IDLE'})
+ useEffect(()=>{
+  const stop=(window.nhlTracker as any).onUpdateProgress((event:any)=>setProgress(event))
+  return()=>{if(typeof stop==='function')stop()}
+ },[])
+ const check=async()=>{
+  setChecking(true);setState((x:any)=>({...x,kind:'CHECKING'}))
+  try{
+   const r=await window.nhlTracker.updateInfo()
+   const installed=String(r?.installedVersion||installedAppVersion).replace(/^v/i,'')
+   if(r?.status==='NO_RELEASE')setState({kind:'NO_RELEASE',installed})
+   else if(r?.status==='ERROR')setState({kind:'ERROR',installed,message:r?.message})
+   else {
+    const latest=String(r?.latestVersion||'').replace(/^v/i,'')
+    setState({kind:newerVersion(latest,installed)?'UPDATE':'CURRENT',installed,latest,url:r?.releaseUrl})
+   }
+  }catch(e:any){setState({kind:'ERROR',installed:state.installed||installedAppVersion,message:e?.message||'Unable to check for updates.'})}
+  finally{setChecking(false)}
+ }
+ const download=async()=>{
+  setWorking(true)
+  setProgress({state:'PREPARING'})
+  try{
+   const result=await (window.nhlTracker as any).downloadUpdate()
+   if(result?.error)setProgress({state:'ERROR',message:result.error})
+  }catch(e:any){setProgress({state:'ERROR',message:String(e?.message||e)})}
+  finally{setWorking(false)}
+ }
+ const cancel=async()=>{await (window.nhlTracker as any).cancelUpdate()}
+ const install=async()=>{
+  if(!window.confirm('Close NHL Tracker and install v'+String(progress.version||state.latest)+' now? The existing account data and local settings will be retained. NHL Tracker will reopen when installation finishes.'))return
+  const result=await (window.nhlTracker as any).installUpdate()
+  if(result?.error)setProgress({state:'ERROR',message:result.error})
+ }
+ const pct=Math.max(0,Math.min(100,Number(progress.percent)||0))
+ const eta=progress.secondsRemaining==null?'Calculating…':progress.secondsRemaining<60?progress.secondsRemaining+' seconds':Math.ceil(progress.secondsRemaining/60)+' minutes'
+ const speed=Number(progress.bytesPerSecond)>0?(progress.bytesPerSecond/1024/1024).toFixed(1)+' MB/s':'—'
+ return <section className="settingsCard appUpdates">
+  <div className="appUpdatesHead"><div><h2>App Updates</h2><p>Check for new versions, download safely inside NHL Tracker, and install when you're ready. Your saved wagers and local preferences stay in place.</p></div><div className="installedVersion"><small>INSTALLED VERSION</small><b>v{state.installed||installedAppVersion}</b></div></div>
+  <div className="updateActions">
+   <button onClick={check} disabled={checking||working}>{checking?'CHECKING…':'CHECK FOR UPDATES'}</button>
+   {state.kind==='UPDATE'&&progress.state!=='READY'&&<button className="downloadUpdate" onClick={download} disabled={working}>{working?'DOWNLOADING…':'UPDATE APP · v'+state.latest}</button>}
+   {working&&<button type="button" onClick={cancel}>CANCEL DOWNLOAD</button>}
+   {progress.state==='READY'&&<button className="downloadUpdate" onClick={install}>INSTALL & RESTART · v{progress.version}</button>}
+  </div>
+  {(working||progress.state==='DOWNLOADING'||progress.state==='PREPARING')&&<div style={{marginTop:18,padding:16,border:'1px solid #35617b',borderRadius:10,background:'#142d3e'}}>
+   <strong>{progress.state==='PREPARING'?'Preparing download…':'Downloading NHL Tracker v'+(progress.version||state.latest)}</strong>
+   <div role="progressbar" aria-label="Update download progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)} style={{margin:'12px 0 7px',height:14,background:'#294656',borderRadius:12,overflow:'hidden'}}>
+    <div style={{height:'100%',width:pct+'%',background:'linear-gradient(90deg,#1e8caf,#36c6a2)',transition:'width .2s ease'}}/>
+   </div>
+   <div style={{display:'flex',justifyContent:'space-between',flexWrap:'wrap',gap:8,fontSize:13}}><b>{pct.toFixed(1)}% complete</b><span>{speed} · Estimated time remaining: {eta}</span></div>
+  </div>}
+  {progress.state==='READY'&&<div className="updateStatus good"><b>UPDATE DOWNLOADED · v{progress.version}</b><span>The installer is verified and ready. Choose Install & Restart to close the application, install quietly, and reopen NHL Tracker. Your wagers and settings are not deleted.</span></div>}
+  {progress.state==='ERROR'&&<div className="updateStatus bad"><b>UPDATE DOWNLOAD FAILED</b><span>{progress.message||'Try again after checking your connection.'}</span></div>}
+  {state.kind==='NO_RELEASE'&&<div className="updateStatus neutral"><b>NO PUBLISHED RELEASE</b><span>No official GitHub Release is currently available.</span></div>}
+  {state.kind==='CURRENT'&&<div className="updateStatus good"><b>UP TO DATE</b><span>v{state.installed} is the latest published version.</span></div>}
+  {state.kind==='UPDATE'&&progress.state!=='READY'&&<div className="updateStatus available"><b>UPDATE AVAILABLE · v{state.latest}</b><span>Installed: v{state.installed}. Choose Update App to download within NHL Tracker. Installation requires your confirmation.</span></div>}
+  {state.kind==='ERROR'&&<div className="updateStatus bad"><b>UNABLE TO CHECK FOR UPDATES</b><span>{state.message||'Check your internet connection and try again.'}</span></div>}
+  <p style={{fontSize:12,opacity:.7,marginTop:16}}>Updates install over the existing app. The installer uses the same application identity; Windows taskbar/Start pin behavior can depend on system policies.</p>
+ </section>
 }
-
 function DataManagement({bets,setBets,unitSize,defaultDate,isTestMode,liveUsername,section="Backup Account Data"}:{bets:Bet[],setBets:any,unitSize:number,defaultDate:string,isTestMode:boolean,liveUsername?:string;section?:string}){
  const[exportDate,setExportDate]=useState(defaultDate),[retroStart,setRetroStart]=useState(defaultDate),[retroEnd,setRetroEnd]=useState(defaultDate),[retroBusy,setRetroBusy]=useState(false),[notice,setNotice]=useState('');const fileRef=useRef<HTMLInputElement>(null),backupFileRef=useRef<HTMLInputElement>(null)
  const portableRow=(b:Bet)=>{const row:any={BetID:b.id,Date:b.date,Category:b.category||'COMBOS',Sportsbook:b.book,Units:b.units,UnitSize:b.unitSize,'American Odds':b.odds??'',Payout:b.payout??'','Bonus Bet':b.bonusBet?'YES':'NO',Status:b.status||'PENDING'};for(let i=0;i<6;i++){const l=b.legs[i];row[`Player ${i+1}`]=l?.player||'';row[`Market ${i+1}`]=l?.stat||'';row[`Target ${i+1}`]=l?.qty??''}return row}
