@@ -12,6 +12,7 @@ test('All four supported formats are declared with Kalshi payout default',()=>{
 })
 test('Quotes are normalized to American odds, retaining exact payouts when entered',()=>{
  assert.match(source,/const odds=profitRatio>=1\?Math\.round\(profitRatio\*100\):-Math\.round\(100\/profitRatio\)/)
+ assert.match(source,/if\(payout==null\)payout=Math\.round\(stake\*decimal\*100\)\/100/)
  assert.match(source,/return \{odds,payout\}/)
  for(const proof of ['fractional','decimal','payout'])assert.ok(source.toLowerCase().includes(proof))
 })
