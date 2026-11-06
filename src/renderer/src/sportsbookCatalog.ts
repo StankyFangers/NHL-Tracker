@@ -95,6 +95,9 @@ export function parseSportsbookPrice(raw:string,format:SportsbookPricingFormat,s
  const profitRatio=decimal-1
  const odds=profitRatio>=1?Math.round(profitRatio*100):-Math.round(100/profitRatio)
  if(!Number.isFinite(odds)||Math.abs(odds)<100)throw Error('Unable to convert price to American odds.')
+ // Preserve exact expected cash return (rounded to cents), even when decimal
+ // or fractional odds cannot be represented exactly as integer American odds.
+ if(payout==null)payout=Math.round(stake*decimal*100)/100
  return {odds,payout}
 }
 
