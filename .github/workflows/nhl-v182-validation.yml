@@ -6,6 +6,16 @@ on:
       - feature/telegram-notifications
     paths:
       - .github/workflows/nhl-v182-validation.yml
+      - src/main/**
+      - src/preload/**
+      - src/renderer/src/App.tsx
+      - src/renderer/src/sportsbook*.tsx
+      - src/renderer/src/sportsbookCatalog.ts
+      - src/renderer/src/SportsbookCatalogSettings.tsx
+      - src/renderer/src/kalshiImport.ts
+      - tests/**
+      - package.json
+      - package-lock.json
   workflow_dispatch:
 
 permissions:
