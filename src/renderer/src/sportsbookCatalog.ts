@@ -97,3 +97,22 @@ export function parseSportsbookPrice(raw:string,format:SportsbookPricingFormat,s
  if(!Number.isFinite(odds)||Math.abs(odds)<100)throw Error('Unable to convert price to American odds.')
  return {odds,payout}
 }
+
+export function priceInputForExisting(odds:number|undefined,payout:number|undefined,format:SportsbookPricingFormat,stake:number):string{
+ if(format==='PAYOUT'){
+  const gross=payout!=null?payout:odds!=null&&Math.abs(odds)>=100?stake*(1+(odds>0?odds/100:100/Math.abs(odds))):undefined
+  return gross!=null&&Number.isFinite(gross)?gross.toFixed(2):''
+ }
+ if(odds==null||!Number.isFinite(odds)||Math.abs(odds)<100)return ''
+ if(format==='AMERICAN')return (odds>0?'+':'')+odds
+ const ratio=odds>0?odds/100:100/Math.abs(odds)
+ if(format==='DECIMAL')return (1+ratio).toFixed(4).replace(/0+$/,'').replace(/\.$/,'')
+ // Approximate a readable fraction from the stored rounded American odds.
+ let top=1,bottom=1,diff=Infinity
+ for(let d=1;d<=100;d++){
+  const n=Math.max(1,Math.round(ratio*d)),err=Math.abs(n/d-ratio)
+  if(err<diff){top=n;bottom=d;diff=err}
+  if(diff<1e-7)break
+ }
+ return top+'/'+bottom
+}
