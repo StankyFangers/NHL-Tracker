@@ -38,7 +38,7 @@ export default function SportsbookManagement({view,account,bets}:{view:View;acco
   addBookAdjustment(account,{book,date:day,amount:number,description});setAmount('');setDescription('');setNotice('Adjustment saved. Your original opening balance and betting P/L have not changed.')
  }catch(e){setNotice(e instanceof Error?e.message:'Could not save adjustment.')}
  }
- const adjustmentRows=adjustments.filter(a=>bookOf(a.book)===book).sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt.localeCompare(a.createdAt))
+ const adjustmentRows=adjustments.filter(a=>String(a.book).toLowerCase()===book.toLowerCase()).sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt.localeCompare(a.createdAt))
  const allTransactions=[...wagers.map(w=>({id:w.id,day:dayOf(w),kind:'BET' as const,wager:w,adjustment:null as BookAdjustment|null})),...adjustmentRows.map(a=>({id:a.id,day:a.date,kind:'ADJUSTMENT' as const,wager:null as Wager|null,adjustment:a}))].sort((a,b)=>b.day.localeCompare(a.day))
  const grouped=useMemo(()=>{const map=new Map<string,typeof allTransactions>();for(const r of allTransactions){const key=groupKey(r.day,period),list=map.get(key)||[];list.push(r);map.set(key,list)}return [...map].sort(([a],[b])=>b.localeCompare(a))},[allTransactions,period])
  const selected=wagers.filter(w=>{const date=dayOf(w),start=range==='CUSTOM'?from:rangeStart(range,until);return(!start||date>=start)&&date<=until})
