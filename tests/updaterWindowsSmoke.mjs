@@ -3,6 +3,7 @@ import {readFileSync,mkdtempSync,readFileSync as read,existsSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {createRequire} from 'node:module'
+import {spawnSync} from 'node:child_process'
 import ts from 'typescript'
 
 if(process.platform!=='win32')throw Error('Windows-only smoke test')
@@ -17,6 +18,21 @@ function loadModule(filename){
 const {launchUpdateCoordinator}=loadModule('../src/main/updateCoordinator.ts')
 const {launchNodeUpdateCoordinator}=loadModule('../src/main/nodeUpdateCoordinator.ts')
 const userData=mkdtempSync(join(tmpdir(),'NHL Tracker Updater Smoke '))
+// Verify Windows PowerShell can execute a tiny script at a path with spaces
+// independently of either updater. Report stdout, stderr, and exit code.
+const probeScript=join(userData,'powershell preflight.ps1')
+const {writeFileSync}=require('node:fs')
+writeFileSync(probeScript,"Write-Output 'PREFLIGHT_OK'\\r\\n", 'utf8')
+const probeInvocation='& '+("'" + probeScript.replace(/'/g,"''") + "'")
+const probe=spawnSync('powershell.exe',[
+ '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass',
+ '-EncodedCommand',Buffer.from(probeInvocation,'utf16le').toString('base64')
+],{encoding:'utf8',timeout:15000,windowsHide:true})
+console.log('PowerShell preflight status:',probe.status,'signal:',probe.signal)
+console.log('PowerShell preflight stdout:',probe.stdout,'stderr:',probe.stderr)
+if(probe.error)console.error('PowerShell preflight error:',probe.error)
+assert.equal(probe.status,0,'Standalone PowerShell invocation must exit successfully')
+assert.match(probe.stdout,/PREFLIGHT_OK/,'Standalone PowerShell must execute file with spaces in path')
 // This tests the real detached PowerShell startup + handshake.
 // dryRun prevents installation and exiting/restarting NHL Tracker.
 let started
