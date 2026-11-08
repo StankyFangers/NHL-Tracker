@@ -7,7 +7,6 @@ import { app, BrowserWindow, ipcMain, Notification, shell, dialog, net } from 'e
 import { join } from 'path'
 import { writeFile } from 'fs/promises'
 import {registerAppUpdater} from './appUpdater'
-import { writeFile } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 
 const NHL = 'https://api-web.nhle.com/v1'
