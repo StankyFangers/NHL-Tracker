@@ -1,3 +1,4 @@
+import {resolveProviderPlayerAlias,readPlayerDb} from './playerIdentityDb'
 // Conservative Kalshi -> NHL Tracker wager reconstruction.
 // Never invent player legs or treat fills as independently placed wagers.
 export type KalshiFill={id:string;fillId:string;orderId:string;date:string;createdAt?:string;ticker:string;title:string;side:string;action:string;count:string;price:string;fee:string;isNhl:boolean;review:string;legs:{ticker:string;side:string;title:string;resolved:boolean;source:string;nhlTicker:boolean}[]}
@@ -123,7 +124,14 @@ function attachNhlMatch(legs:ParsedLeg[],_dfo:Record<string,any>,games:any[],ros
  for(const leg of legs){
   const player=kalshiNhlPlayerNameKey(leg.player)
   // The game roster is the identity source. DFO lineup coverage is optional and used for classification.
-  const matchingTeams=Object.entries(rosterPlayers).filter(([_,names])=>names.some(name=>kalshiNhlPlayerNameKey(name)===player)).map(([team])=>team)
+  const linked=resolveProviderPlayerAlias('Kalshi',leg.player)
+  const matchingTeams=Object.entries(rosterPlayers).filter(([team,names])=>{
+   if(linked){
+    const identity=readPlayerDb().find(p=>p.id===linked)
+    return !!identity?.teams.includes(team)&&names.some(name=>kalshiNhlPlayerNameKey(name)===kalshiNhlPlayerNameKey(identity.name))
+   }
+   return names.some(name=>kalshiNhlPlayerNameKey(name)===player)
+  }).map(([team])=>team)
   if(matchingTeams.length!==1)return false
   const team=matchingTeams[0]
   const matchedGames=games.filter(g=>teamOf(g,'away')===team||teamOf(g,'home')===team)
@@ -308,7 +316,10 @@ export async function verifyKalshiIdentity(candidates:Candidate[],roster:(team:s
      walk(raw);cache.set(l.team,names)
     }catch{error='NHL roster could not load for '+l.team;break}
    }
-   let identities=cache.get(l.team)?.get(kalshiNhlPlayerNameKey(l.player))||[]
+   const linked=resolveProviderPlayerAlias('Kalshi',l.player,l.team)
+   const identity=linked?readPlayerDb().find(p=>p.id===linked&&p.teams.includes(l.team!)):undefined
+   let identities=identity?cache.get(l.team)?.get(kalshiNhlPlayerNameKey(identity.name))||[]:cache.get(l.team)?.get(kalshiNhlPlayerNameKey(l.player))||[]
+   if(linked)identities=identities.filter(p=>p.id===linked)
    if(l.sweaterNumber)identities=identities.filter(p=>p.sweaterNumber===l.sweaterNumber)
    const ids=[...new Set(identities.map(p=>p.id))]
    if(ids.length!==1){
