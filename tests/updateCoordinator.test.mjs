@@ -45,3 +45,9 @@ test('Node updater targets existing custom installation directory and has safety
  assert.match(nodeHelper,/fs\.writeFileSync\(config\.ready,'READY'\)/)
  assert.match(nodeHelper,/outcome\(false/)
 })
+
+test('Both update launchers use NSIS update mode and preserve custom install directory',()=>{
+ assert.match(nodeHelper,/\['--updated','\/S','\/D='\+installDir\]/)
+ assert.match(helper,/\$startInfo\.Arguments = '--updated \/S \/D=' \+ \$installDir/)
+ assert.match(helper,/\$installDir = Split-Path -Parent \$appExe/)
+})
