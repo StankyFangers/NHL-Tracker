@@ -103,7 +103,7 @@ export function matchHistoricalBoxscores(legs:ParsedLeg[],games:any[],players:Hi
  const knownGames=new Set(games.map(g=>String(g.id)))
  const picks:ParsedLeg[]=legs.map(l=>({...l}))
  for(const leg of picks){
-  const candidates=players.filter(p=>knownGames.has(String(p.gameId))&&sameHistoricalPlayer(leg.player,p.player))
+  const candidates=players.filter(p=>knownGames.has(String(p.gameId))&&(sameHistoricalPlayer(leg.player,p.player)||resolveProviderPlayerAlias('Kalshi',leg.player,p.team)===p.playerId))
   const identities=new Map(candidates.map(p=>[String(p.gameId)+':'+p.playerId,p]))
   if(identities.size!==1)return {ok:false,reason:(identities.size?'Ambiguous player across game boxscores: ':'Player missing from game boxscores: ')+leg.player}
   const match=[...identities.values()][0]
