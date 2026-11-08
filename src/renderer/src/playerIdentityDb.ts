@@ -104,3 +104,11 @@ export function resolveProviderPlayerAlias(provider:string,label:string,team?:st
  return ids.length===1?ids[0]:undefined
 }
 export function providerPlayerAliasesForId(playerId:number){return readProviderPlayerAliases().filter(a=>a.playerId===playerId)}
+
+export function resolveAnyProviderPlayerId(label:string,team?:string):number|undefined{
+ const key=aliasLabel(label),teamCode=team?.trim().toUpperCase()
+ if(!key)return undefined
+ const found=readProviderPlayerAliases().filter(a=>aliasLabel(a.label)===key&&(!teamCode||a.team===teamCode))
+ const ids=[...new Set(found.map(a=>a.playerId))]
+ return ids.length===1?ids[0]:undefined
+}
