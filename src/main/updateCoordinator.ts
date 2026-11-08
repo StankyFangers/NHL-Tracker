@@ -33,6 +33,8 @@ export async function launchUpdateCoordinator(config:UpdateConfig){
   '    [System.IO.File]::WriteAllText($result,($payload | ConvertTo-Json -Compress),([System.Text.UTF8Encoding]::new($false)))',
   '  } catch { Log ("Could not save result: " + $_.Exception.Message) }',
   '}',
+  'Write-Output ("COORDINATOR_BOOT ready=" + $ready)',
+  '$installFailed = $false',
   'try {',
   "  Set-Content -LiteralPath $ready -Value 'READY' -Encoding ASCII",
   '  Log ("Coordinator started for " + $targetVersion)',
@@ -68,7 +70,10 @@ export async function launchUpdateCoordinator(config:UpdateConfig){
   '  }',
   "  Save-Result $true ('Installed NHL Tracker v' + $targetVersion)",
   '} catch {',
-  '  Log ("INSTALL FAILED: " + $_.Exception.ToString())',
+  '  $installFailed = $true',
+  '  $failureText = $_.Exception.ToString()',
+  '  [Console]::Error.WriteLine("COORDINATOR_ERROR: " + $failureText)',
+  '  Log ("INSTALL FAILED: " + $failureText)',
   '  Save-Result $false $_.Exception.Message',
   '} finally {',
   '  try {',
@@ -77,7 +82,8 @@ export async function launchUpdateCoordinator(config:UpdateConfig){
   '      Start-Process -FilePath $appExe',
   "    } else { Log 'Cannot restart because NHL Tracker executable is missing' }",
   '  } catch { Log ("Restart failed: " + $_.Exception.ToString()) }',
-  '}'
+  '}',
+  'if ($installFailed) { exit 1 }'
  ].join('\r\n')
  await writeFile(scriptPath,script,'utf8')
  // Capture PowerShell's *pre-handshake* stdout/stderr. Previously stdio:'ignore'
