@@ -1,0 +1,229 @@
+name: NHL Tracker v1.8.7 Windows Release
+
+on:
+  push:
+    branches:
+      - feature/v1.8.7-scoreboard-header-ui
+    paths:
+      - .github/workflows/nhl-v187-release.yml
+      - src/main/index.ts
+      - src/main/updateCoordinator.ts
+      - src/main/nodeUpdateCoordinator.ts
+      - tests/updaterWindowsSmoke.mjs
+      - src/preload/index.ts
+      - src/renderer/src/playerIdentityDb.ts
+      - src/renderer/src/kalshiImport.ts
+      - src/renderer/src/KalshiNHL.tsx
+      - tests/playerIdentityCollision.test.mjs
+      - tests/updateCoordinator.test.mjs
+      - src/renderer/src/App.tsx
+      - src/renderer/src/SportsbookCatalogSettings.tsx
+      - src/renderer/src/sportsbookCatalog.ts
+      - src/renderer/src/sportsbookCatalog.css
+      - src/renderer/src/sportsbookBalances.tsx
+      - src/renderer/src/sportsbookBalances.css
+      - tests/sportsbookPricingFormats.test.mjs
+      - package.json
+      - package-lock.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nhl-tracker-v1.8.7-release
+  cancel-in-progress: false
+
+jobs:
+  release-windows:
+    name: Verify, build and publish Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Confirm release version
+        shell: bash
+        run: |
+          node -e "const p=require('./package.json');if(p.version!=='1.8.7')process.exit(1)"
+          node -e "const p=require('./package-lock.json');if(p.version!=='1.8.7'||p.packages[''].version!=='1.8.7')process.exit(1)"
+
+      - name: Install exact lockfile dependencies (retry transient Electron download failures)
+        shell: pwsh
+        env:
+          npm_config_fetch_retries: '4'
+          npm_config_fetch_retry_mintimeout: '20000'
+          npm_config_fetch_retry_maxtimeout: '120000'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            # Electron downloads a separate binary during npm ci. The official
+            # GitHub release endpoint has repeatedly returned HTTP 504.
+            # Try the mirror documented by Electron, then the official source.
+            if ($attempt -eq 2) {
+              Remove-Item Env:ELECTRON_MIRROR -ErrorAction SilentlyContinue
+              Write-Host "npm ci attempt $attempt of 3 (official Electron GitHub releases)"
+            } else {
+              $env:ELECTRON_MIRROR = 'https://npmmirror.com/mirrors/electron/'
+              Write-Host "npm ci attempt $attempt of 3 (Electron documented CDN mirror)"
+            }
+            & npm.cmd ci
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "npm ci succeeded."
+              exit 0
+            }
+            if ($attempt -eq 3) {
+              throw "npm ci failed after three attempts (last exit code $LASTEXITCODE)"
+            }
+            Write-Warning "Dependency install failed; retrying after 20 seconds."
+            Start-Sleep -Seconds 20
+          }
+
+      - name: Verify source revision contains updater files
+        shell: bash
+        run: |
+          echo "Build revision: $GITHUB_SHA"
+          git rev-parse HEAD
+          test -f tests/updateCoordinator.test.mjs
+          test -f src/main/updateCoordinator.ts
+          test -f src/main/nodeUpdateCoordinator.ts
+          test -f tests/updaterWindowsSmoke.mjs
+          test -f src/main/index.ts
+          echo "Updater test and coordinator source are present."
+
+      - name: Prevent repeat Kalshi sync from changing existing categories
+        run: node --test tests/kalshiCategoryPreservation.test.mjs tests/kalshiAmericanOdds.test.mjs tests/sportsbookPricingFormats.test.mjs tests/updateCoordinator.test.mjs tests/playerIdentityCollision.test.mjs
+
+      - name: Verify detached PowerShell and Electron/Node startup on Windows
+        run: node tests/updaterWindowsSmoke.mjs
+
+      - name: Run cloud monitoring unit tests (Windows-safe discovery)
+        working-directory: telegram-cloud
+        run: npm test
+
+      - name: Build production Electron app
+        run: npm run build
+
+      - name: Create Windows NSIS installer (Electron and NSIS mirrors)
+        shell: pwsh
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Electron runtime and electron-builder toolsets (NSIS, resources,
+          # winCodeSign) use TWO different download source settings.
+          # Both must be configured; the previous attempts only set Electron.
+          $sources = @(
+            @{ Name = 'npmmirror'; Electron = 'https://npmmirror.com/mirrors/electron/'; Builder = 'https://npmmirror.com/mirrors/electron-builder-binaries/' },
+            @{ Name = 'Huawei mirror'; Electron = 'https://npmmirror.com/mirrors/electron/'; Builder = 'https://mirrors.huaweicloud.com/electron-builder-binaries/' },
+            @{ Name = 'official GitHub'; Electron = ''; Builder = '' }
+          )
+          for ($i = 0; $i -lt $sources.Count; $i++) {
+            $source = $sources[$i]
+            Write-Host "NSIS packaging attempt $($i+1) of $($sources.Count): $($source.Name)"
+            if ($source.Electron) {
+              $env:ELECTRON_MIRROR = $source.Electron
+            } else {
+              Remove-Item Env:ELECTRON_MIRROR -ErrorAction SilentlyContinue
+            }
+            if ($source.Builder) {
+              $env:ELECTRON_BUILDER_BINARIES_MIRROR = $source.Builder
+            } else {
+              Remove-Item Env:ELECTRON_BUILDER_BINARIES_MIRROR -ErrorAction SilentlyContinue
+            }
+            Write-Host "Electron source: $($source.Electron)"
+            Write-Host "NSIS/toolset source: $($source.Builder)"
+            & .\node_modules\.bin\electron-builder.cmd --win nsis --x64 --publish never
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host 'Windows NSIS installer packaged successfully.'
+              exit 0
+            }
+            if ($i -eq $sources.Count - 1) {
+              throw "NSIS packaging failed for all three sources (last exit code $LASTEXITCODE)"
+            }
+            Write-Warning "Packaging source failed; switching mirrors in 15 seconds."
+            Start-Sleep -Seconds 15
+          }
+
+      - name: Verify release installer
+        shell: pwsh
+        run: |
+          $exe = @(Get-ChildItem -Path release -Filter '*.exe' -File -ErrorAction Stop)
+          if ($exe.Count -ne 1) { throw "Expected one Windows installer, found $($exe.Count)" }
+          if ($exe[0].Name -ne 'NHL Tracker Setup 1.8.7.exe') { throw "Unexpected installer filename: $($exe[0].Name)" }
+          if ($exe[0].Length -lt 1000000) { throw "Installer is unexpectedly small" }
+          Write-Host "Verified: $($exe[0].Name), $($exe[0].Length) bytes"
+
+      - name: Upload backup Actions artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NHL-Tracker-v1.8.7-Windows-Installer
+          path: release/*.exe
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Check whether this is the latest branch revision
+        id: freshness
+        shell: bash
+        run: |
+          latest=$(git ls-remote origin refs/heads/feature/v1.8.7-scoreboard-header-ui | cut -f1)
+          if [ "$latest" = "$GITHUB_SHA" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "This build is superseded by a newer commit. Skipping publication safely."
+          fi
+
+      - name: Publish GitHub Release (Check for Updates)
+        if: steps.freshness.outputs.publish == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > release-notes.md <<'EOF'
+          ## NHL Tracker v1.8.7 — Scoreboard header polish and automatic updater validation
+
+          What's new:
+          - Show the last manual Daily Faceoff lineup-check timestamp in local 12-hour time (e.g., Checked 11:11 AM).
+          - Remove the visible SLATE DATE label; keep the date picker, navigation arrows, and accessible date label.
+          - Preserve the v1.8.6 Windows update coordinator, its PowerShell fallback, and their startup safeguards.
+
+          **Upgrade test — v1.8.6 to v1.8.7**
+          - Keep a backup of your account data and confirm NHL Tracker currently reports v1.8.6.
+          - Use Settings → Updates → Check for Updates in the installed app.
+          - Download and install v1.8.7 in-app; observe the application exit and restart.
+          - Confirm the app reports v1.8.7, both header changes display, and your account data remains intact.
+          - If the update fails, do not uninstall or delete app data; collect the updater diagnostics.
+
+          **Notes**
+          - This is the first end-to-end user validation of in-app installation; passing CI alone does not prove it.
+          - No account migrations, wager edits, sportsbook changes, or storage resets are included.
+          - Local sportsbook settings and custom aliases are device-specific; preserve your existing user-data folder.
+          - Windows SmartScreen may warn because the app is not signed with a trusted publisher certificate.
+          EOF
+          if gh release view "v1.8.7" >/dev/null 2>&1; then
+            gh release upload "v1.8.7" release/*.exe --clobber
+            gh release edit "v1.8.7" --title "NHL Tracker v1.8.7 — Boys Tester Release" --notes-file release-notes.md --latest
+          else
+            gh release create "v1.8.7" release/*.exe \
+              --target "$GITHUB_SHA" \
+              --title "NHL Tracker v1.8.7 — Boys Tester Release" \
+              --notes-file release-notes.md \
+              --latest
+          fi
+
+      - name: Confirm GitHub Release is visible
+        if: steps.freshness.outputs.publish == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "v1.8.7" --json tagName,isDraft,isPrerelease,assets,url
