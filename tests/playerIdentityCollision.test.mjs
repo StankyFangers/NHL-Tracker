@@ -102,3 +102,14 @@ test('Historical Kalshi aliases resolve by NHL player ID, not just name',()=>{
  const src=kalshi.source
  assert.match(src,/resolveProviderPlayerAlias\('Kalshi',leg\.player,p\.team\)===p\.playerId/)
 })
+
+test('Never permit an ambiguous official same-name alias to pick the wrong teammate',()=>{
+ store.clear()
+ globalThis.window={dispatchEvent:()=>{}}
+ db.api.addPlayerIdentities(db.api.rosterEntries(roster,'VAN'))
+ assert.throws(()=>db.api.registerProviderPlayerAlias('Kalshi','Elias Pettersson',8480012,'VAN'),/Multiple NHL players share/)
+ db.api.registerProviderPlayerAlias('Kalshi','EP40',8480012,'VAN')
+ const parsed=kalshi.parseTitle('yes EP40: 1+','KXNHLPOINT')
+ assert.equal(parsed.player,'EP40')
+ assert.equal(db.api.resolveProviderPlayerAlias('Kalshi',parsed.player,'VAN'),8480012)
+})
