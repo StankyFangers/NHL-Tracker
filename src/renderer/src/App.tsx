@@ -824,18 +824,8 @@ function TrackerApp({initialTestAccount,onTestLogout,liveAccount,onLiveLogout}:{
   async function repair(){
    const targets=bets.filter(b=>b.date===localDate()&&!verifiedDays.some(v=>v.date===b.date)&&b.date>=BACKFILL_FIRST_DATE&&b.legs?.some(l=>l.kind!=='TEAM'&&['Point','Goal','Assist','Shot'].includes(String(l.stat))&&!Number(l.playerId)));
    if(!targets.length)return;
-   // Recover trusted player IDs from ALL saved wagers, not just the same game.
-   // A unique NHL player identity is stable across teams and game dates.
-   const knownIds=new Map<string,Set<number>>();
-   for(const bet of bets)for(const leg of bet.legs||[]){
-    if(leg.kind==='TEAM'||!Number.isInteger(Number(leg.playerId))||Number(leg.playerId)<=0)continue;
-    const key=playerIdentityKey(leg.player);
-    if(!key)continue;
-    if(!knownIds.has(key))knownIds.set(key,new Set());
-    knownIds.get(key)!.add(Number(leg.playerId));
-   }
-   const locallyRepairable=targets.some(b=>b.legs.some(l=>l.kind!=='TEAM'&&!Number(l.playerId)&&(
-    knownIds.get(playerIdentityKey(l.player))?.size===1||!!resolvePlayerId(l.player,l.team))));
+   // Never infer a missing player's ID from another wager with the same name.
+   const locallyRepairable=targets.some(b=>b.legs.some(l=>l.kind!=='TEAM'&&!Number(l.playerId)&&!!resolvePlayerId(l.player,l.team)));
    if(locallyRepairable){
     setBets(old=>old.map(b=>{
      if(b.date!==localDate()||verifiedDays.some(v=>v.date===b.date))return b;
@@ -843,8 +833,9 @@ function TrackerApp({initialTestAccount,onTestLogout,liveAccount,onLiveLogout}:{
      let changed=false;
      const legs=b.legs.map(l=>{
       if(l.kind==='TEAM'||Number(l.playerId)>0)return l;
-      const ids=knownIds.get(playerIdentityKey(l.player));
-      const id=ids?.size===1?[...ids][0]:resolvePlayerId(l.player,l.team);
+      // Previous bets alone cannot disambiguate same-name teammates. Only
+      // the verified NHL identity index may fill a missing ID here.
+      const id=resolvePlayerId(l.player,l.team);
       if(!id)return l;
       changed=true;return {...l,playerId:id};
      });
