@@ -64,7 +64,16 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           for ($attempt = 1; $attempt -le 3; $attempt++) {
-            Write-Host "npm ci attempt $attempt of 3"
+            # Electron downloads a separate binary during npm ci. The official
+            # GitHub release endpoint has repeatedly returned HTTP 504.
+            # Try the mirror documented by Electron, then the official source.
+            if ($attempt -eq 2) {
+              Remove-Item Env:ELECTRON_MIRROR -ErrorAction SilentlyContinue
+              Write-Host "npm ci attempt $attempt of 3 (official Electron GitHub releases)"
+            } else {
+              $env:ELECTRON_MIRROR = 'https://npmmirror.com/mirrors/electron/'
+              Write-Host "npm ci attempt $attempt of 3 (Electron documented CDN mirror)"
+            }
             & npm.cmd ci
             if ($LASTEXITCODE -eq 0) {
               Write-Host "npm ci succeeded."
