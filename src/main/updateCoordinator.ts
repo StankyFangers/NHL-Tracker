@@ -115,7 +115,7 @@ export async function launchUpdateCoordinator(config:UpdateConfig){
    startupOutput?'PowerShell output: '+startupOutput.slice(-2500):'',
    stderr?'Startup log: '+stderr:'',
    'Generated script: '+scriptPath,'Diagnostic log: '+startupLogFile,
-   'NHL Tracker remains open.'].filter(Boolean).join(' | ')
+   'NHL Tracker will stay open.'].filter(Boolean).join(' | ')
   throw new Error(diagnostic)
  }
  child.unref()
