@@ -46,7 +46,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
 
       - name: Confirm release version
@@ -55,8 +55,27 @@ jobs:
           node -e "const p=require('./package.json');if(p.version!=='1.8.6')process.exit(1)"
           node -e "const p=require('./package-lock.json');if(p.version!=='1.8.6'||p.packages[''].version!=='1.8.6')process.exit(1)"
 
-      - name: Install exact lockfile dependencies
-        run: npm ci
+      - name: Install exact lockfile dependencies (retry transient Electron download failures)
+        shell: pwsh
+        env:
+          npm_config_fetch_retries: '4'
+          npm_config_fetch_retry_mintimeout: '20000'
+          npm_config_fetch_retry_maxtimeout: '120000'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            Write-Host "npm ci attempt $attempt of 3"
+            & npm.cmd ci
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "npm ci succeeded."
+              exit 0
+            }
+            if ($attempt -eq 3) {
+              throw "npm ci failed after three attempts (last exit code $LASTEXITCODE)"
+            }
+            Write-Warning "Dependency install failed; retrying after 20 seconds."
+            Start-Sleep -Seconds 20
+          }
 
       - name: Verify source revision contains updater files
         shell: bash
