@@ -86,6 +86,8 @@ export function registerProviderPlayerAlias(provider:string,label:string,playerI
  if(!valid(playerId)||!/^[A-Z]{3}$/.test(teamCode))throw Error('Select a verified NHL player ID and team.')
  const identity=readPlayerDb().find(p=>p.id===Number(playerId)&&p.teams.includes(teamCode))
  if(!identity)throw Error('Verify and add this NHL identity and team before creating its sportsbook alias.')
+ const canonicalMatches=readPlayerDb().filter(p=>p.teams.includes(teamCode)&&playerAliasKey(p.name)===playerAliasKey(text))
+ if(new Set(canonicalMatches.map(p=>p.id)).size>1)throw Error('Multiple NHL players share that official name on '+teamCode+'. Use the sportsbook label with a jersey number or another unique identifier.')
  const aliases=readProviderPlayerAliases()
  const collision=aliases.find(a=>a.provider===book&&a.team===teamCode&&aliasLabel(a.label)===aliasLabel(text)&&a.playerId!==Number(playerId))
  if(collision)throw Error('That sportsbook label is already linked to a different NHL player on '+teamCode+'. Use a jersey number or another distinguishing label.')
