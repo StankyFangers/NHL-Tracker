@@ -10,6 +10,8 @@ on:
       - src/renderer/src/kalshiImport.ts
       - src/renderer/src/App.tsx
       - src/main/index.ts
+      - src/main/updateCoordinator.ts
+      - tests/updaterWindowsSmoke.mjs
       - src/preload/index.ts
       - tests/playerIdentityCollision.test.mjs
       - package.json
@@ -38,5 +40,7 @@ jobs:
         run: npm ci
       - name: Run identity, Kalshi, and pricing regression tests
         run: node --test tests/playerIdentityCollision.test.mjs tests/kalshiCategoryPreservation.test.mjs tests/kalshiAmericanOdds.test.mjs tests/sportsbookPricingFormats.test.mjs
+      - name: Execute actual Windows updater coordinator startup smoke test
+        run: node tests/updaterWindowsSmoke.mjs
       - name: Build Windows Electron application
         run: npm run build
