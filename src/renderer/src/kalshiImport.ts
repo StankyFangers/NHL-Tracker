@@ -1,7 +1,7 @@
 // Conservative Kalshi -> NHL Tracker wager reconstruction.
 // Never invent player legs or treat fills as independently placed wagers.
 export type KalshiFill={id:string;fillId:string;orderId:string;date:string;createdAt?:string;ticker:string;title:string;side:string;action:string;count:string;price:string;fee:string;isNhl:boolean;review:string;legs:{ticker:string;side:string;title:string;resolved:boolean;source:string;nhlTicker:boolean}[]}
-type ParsedLeg={player:string;qty:number;stat:string;side:'OVER';kind:'PLAYER';team?:string;gameId?:string;opponent?:string}
+type ParsedLeg={player:string;qty:number;stat:string;side:'OVER';kind:'PLAYER';team?:string;gameId?:string;opponent?:string;sweaterNumber?:number}
 export type KalshiImport={id:string;date:string;legs:ParsedLeg[];book:string;units:number;unitSize:number;odds:number;createdAt:string;groupKey?:string;status:'PENDING';category:string;source:'LIVE'}
 export type Candidate={id:string;date:string;ticker:string;legs:ParsedLeg[];risk:number;units:number;odds:number;category:string;description:string;bet:KalshiImport}
 const normalized=(s:string)=>s.replace(/\s*\(#\d+\)\s*/g,' ').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')
@@ -16,7 +16,10 @@ const parseTitle=(raw:string,ticker=''):ParsedLeg|null=>{
  const long=s.match(/^(.+?)\s+(\d+)\+\s+(points?|assists?|goals?)\b/i)
  const m=colon||long
  if(!m)return null
- const player=m[1].trim().replace(/\s*\(#\d+\)\s*/g,' ').trim()
+ const rawPlayer=m[1].trim()
+ const jersey=rawPlayer.match(/\(#(\d{1,3})\)/)
+ const sweaterNumber=jersey?Number(jersey[1]):undefined
+ const player=rawPlayer.replace(/\s*\(#\d+\)\s*/g,' ').trim()
  if(!/^[\p{L}\p{M}.' -]{3,70}$/u.test(player)||!player.includes(' '))return null
  const qty=Number(m[2])
  if(!Number.isInteger(qty)||qty<1||qty>10)return null
@@ -24,7 +27,7 @@ const parseTitle=(raw:string,ticker=''):ParsedLeg|null=>{
  const explicit=String(m[3]||'')
  const hint=[explicit,...segments.slice(1)].join(' ').toLowerCase()
  const stat=/^KXNHLAST(?:-|$)/.test(market)||/\bassists?\b/.test(hint)?'Assist':/^KXNHLGOAL/.test(market)||/\bgoals?\b/.test(hint)?'Goal':'Point'
- return {player,qty,stat,side:'OVER',kind:'PLAYER'}
+ return {player,qty,stat,side:'OVER',kind:'PLAYER',...(sweaterNumber?{sweaterNumber}:{})}
 }
 /** Parse repeated Kalshi multi-view event descriptions, without confusing
     duplicate title/subtitle copies with additional player legs. */
@@ -281,7 +284,7 @@ export function prepareKalshiImports(fills:KalshiFill[],existing:any[],dfo:Recor
 
 const rosterName=(v:any)=>typeof v==='string'?v:typeof v?.default==='string'?v.default:''
 export async function verifyKalshiIdentity(candidates:Candidate[],roster:(team:string)=>Promise<any>){
- const cache=new Map<string,Map<string,number[]>>()
+ const cache=new Map<string,Map<string,{id:number;sweaterNumber?:number}[]>>()
  const accepted:Candidate[]=[]
  const rejected:{id:string;reason:string}[]=[]
  for(const c of candidates){
@@ -290,20 +293,30 @@ export async function verifyKalshiIdentity(candidates:Candidate[],roster:(team:s
    if(!l.team){error='Player team not resolved';break}
    if(!cache.has(l.team)){
     try{
-     const raw=await roster(l.team),names=new Map<string,number[]>()
+     const raw=await roster(l.team),names=new Map<string,{id:number;sweaterNumber?:number}[]>()
      const walk=(x:any)=>{
       if(Array.isArray(x)){x.forEach(walk);return}
       if(!x||typeof x!=='object')return
       const id=Number(x.id||x.playerId||0)
       const name=[rosterName(x.firstName),rosterName(x.lastName)].filter(Boolean).join(' ')||rosterName(x.fullName)
-      if(id>0&&name){const k=kalshiNhlPlayerNameKey(name);names.set(k,[...new Set([...(names.get(k)||[]),id])])}
+      if(id>0&&name){
+       const k=kalshiNhlPlayerNameKey(name),sweaterNumber=Number(x.sweaterNumber||0)||undefined
+       if(!(names.get(k)||[]).some(p=>p.id===id))names.set(k,[...(names.get(k)||[]),{id,sweaterNumber}])
+      }
       Object.values(x).forEach(v=>{if(typeof v==='object'&&v!==null)walk(v)})
      }
      walk(raw);cache.set(l.team,names)
     }catch{error='NHL roster could not load for '+l.team;break}
    }
-   const ids=cache.get(l.team)?.get(kalshiNhlPlayerNameKey(l.player))||[]
-   if(ids.length!==1){error='NHL player identity cannot be verified for '+l.player;break}
+   let identities=cache.get(l.team)?.get(kalshiNhlPlayerNameKey(l.player))||[]
+   if(l.sweaterNumber)identities=identities.filter(p=>p.sweaterNumber===l.sweaterNumber)
+   const ids=[...new Set(identities.map(p=>p.id))]
+   if(ids.length!==1){
+    error=ids.length>1
+     ?'Multiple NHL players share '+l.player+' on '+l.team+'. A jersey number or explicit NHL player ID is required.'
+     :'NHL player identity cannot be verified for '+l.player+(l.sweaterNumber?' (#'+l.sweaterNumber+')':'')
+    break
+   }
    ;(l as any).playerId=ids[0]
   }
   if(error)rejected.push({id:c.id,reason:error});else accepted.push(c)
