@@ -8,7 +8,6 @@ import { join } from 'path'
 import { mkdir, open, rename, unlink, readFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import {launchUpdateCoordinator} from './updateCoordinator'
-import {launchNodeUpdateCoordinator} from './nodeUpdateCoordinator'
 import { writeFile } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 
@@ -492,19 +491,12 @@ app.whenReady().then(() => {
         installer:pending.path,version:pending.version,
         appExecutable:process.execPath,userData:app.getPath('userData'),parentPid:process.pid
       }
-      // Electron's Node runtime starts an independent installer coordinator.
-      // PowerShell is a fallback; neither route may close the app without a
-      // successful startup handshake.
-      let launched:{started:boolean;logFile:string}
-      try{
-        launched=await launchNodeUpdateCoordinator(config)
-      }catch(nodeError){
-        try{
-          launched=await launchUpdateCoordinator(config)
-        }catch(psError){
-          throw new Error('Both update launchers failed. Node: '+String(nodeError)+'. PowerShell: '+String(psError))
-        }
-      }
+      // Run the installer from standalone PowerShell, never from an
+      // ELECTRON_RUN_AS_NODE child of NHL Tracker.exe. A child using the
+      // installed app executable would keep its binary locked while NSIS
+      // attempts to uninstall/replace the old application files (exit 2).
+      // Require the external coordinator's READY handshake before quitting.
+      const launched=await launchUpdateCoordinator(config)
       // The helper confirms it is running before we allow the app to close.
       // It logs progress and restarts NHL Tracker on both success and failure.
       setTimeout(()=>app.quit(),350)
