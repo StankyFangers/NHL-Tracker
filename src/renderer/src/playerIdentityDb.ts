@@ -68,3 +68,37 @@ export async function syncPlayerDb(roster:(team:string)=>Promise<any>,teams:stri
  // An incomplete sync must retry next launch; keep all successfully cached players.
  if(!failures&&successes===teams.length)localStorage.setItem(META,String(Date.now()));
 }
+
+export type ProviderPlayerAlias={provider:string;label:string;playerId:number;team:string;createdAt:string}
+const PROVIDER_ALIASES_KEY='nhlTracker:providerPlayerAliases:v1'
+const aliasProvider=(provider:string)=>String(provider||'').trim().toUpperCase()
+const aliasLabel=(label:string)=>identityKey(label)
+export function readProviderPlayerAliases():ProviderPlayerAlias[]{
+ try{
+  const value=JSON.parse(localStorage.getItem(PROVIDER_ALIASES_KEY)||'[]')
+  return Array.isArray(value)?value.filter((a:any)=>valid(a?.playerId)&&typeof a?.label==='string'&&typeof a?.team==='string'&&typeof a?.provider==='string'):[]
+ }catch{return[]}
+}
+export function registerProviderPlayerAlias(provider:string,label:string,playerId:number,team:string){
+ const book=aliasProvider(provider),text=String(label||'').trim(),teamCode=String(team||'').trim().toUpperCase()
+ if(!['KALSHI','FANATICS','OTHER'].includes(book))throw Error('Select Kalshi, Fanatics, or Other.')
+ if(!aliasLabel(text)||text.length>80)throw Error('Enter the sportsbook player name (up to 80 characters).')
+ if(!valid(playerId)||!/^[A-Z]{3}$/.test(teamCode))throw Error('Select a verified NHL player ID and team.')
+ const identity=readPlayerDb().find(p=>p.id===Number(playerId)&&p.teams.includes(teamCode))
+ if(!identity)throw Error('Verify and add this NHL identity and team before creating its sportsbook alias.')
+ const aliases=readProviderPlayerAliases()
+ const collision=aliases.find(a=>a.provider===book&&a.team===teamCode&&aliasLabel(a.label)===aliasLabel(text)&&a.playerId!==Number(playerId))
+ if(collision)throw Error('That sportsbook label is already linked to a different NHL player on '+teamCode+'. Use a jersey number or another distinguishing label.')
+ const next=[...aliases.filter(a=>!(a.provider===book&&a.team===teamCode&&aliasLabel(a.label)===aliasLabel(text))),{provider:book,label:text,playerId:Number(playerId),team:teamCode,createdAt:new Date().toISOString()}]
+ localStorage.setItem(PROVIDER_ALIASES_KEY,JSON.stringify(next))
+ window.dispatchEvent(new Event('nhl-provider-aliases-changed'))
+ return next[next.length-1]
+}
+export function resolveProviderPlayerAlias(provider:string,label:string,team?:string):number|undefined{
+ const key=aliasLabel(label),book=aliasProvider(provider),t=team?.toUpperCase()
+ if(!key)return undefined
+ const aliases=readProviderPlayerAliases().filter(a=>a.provider===book&&aliasLabel(a.label)===key&&(!t||a.team===t))
+ const ids=[...new Set(aliases.map(a=>a.playerId))]
+ return ids.length===1?ids[0]:undefined
+}
+export function providerPlayerAliasesForId(playerId:number){return readProviderPlayerAliases().filter(a=>a.playerId===playerId)}
