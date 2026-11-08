@@ -6,6 +6,12 @@ const META='nhlTracker:playerIdentityDb:lastFullSync';
 export const identityKey=(v:string)=>String(v||'').normalize('NFKD').toLowerCase()
  .replace(/[\u0300-\u036f]/g,'').replace(/ø/g,'o').replace(/æ/g,'ae').replace(/ß/g,'ss')
  .replace(/[^a-z0-9]/g,'');
+// Verified whole-name variants only. Never infer an identity from surname alone.
+const VERIFIED_ALIASES:Record<string,string>={
+ tomnovak:'tommynovak',tommynovak:'tommynovak',
+ maxshabanov:'maximshabanov',maximshabanov:'maximshabanov'
+}
+export const playerAliasKey=(v:string)=>VERIFIED_ALIASES[identityKey(v)]||identityKey(v);
 const valid=(id:any)=>Number.isSafeInteger(Number(id))&&Number(id)>0;
 export function readPlayerDb():PlayerIdentity[]{
  try{const data=JSON.parse(localStorage.getItem(KEY)||'[]');return Array.isArray(data)?data.filter(p=>valid(p?.id)&&typeof p.name==='string'):[]}catch{return []}
@@ -27,8 +33,8 @@ export function addPlayerIdentities(entries:{id:number;name:string;team?:string;
  if(changed)savePlayerDb([...byId.values()]);return changed;
 }
 export function resolvePlayerId(name:string,team?:string,position?:string,sweaterNumber?:number):number|undefined{
- const key=identityKey(name);if(!key)return undefined;
- const matches=readPlayerDb().filter(p=>identityKey(p.name)===key);
+ const key=playerAliasKey(name);if(!key)return undefined;
+ const matches=readPlayerDb().filter(p=>playerAliasKey(p.name)===key);
  if(!matches.length)return undefined;
  // The same name may belong to two players on the SAME team (VAN's Elias Petterssons).
  // Never silently select either NHL player ID without distinguishing evidence.
