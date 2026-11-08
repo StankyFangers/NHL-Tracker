@@ -1,0 +1,46 @@
+name: NHL Tracker v1.8.5 Player Identity Validation
+
+on:
+  push:
+    branches:
+      - feature/telegram-notifications
+    paths:
+      - .github/workflows/nhl-v185-player-identity-validation.yml
+      - src/renderer/src/playerIdentityDb.ts
+      - src/renderer/src/kalshiImport.ts
+      - src/renderer/src/App.tsx
+      - src/main/index.ts
+      - tests/playerIdentityCollision.test.mjs
+      - package.json
+      - package-lock.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nhl-v185-player-identity-validation
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Verify player identities and compile app
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Install exact lockfile dependencies
+        run: npm ci
+      - name: Run identity, Kalshi, and pricing regression tests
+        run: node --test tests/playerIdentityCollision.test.mjs tests/kalshiCategoryPreservation.test.mjs tests/kalshiAmericanOdds.test.mjs tests/sportsbookPricingFormats.test.mjs
+      - name: Build Windows Electron application
+        run: npm run build
+      - name: Type-check renderer and main process
+        shell: bash
+        run: |
+          npx tsc --noEmit -p tsconfig.web.json
+          npx tsc --noEmit -p tsconfig.node.json
