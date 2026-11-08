@@ -32,7 +32,7 @@ test('Explicit check, download and install retain the existing renderer IPC cont
 })
 
 test('GitHub NSIS installer has the same app identity and update metadata publisher',()=>{
- assert.equal(pkg.version,'1.8.12')
+ assert.equal(pkg.version,'1.8.13')
  assert.equal(pkg.build.appId,'com.nhltracker.app')
  assert.equal(pkg.build.productName,'NHL Tracker')
  assert.equal(pkg.build.executableName,'NHL Tracker')
