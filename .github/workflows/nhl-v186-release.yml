@@ -5,7 +5,7 @@ on:
     branches:
       - feature/telegram-notifications
     paths:
-      - .github/workflows/nhl-v185-release.yml
+      - .github/workflows/nhl-v186-release.yml
       - src/main/index.ts
       - src/main/updateCoordinator.ts
       - src/main/nodeUpdateCoordinator.ts
@@ -65,6 +65,8 @@ jobs:
           git rev-parse HEAD
           test -f tests/updateCoordinator.test.mjs
           test -f src/main/updateCoordinator.ts
+          test -f src/main/nodeUpdateCoordinator.ts
+          test -f tests/updaterWindowsSmoke.mjs
           test -f src/main/index.ts
           echo "Updater test and coordinator source are present."
 
