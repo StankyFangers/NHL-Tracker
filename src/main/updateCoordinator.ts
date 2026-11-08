@@ -1,5 +1,5 @@
 import {spawn} from 'node:child_process'
-import {mkdir,readFile,unlink,writeFile} from 'node:fs/promises'
+import {mkdir,readFile,unlink,writeFile,open} from 'node:fs/promises'
 import {join} from 'node:path'
 
 type UpdateConfig={installer:string;version:string;appExecutable:string;userData:string;parentPid:number}
@@ -78,9 +78,19 @@ export async function launchUpdateCoordinator(config:UpdateConfig){
   '}'
  ].join('\r\n')
  await writeFile(scriptPath,script,'utf8')
- const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',scriptPath],{
-  detached:true,stdio:'ignore',windowsHide:true
- })
+ // Capture PowerShell's *pre-handshake* stdout/stderr. Previously stdio:'ignore'
+ // meant a startup crash provided no actionable evidence.
+ const startupLogFile=join(dir,'coordinator-startup.log')
+ await writeFile(startupLogFile,'Starting PowerShell update coordinator for '+config.version+'\r\n','utf8')
+ const log=await open(startupLogFile,'a')
+ let child:ReturnType<typeof spawn>
+ try{
+  child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',scriptPath],{
+   detached:true,stdio:['ignore',log.fd,log.fd],windowsHide:true
+  })
+ }finally{
+  await log.close()
+ }
  let failed:string|null=null
  child.on('error',error=>{failed=error.message})
  let ready=false
@@ -92,8 +102,9 @@ export async function launchUpdateCoordinator(config:UpdateConfig){
  }
  if(!ready){
   try{child.kill()}catch{}
-  throw new Error(failed||'Installer coordinator could not start. NHL Tracker will stay open. Check '+logFile)
+  const stderr=(await readFile(startupLogFile,'utf8').catch(()=>'' )).trim().slice(-1600)
+  throw new Error((failed||'Installer coordinator failed before startup confirmation.')+(stderr?' Details: '+stderr:'')+' Diagnostic log: '+startupLogFile+'. NHL Tracker will stay open.')
  }
  child.unref()
- return {started:true,logFile}
+ return {started:true,logFile,startupLogFile}
 }
