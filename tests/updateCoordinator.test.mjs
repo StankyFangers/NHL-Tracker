@@ -34,7 +34,7 @@ test('Windows updater captures hidden PowerShell launch errors without quitting 
  assert.match(helper,/stdio:\['ignore','pipe','pipe'\]/)
  assert.match(helper,/child\.stderr\?\.on\('data'/)
  assert.match(helper,/readFile\(startupLogFile,'utf8'\)/)
- assert.match(helper,/NHL Tracker will stay open/)
+ assert.match(helper,/NHL Tracker (?:will stay|remains) open/)
 })
 
 test('Node updater targets existing custom installation directory and has safety timeout',()=>{
