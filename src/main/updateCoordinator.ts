@@ -93,7 +93,12 @@ export async function launchUpdateCoordinator(config:UpdateConfig){
  // Pipes remain valid for the lifetime of the spawned process. Closing a
  // parent-owned file descriptor immediately after spawn can leave the detached
  // Windows child without a usable stderr channel.
- const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',scriptPath],{
+ // Windows PowerShell's -File argument handling is unreliable here for
+ // generated scripts under userData paths containing spaces. Invoke the
+ // absolute script path through UTF-16LE EncodedCommand instead.
+ const invocation='& '+ps(scriptPath)
+ const encodedInvocation=Buffer.from(invocation,'utf16le').toString('base64')
+ const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand',encodedInvocation],{
   detached:true,stdio:['ignore','pipe','pipe'],windowsHide:true
  })
  child.stdout?.on('data',chunk=>{void appendFile(startupLogFile,chunk).catch(()=>{})})
