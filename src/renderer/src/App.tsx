@@ -486,7 +486,7 @@ function TrackerApp({initialTestAccount,onTestLogout,liveAccount,onLiveLogout}:{
    const rawQuery=devPlayerQuery.trim()
    // Support direct official NHL ID lookup and EP40 even when NHL's
    // name-search index omits or ambiguously lists a player.
-   const directId=/^#?(\\d{7})$/.test(rawQuery)?Number(rawQuery.replace(/^#/,'')):rawQuery.toUpperCase()==='EP40'?8480012:0
+   const directId=/^#?(\d{7})$/.test(rawQuery)?Number(rawQuery.replace(/^#/,'')):rawQuery.toUpperCase()==='EP40'?8480012:0
    if(directId){
     const team=rawQuery.toUpperCase()==='EP40'?'VAN':devPlayerTeam.trim().toUpperCase()
     const roster=await window.nhlTracker.roster(team)
