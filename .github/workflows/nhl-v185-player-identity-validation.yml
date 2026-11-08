@@ -10,6 +10,7 @@ on:
       - src/renderer/src/kalshiImport.ts
       - src/renderer/src/App.tsx
       - src/main/index.ts
+      - src/preload/index.ts
       - tests/playerIdentityCollision.test.mjs
       - package.json
       - package-lock.json
