@@ -7,8 +7,11 @@ function loadTs(filename){
  const source=readFileSync(new URL(filename,import.meta.url),'utf8')
  const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText
  const module={exports:{}}
- const read=new Function('module','exports',js+';return typeof parseTitle==="function"?parseTitle:null')
- const parseTitle=read(module,module.exports)
+ const read=new Function('module','exports','require',js+';return typeof parseTitle==="function"?parseTitle:null')
+ const parseTitle=read(module,module.exports,(name)=>{
+  if(name==='./playerIdentityDb')return db.api
+  throw Error('Unexpected import in test harness: '+name)
+ })
  return {api:module.exports,source,parseTitle}
 }
 const db=loadTs('../src/renderer/src/playerIdentityDb.ts')
@@ -71,4 +74,31 @@ test('Philip Tomasino is indexed by official NHL ID even without a combo row',()
 test('DEV search includes cached identity fallback and handles missed remote searches',()=>{
  assert.match(app,/const local=readPlayerDb\(\)\.filter\(p=>playerAliasKey\(p.name\)/)
  assert.match(app,/const results=\[\.\.\.local,\.\.\.remote\]/)
+})
+
+test('Provider names resolve to the exact NHL ID and reject cross-player collisions',()=>{
+ store.clear()
+ db.api.addPlayerIdentities([{id:8480012,name:'Elias Pettersson',team:'VAN'},{id:8483678,name:'Elias Pettersson',team:'VAN'}])
+ globalThis.window={dispatchEvent:()=>{}}
+ db.api.registerProviderPlayerAlias('Kalshi','EP40',8480012,'VAN')
+ db.api.registerProviderPlayerAlias('Fanatics','Elias Pettersson C #40',8480012,'VAN')
+ assert.equal(db.api.resolveProviderPlayerAlias('Kalshi','EP40','VAN'),8480012)
+ assert.equal(db.api.resolveProviderPlayerAlias('Fanatics','Elias Pettersson C #40','VAN'),8480012)
+ assert.equal(db.api.resolveProviderPlayerAlias('Kalshi','EP40','NYR'),undefined)
+ assert.throws(()=>db.api.registerProviderPlayerAlias('Kalshi','EP40',8483678,'VAN'),/different NHL player/)
+ assert.equal(db.api.resolvePlayerId('Elias Pettersson','VAN'),undefined)
+})
+test('Kalshi validates an alternative sportsbook label against the NHL roster',async()=>{
+ store.clear()
+ globalThis.window={dispatchEvent:()=>{}}
+ db.api.addPlayerIdentities(db.api.rosterEntries(roster,'VAN'))
+ db.api.registerProviderPlayerAlias('Kalshi','EP40',8480012,'VAN')
+ const candidate={id:'provider-alias',bet:{legs:[{player:'EP40',team:'VAN',kind:'PLAYER',qty:1,stat:'Point',side:'OVER'}]}}
+ const result=await kalshi.api.verifyKalshiIdentity([candidate],async()=>roster)
+ assert.deepEqual(result.rejected,[])
+ assert.equal(result.accepted[0].bet.legs[0].playerId,8480012)
+})
+test('Historical Kalshi aliases resolve by NHL player ID, not just name',()=>{
+ const src=kalshi.source
+ assert.match(src,/resolveProviderPlayerAlias\('Kalshi',leg\.player,p\.team\)===p\.playerId/)
 })
