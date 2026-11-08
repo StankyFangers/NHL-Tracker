@@ -53,8 +53,8 @@ async function dfoLines(team:string){
 const playerNameKey=(s:string)=>String(s||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')
 async function dfoPlayerStats(team:string,names:string[]){
  const [roster,club]=await Promise.all([nhlJson('/roster/'+encodeURIComponent(team)+'/current'),nhlJson('/club-stats/'+encodeURIComponent(team)+'/now')])
- const rosterPlayers=[...(roster?.forwards||[]),...(roster?.defensemen||[]),...(roster?.goalies||[])];const byName=new Map<string,any>()
- for(const p of rosterPlayers){const full=[p?.firstName?.default,p?.lastName?.default].filter(Boolean).join(' ');if(full)byName.set(playerNameKey(full),p)}
+ const rosterPlayers=[...(roster?.forwards||[]),...(roster?.defensemen||[]),...(roster?.goalies||[])];const byName=new Map<string,any|null>()
+ for(const p of rosterPlayers){const full=[p?.firstName?.default,p?.lastName?.default].filter(Boolean).join(' ');if(full){const key=playerNameKey(full),old=byName.get(key);if(old===undefined)byName.set(key,p);else if(old&&Number(old.id||old.playerId)!==Number(p.id||p.playerId))byName.set(key,null)}}
  const skaters=[...(club?.skaters||[]),...(club?.forwards||[]),...(club?.defensemen||[])];const seasonById=new Map<number,any>();for(const p of skaters){const id=Number(p?.playerId||p?.id||0);if(id)seasonById.set(id,p)}
  const out:Record<string,any>={}
  await Promise.all((names||[]).map(async display=>{const p=byName.get(playerNameKey(display));const id=Number(p?.id||p?.playerId||0);if(!id)return;const season=seasonById.get(id)||{};let log:any={};try{log=await nhlJson('/player/'+id+'/game-log/now')}catch{}const allGames=(log?.gameLog||log?.games||[]);const games=allGames.slice(0,10);const sum=(k:string,alts:string[]=[])=>games.reduce((n:number,g:any)=>n+Number(g?.[k]??alts.map(x=>g?.[x]).find(v=>v!=null)??0),0);const g=sum('goals'),aa=sum('assists'),sog=sum('shots',['shotsOnGoal','sog']);const toSeconds=(v:any):number|null=>{
