@@ -111,33 +111,45 @@ jobs:
       - name: Build production Electron app
         run: npm run build
 
-      - name: Create Windows NSIS installer (retry transient toolset download failures)
+      - name: Create Windows NSIS installer (Electron and NSIS mirrors)
         shell: pwsh
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: |
           $ErrorActionPreference = 'Stop'
-          for ($attempt = 1; $attempt -le 3; $attempt++) {
-            # electron-builder downloads Electron again during packaging.
-            # npm ci's mirror setting is scoped to that earlier step, so
-            # explicitly configure a mirror here as well.
-            if ($attempt -eq 2) {
-              Remove-Item Env:ELECTRON_MIRROR -ErrorAction SilentlyContinue
-              Write-Host "electron-builder NSIS attempt $attempt of 3 (official Electron source)"
+          # Electron runtime and electron-builder toolsets (NSIS, resources,
+          # winCodeSign) use TWO different download source settings.
+          # Both must be configured; the previous attempts only set Electron.
+          $sources = @(
+            @{ Name = 'npmmirror'; Electron = 'https://npmmirror.com/mirrors/electron/'; Builder = 'https://npmmirror.com/mirrors/electron-builder-binaries/' },
+            @{ Name = 'Huawei mirror'; Electron = 'https://npmmirror.com/mirrors/electron/'; Builder = 'https://mirrors.huaweicloud.com/electron-builder-binaries/' },
+            @{ Name = 'official GitHub'; Electron = ''; Builder = '' }
+          )
+          for ($i = 0; $i -lt $sources.Count; $i++) {
+            $source = $sources[$i]
+            Write-Host "NSIS packaging attempt $($i+1) of $($sources.Count): $($source.Name)"
+            if ($source.Electron) {
+              $env:ELECTRON_MIRROR = $source.Electron
             } else {
-              $env:ELECTRON_MIRROR = 'https://npmmirror.com/mirrors/electron/'
-              Write-Host "electron-builder NSIS attempt $attempt of 3 (Electron mirror)"
+              Remove-Item Env:ELECTRON_MIRROR -ErrorAction SilentlyContinue
             }
+            if ($source.Builder) {
+              $env:ELECTRON_BUILDER_BINARIES_MIRROR = $source.Builder
+            } else {
+              Remove-Item Env:ELECTRON_BUILDER_BINARIES_MIRROR -ErrorAction SilentlyContinue
+            }
+            Write-Host "Electron source: $($source.Electron)"
+            Write-Host "NSIS/toolset source: $($source.Builder)"
             & .\node_modules\.bin\electron-builder.cmd --win nsis --x64 --publish never
             if ($LASTEXITCODE -eq 0) {
               Write-Host 'Windows NSIS installer packaged successfully.'
               exit 0
             }
-            if ($attempt -eq 3) {
-              throw "NSIS packaging failed after three attempts (last exit code $LASTEXITCODE)"
+            if ($i -eq $sources.Count - 1) {
+              throw "NSIS packaging failed for all three sources (last exit code $LASTEXITCODE)"
             }
-            Write-Warning "NSIS packaging failed. Retrying with cached downloaded binaries in 20 seconds."
-            Start-Sleep -Seconds 20
+            Write-Warning "Packaging source failed; switching mirrors in 15 seconds."
+            Start-Sleep -Seconds 15
           }
 
       - name: Verify release installer
