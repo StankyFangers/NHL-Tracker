@@ -111,10 +111,25 @@ jobs:
       - name: Build production Electron app
         run: npm run build
 
-      - name: Create Windows NSIS installer
+      - name: Create Windows NSIS installer (retry transient toolset download failures)
+        shell: pwsh
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npx electron-builder --win nsis --x64 --publish never
+        run: |
+          $ErrorActionPreference = 'Stop'
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            Write-Host "electron-builder NSIS attempt $attempt of 3"
+            & .\node_modules\.bin\electron-builder.cmd --win nsis --x64 --publish never
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host 'Windows NSIS installer packaged successfully.'
+              exit 0
+            }
+            if ($attempt -eq 3) {
+              throw "NSIS packaging failed after three attempts (last exit code $LASTEXITCODE)"
+            }
+            Write-Warning "NSIS packaging failed. Retrying with cached downloaded binaries in 20 seconds."
+            Start-Sleep -Seconds 20
+          }
 
       - name: Verify release installer
         shell: pwsh
