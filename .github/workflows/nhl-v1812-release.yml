@@ -188,6 +188,7 @@ jobs:
           retention-days: 30
           compression-level: 0
 
+      # Publish only after building the final branch revision, not superseded commits.
       - name: Check whether this is the latest branch revision
         id: freshness
         shell: bash
