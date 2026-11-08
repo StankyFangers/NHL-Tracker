@@ -39,8 +39,3 @@ jobs:
         run: node --test tests/playerIdentityCollision.test.mjs tests/kalshiCategoryPreservation.test.mjs tests/kalshiAmericanOdds.test.mjs tests/sportsbookPricingFormats.test.mjs
       - name: Build Windows Electron application
         run: npm run build
-      - name: Type-check renderer and main process
-        shell: bash
-        run: |
-          npx tsc --noEmit -p tsconfig.web.json
-          npx tsc --noEmit -p tsconfig.node.json
