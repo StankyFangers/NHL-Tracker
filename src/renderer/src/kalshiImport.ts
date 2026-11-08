@@ -21,7 +21,7 @@ const parseTitle=(raw:string,ticker=''):ParsedLeg|null=>{
  const jersey=rawPlayer.match(/\(#(\d{1,3})\)/)
  const sweaterNumber=jersey?Number(jersey[1]):undefined
  const player=rawPlayer.replace(/\s*\(#\d+\)\s*/g,' ').trim()
- if(!/^[\p{L}\p{M}.' -]{3,70}$/u.test(player)||!player.includes(' '))return null
+ if(!/^[\p{L}\p{M}0-9.' -]{3,70}$/u.test(player)||(!player.includes(' ')&&!resolveProviderPlayerAlias('Kalshi',player)))return null
  const qty=Number(m[2])
  if(!Number.isInteger(qty)||qty<1||qty>10)return null
  const market=ticker.toUpperCase()
@@ -43,7 +43,7 @@ export function parseKalshiParentLegs(raw:string):{player:string;qty:number}[] {
   // dropping an unknown third leg or accepting a truncated player name.
   if(part.replace(pattern,'').replace(/[\s,]+/g,'')!=='')continue
   const parsed=matches.map(m=>({player:m[1].trim(),qty:Number(m[2])}))
-  if(parsed.every(v=>v.player.includes(' ')&&v.qty>=1&&v.qty<=10)&&
+  if(parsed.every(v=>(v.player.includes(' ')||!!resolveProviderPlayerAlias('Kalshi',v.player))&&v.qty>=1&&v.qty<=10)&&
      new Set(parsed.map(v=>normalized(v.player)+':'+v.qty)).size===parsed.length)return parsed
  }
  return []
