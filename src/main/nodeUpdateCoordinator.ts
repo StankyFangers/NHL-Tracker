@@ -26,12 +26,12 @@ const run=async()=>{
   if(alive(config.parentPid))throw Error('NHL Tracker did not exit within 30 seconds')
   if(!fs.existsSync(config.installer))throw Error('Downloaded NSIS installer was not found')
   const original=fs.existsSync(config.appExecutable)?fs.statSync(config.appExecutable).mtimeMs:0
-  log('Starting silent installer '+config.installer)
+  log('Starting NSIS update installer '+config.installer+' target='+path.dirname(config.appExecutable))
   // NSIS /D= must be the final, unquoted argument. Explicitly point it
   // at the running app's folder, including custom paths with spaces.
   const installDir=path.dirname(config.appExecutable)
   const status=await new Promise((resolve,reject)=>{
-   const child=cp.spawn(config.installer,['/S','/D='+installDir],{
+   const child=cp.spawn(config.installer,['--updated','/S','/D='+installDir],{
     windowsHide:true,stdio:'ignore',windowsVerbatimArguments:true
    })
    let settled=false
