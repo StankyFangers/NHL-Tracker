@@ -36,7 +36,7 @@
     "appId": "com.nhltracker.app",
     "productName": "NHL Tracker",
     "executableName": "NHL Tracker",
-    "artifactName": "NHL Tracker Setup ${version}.${ext}",
+    "artifactName": "NHL.Tracker.Setup.${version}.${ext}",
     "directories": {
       "output": "release"
     },
