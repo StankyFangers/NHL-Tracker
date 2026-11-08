@@ -113,3 +113,14 @@ test('Never permit an ambiguous official same-name alias to pick the wrong teamm
  assert.equal(parsed.player,'EP40')
  assert.equal(db.api.resolveProviderPlayerAlias('Kalshi',parsed.player,'VAN'),8480012)
 })
+
+test('EP40 may be searched by NHL player ID without name-search results',()=>{
+ const main=readFileSync(new URL('../src/main/index.ts',import.meta.url),'utf8')
+ const preload=readFileSync(new URL('../src/preload/index.ts',import.meta.url),'utf8')
+ assert.match(main,/ipcMain\.handle\('nhl:playerById'/)
+ assert.match(main,/\/player\/'\+id\+'\/landing'/)
+ assert.match(main,/Number\(profile\?\.playerId\)!==id/)
+ assert.match(preload,/playerById: \(id: number\) => ipcRenderer\.invoke\('nhl:playerById', id\)/)
+ assert.match(app,/rawQuery\.toUpperCase\(\)==='EP40'\?8480012/)
+ assert.match(app,/const found=await \(window\.nhlTracker as any\)\.playerById\(directId\)/)
+})
