@@ -4,13 +4,16 @@ import {readFileSync} from 'node:fs'
 
 const main=readFileSync(new URL('../src/main/index.ts',import.meta.url),'utf8')
 const helper=readFileSync(new URL('../src/main/updateCoordinator.ts',import.meta.url),'utf8')
+const nodeHelper=readFileSync(new URL('../src/main/nodeUpdateCoordinator.ts',import.meta.url),'utf8')
 
 test('Updater never closes Electron before coordinator confirms startup',()=>{
- assert.match(main,/const launched=await launchUpdateCoordinator\(/)
+ assert.match(main,/launched=await launchNodeUpdateCoordinator\(config\)/)
+ assert.match(main,/launched=await launchUpdateCoordinator\(config\)/)
+ assert.match(main,/throw new Error\('Both update launchers failed/)
  assert.match(main,/setTimeout\(\(\)=>app\.quit\(\),350\)/)
  assert.match(helper,/Set-Content -LiteralPath \$ready/)
  assert.match(helper,/if\(!ready\)\{/)
- assert.match(helper,/throw new Error\(failed\|\|/)
+ assert.match(helper,/Installer coordinator failed before startup confirmation/)
 })
 test('Silent update has bounded wait, exit code check and failure recovery',()=>{
  assert.match(helper,/WaitForExit\(240000\)/)
@@ -31,4 +34,13 @@ test('Windows updater captures hidden PowerShell launch errors without quitting 
  assert.match(helper,/stdio:\['ignore',log\.fd,log\.fd\]/)
  assert.match(helper,/readFile\(startupLogFile,'utf8'\)/)
  assert.match(helper,/NHL Tracker will stay open/)
+})
+
+test('Node updater targets existing custom installation directory and has safety timeout',()=>{
+ assert.match(nodeHelper,/ELECTRON_RUN_AS_NODE:'1'/)
+ assert.match(nodeHelper,/windowsVerbatimArguments:true/)
+ assert.match(nodeHelper,/path\.dirname\(config\.appExecutable\)/)
+ assert.match(nodeHelper,/240000/)
+ assert.match(nodeHelper,/fs\.writeFileSync\(config\.ready,'READY'\)/)
+ assert.match(nodeHelper,/outcome\(false/)
 })
