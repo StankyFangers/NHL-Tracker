@@ -8,6 +8,7 @@ import { join } from 'path'
 import { mkdir, open, rename, unlink, readFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import {launchUpdateCoordinator} from './updateCoordinator'
+import {launchNodeUpdateCoordinator} from './nodeUpdateCoordinator'
 import { writeFile } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 
@@ -487,10 +488,23 @@ app.whenReady().then(() => {
     if(!pending||updateBusy)return {error:'Download the installer first.'}
     if(!app.isPackaged||process.platform!=='win32')return {error:'Installation requires the packaged Windows app.'}
     try{
-      const launched=await launchUpdateCoordinator({
+      const config={
         installer:pending.path,version:pending.version,
         appExecutable:process.execPath,userData:app.getPath('userData'),parentPid:process.pid
-      })
+      }
+      // Electron's Node runtime starts an independent installer coordinator.
+      // PowerShell is a fallback; neither route may close the app without a
+      // successful startup handshake.
+      let launched:{started:boolean;logFile:string}
+      try{
+        launched=await launchNodeUpdateCoordinator(config)
+      }catch(nodeError){
+        try{
+          launched=await launchUpdateCoordinator(config)
+        }catch(psError){
+          throw new Error('Both update launchers failed. Node: '+String(nodeError)+'. PowerShell: '+String(psError))
+        }
+      }
       // The helper confirms it is running before we allow the app to close.
       // It logs progress and restarts NHL Tracker on both success and failure.
       setTimeout(()=>app.quit(),350)
