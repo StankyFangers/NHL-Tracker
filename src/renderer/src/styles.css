@@ -1091,3 +1091,10 @@ html,body,#root,.app,main{scrollbar-width:thin;scrollbar-color:#3e7898 #0a1118}
 .compactBetPrice.pending{color:#f0c95c}
 .compactBetPrice.hit{color:#5ee0a0}
 .compactBetPrice.miss{color:#ff6f80}
+
+/* Game-specific verification lives inside each expanded matchup accordion. */
+.gameAccordionVerifyControl{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:10px 14px;background:rgba(10,31,50,.65);border-bottom:1px solid rgba(94,145,183,.26)}
+.gameAccordionVerifyControl>.rowVerifyButton{flex-shrink:0;font-size:10px;font-weight:850;letter-spacing:.06em;border:1px solid #3b91b3;border-radius:6px;background:#10354b;color:#9be9ff;padding:8px 11px;cursor:pointer}
+.gameAccordionVerifyControl>.rowVerifyButton:hover:not(:disabled){background:#17516c}
+.gameAccordionVerifyControl>.rowVerifyButton:disabled{opacity:.55;cursor:wait}
+.gameAccordionVerifyControl>small{font-size:10px;color:#95b6ca;line-height:1.35}
