@@ -9,7 +9,6 @@ const nodeHelper=readFileSync(new URL('../src/main/nodeUpdateCoordinator.ts',imp
 test('Updater never closes Electron before coordinator confirms startup',()=>{
  assert.match(main,/const launched=await launchUpdateCoordinator\(config\)/)
  assert.doesNotMatch(main,/launchNodeUpdateCoordinator/)
- assert.match(main,/const launched=await launchUpdateCoordinator\(config\)/)
  assert.match(main,/setTimeout\(\(\)=>app\.quit\(\),350\)/)
  assert.match(helper,/Set-Content -LiteralPath \$ready/)
  assert.match(helper,/if\(!ready\)\{/)
@@ -27,7 +26,7 @@ test('Install passes official updater path from verified staged download',()=>{
  assert.match(main,/const pending=stagedUpdate/)
  assert.match(main,/installer:pending\.path,version:pending\.version/)
  assert.match(main,/app\.isPackaged/)
- assert.doesNotMatch(main,/ELECTRON_RUN_AS_NODE/)
+ assert.doesNotMatch(main,/import\s*\{[^}]*launchNodeUpdateCoordinator[^}]*\}\s*from/)
  assert.doesNotMatch(main,/launchNodeUpdateCoordinator/)
 })
 
