@@ -28,7 +28,7 @@ import {cloudBetsEqual, flushCloudWagers} from './liveCloudSync'
 import CloudBetHub from './CloudBetHub'
 import { importHistoricalWagers, listAllCloudWagers } from './liveMigrationUpload'
 import { parseMigrationBackup, compareMigration, type HistoricalWager } from './liveMigrationPreflight'
-import { addPlayerIdentities, resolvePlayerId, rosterEntries, syncPlayerDb, readPlayerDb } from './playerIdentityDb'
+import { addPlayerIdentities, resolvePlayerId, rosterEntries, syncPlayerDb, readPlayerDb, playerAliasKey } from './playerIdentityDb'
 import { capturePredictions, finalizePredictions, linkWagers, readPredictions } from './confidencePerformance'
 import { CONFIDENCE_AS_OF, CONFIDENCE_STATUS, CONFIDENCE_TEAMS, CONFIDENCE_METRICS, confidenceTeam, matchupConfidence, confidenceColor } from './confidenceEngine'
 import {captureDfoSnapshot,readDfoSnapshot,brokenDfoUnits} from './dfoSnapshots'
@@ -480,8 +480,19 @@ function TrackerApp({initialTestAccount,onTestLogout,liveAccount,onLiveLogout}:{
  const searchDevPlayer=async()=>{
   if((liveAccount||account)?.role!=='DEV'||devPlayerSearching)return
   setDevPlayerSearching(true);setDevPlayerResults([]);setDevRosterMessage('Searching NHL player index…')
-  try{const results=await (window.nhlTracker as any).playerSearch(devPlayerQuery);setDevPlayerResults(results);setDevPlayerSelected('');setDevRosterMessage(results.length?`${results.length} NHL player matches. Verify identity before adding.`:'No NHL player matches found; no identities changed.')}
-  catch(e){setDevRosterMessage(`Player lookup failed: ${String(e)}`)}finally{setDevPlayerSearching(false)}
+  try{
+   const query=playerAliasKey(devPlayerQuery)
+   const local=readPlayerDb().filter(p=>playerAliasKey(p.name).includes(query))
+     .flatMap(p=>p.teams.map(team=>({id:p.id,name:p.name,team})))
+   let remote:{id:number;name:string;team:string}[]=[]
+   let remoteError=''
+   try{remote=await (window.nhlTracker as any).playerSearch(devPlayerQuery)}catch(e){remoteError=String(e)}
+   // Never collapse two different NHL IDs just because the names match.
+   const seen=new Set<number>()
+   const results=[...local,...remote].filter(p=>p.id>0&&!seen.has(p.id)&&!!seen.add(p.id)).slice(0,40)
+   setDevPlayerResults(results);setDevPlayerSelected('')
+   setDevRosterMessage(results.length?`${results.length} player identity matches (cached rosters + NHL search). Verify ID and team before adding.`:(remoteError?'NHL search unavailable and no cached player matched. Run Refresh All NHL Rosters, then retry.':'No NHL player matches found; no identities changed.'))
+  }catch(e){setDevRosterMessage(`Player lookup failed: ${String(e)}`)}finally{setDevPlayerSearching(false)}
  }
  const addDevPlayer=async(p:{id:number;name:string;team:string})=>{
   if((liveAccount||account)?.role!=='DEV')return
@@ -2030,7 +2041,7 @@ function BetCenter({date,setDate,unitSize,bets,setBets,games,liveStats,rebetSeed
  const favoriteMarket=(candidate:string)=>{const mm=playerHistory.market.get(candidate.toLowerCase());if(!mm)return'';return[...mm.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]||''}
  const [sharedIndexTick,setSharedIndexTick]=useState(0)
  useEffect(()=>{const fn=()=>setSharedIndexTick(v=>v+1);window.addEventListener('nhl-shared-players-updated',fn);return()=>window.removeEventListener('nhl-shared-players-updated',fn)},[])
- const suggestions=useMemo(()=>{if(selectedPlayer)return[];const q=player.trim().toLowerCase();const indexed=readPlayerDb().flatMap(p=>p.teams.filter(t=>teamGame.has(t)).map(t=>({id:p.id,name:p.name,team:t,position:p.position||'',sweaterNumber:p.sweaterNumber,gameId:teamGame.get(t)})));const combined=[...roster,...indexed.filter(p=>!roster.some(r=>r.id===p.id))];const pool=combined.filter(p=>(!q||p.name.toLowerCase().includes(q)));return pool.map(p=>{const al=p.name.toLowerCase(),last=al.split(' ').at(-1)||'',match=q?(last.startsWith(q)?0:al.startsWith(q)?1:2):3;const pair=pairCount(p.name),freq=playerHistory.frequency.get(al)||0,recent=playerHistory.recency.get(al)||0;return{...p,_pair:pair,_freq:freq,_recent:recent,_match:match,_market:favoriteMarket(p.name)}}).filter(p=>q||p._pair>0).sort((a,b)=>q?(a._match-b._match||b._pair-a._pair||b._freq-a._freq||b._recent-a._recent||a.name.localeCompare(b.name)):(b._pair-a._pair||b._freq-a._freq||b._recent-a._recent||a.name.localeCompare(b.name))).slice(0,12)},[player,roster,selectedPlayer,legs,playerHistory,sharedIndexTick])
+ const suggestions=useMemo(()=>{if(selectedPlayer)return[];const q=player.trim().toLowerCase();const indexed=readPlayerDb().flatMap(p=>p.teams.filter(t=>teamGame.has(t)).map(t=>({id:p.id,name:p.name,team:t,position:p.position||'',sweaterNumber:p.sweaterNumber,gameId:teamGame.get(t)})));const combined=[...roster,...indexed.filter(p=>!roster.some(r=>r.id===p.id))];const pool=combined.filter(p=>(!q||p.name.toLowerCase().includes(q)||playerAliasKey(p.name).includes(playerAliasKey(q))));return pool.map(p=>{const al=p.name.toLowerCase(),last=al.split(' ').at(-1)||'',match=q?(last.startsWith(q)?0:al.startsWith(q)?1:2):3;const pair=pairCount(p.name),freq=playerHistory.frequency.get(al)||0,recent=playerHistory.recency.get(al)||0;return{...p,_pair:pair,_freq:freq,_recent:recent,_match:match,_market:favoriteMarket(p.name)}}).filter(p=>q||p._pair>0).sort((a,b)=>q?(a._match-b._match||b._pair-a._pair||b._freq-a._freq||b._recent-a._recent||a.name.localeCompare(b.name)):(b._pair-a._pair||b._freq-a._freq||b._recent-a._recent||a.name.localeCompare(b.name))).slice(0,12)},[player,roster,selectedPlayer,legs,playerHistory,sharedIndexTick])
  useEffect(()=>setActiveSuggestion(0),[player,legs.length])
  const[bookCommitted,setBookCommitted]=useState(()=>!!defaultSportsbook())
  useEffect(()=>{if(book&&book===defaultSportsbook())setBookCommitted(true)},[book])
