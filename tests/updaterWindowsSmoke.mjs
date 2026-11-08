@@ -19,10 +19,20 @@ const {launchNodeUpdateCoordinator}=loadModule('../src/main/nodeUpdateCoordinato
 const userData=mkdtempSync(join(tmpdir(),'NHL Tracker Updater Smoke '))
 // This tests the real detached PowerShell startup + handshake.
 // dryRun prevents installation and exiting/restarting NHL Tracker.
-const started=await launchUpdateCoordinator({
+let started
+try {
+ started=await launchUpdateCoordinator({
  installer:join(userData,'unused installer.exe'),version:'9.9.9-smoke',
  appExecutable:join(userData,'unused app.exe'),userData,parentPid:process.pid,dryRun:true
 })
+} catch (error) {
+ const script=join(userData,'update-cache','install-coordinator.ps1')
+ const log=join(userData,'update-cache','coordinator-startup.log')
+ console.error('Windows coordinator smoke test failed:',error)
+ console.error('Generated coordinator script:\n',read(script,'utf8'))
+ console.error('Startup diagnostics:\n',existsSync(log)?read(log,'utf8'):'No startup log')
+ throw error
+}
 assert.equal(started.started,true)
 assert.equal(existsSync(join(userData,'update-cache','coordinator-ready.txt')),true)
 console.log('Coordinator handshake passed in Windows with spaces in path')
