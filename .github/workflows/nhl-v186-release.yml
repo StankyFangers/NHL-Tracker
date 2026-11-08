@@ -1,0 +1,164 @@
+name: NHL Tracker v1.8.6 Windows Release
+
+on:
+  push:
+    branches:
+      - feature/telegram-notifications
+    paths:
+      - .github/workflows/nhl-v185-release.yml
+      - src/main/index.ts
+      - src/main/updateCoordinator.ts
+      - src/main/nodeUpdateCoordinator.ts
+      - tests/updaterWindowsSmoke.mjs
+      - src/preload/index.ts
+      - src/renderer/src/playerIdentityDb.ts
+      - src/renderer/src/kalshiImport.ts
+      - src/renderer/src/KalshiNHL.tsx
+      - tests/playerIdentityCollision.test.mjs
+      - tests/updateCoordinator.test.mjs
+      - src/renderer/src/App.tsx
+      - src/renderer/src/SportsbookCatalogSettings.tsx
+      - src/renderer/src/sportsbookCatalog.ts
+      - src/renderer/src/sportsbookCatalog.css
+      - src/renderer/src/sportsbookBalances.tsx
+      - src/renderer/src/sportsbookBalances.css
+      - tests/sportsbookPricingFormats.test.mjs
+      - package.json
+      - package-lock.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nhl-tracker-v1.8.6-release
+  cancel-in-progress: false
+
+jobs:
+  release-windows:
+    name: Verify, build and publish Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Confirm release version
+        shell: bash
+        run: |
+          node -e "const p=require('./package.json');if(p.version!=='1.8.6')process.exit(1)"
+          node -e "const p=require('./package-lock.json');if(p.version!=='1.8.6'||p.packages[''].version!=='1.8.6')process.exit(1)"
+
+      - name: Install exact lockfile dependencies
+        run: npm ci
+
+      - name: Verify source revision contains updater files
+        shell: bash
+        run: |
+          echo "Build revision: $GITHUB_SHA"
+          git rev-parse HEAD
+          test -f tests/updateCoordinator.test.mjs
+          test -f src/main/updateCoordinator.ts
+          test -f src/main/index.ts
+          echo "Updater test and coordinator source are present."
+
+      - name: Prevent repeat Kalshi sync from changing existing categories
+        run: node --test tests/kalshiCategoryPreservation.test.mjs tests/kalshiAmericanOdds.test.mjs tests/sportsbookPricingFormats.test.mjs tests/updateCoordinator.test.mjs tests/playerIdentityCollision.test.mjs
+
+      - name: Verify detached PowerShell and Electron/Node startup on Windows
+        run: node tests/updaterWindowsSmoke.mjs
+
+      - name: Run cloud monitoring unit tests (Windows-safe discovery)
+        working-directory: telegram-cloud
+        run: npm test
+
+      - name: Build production Electron app
+        run: npm run build
+
+      - name: Create Windows NSIS installer
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder --win nsis --x64 --publish never
+
+      - name: Verify release installer
+        shell: pwsh
+        run: |
+          $exe = @(Get-ChildItem -Path release -Filter '*.exe' -File -ErrorAction Stop)
+          if ($exe.Count -ne 1) { throw "Expected one Windows installer, found $($exe.Count)" }
+          if ($exe[0].Name -ne 'NHL Tracker Setup 1.8.6.exe') { throw "Unexpected installer filename: $($exe[0].Name)" }
+          if ($exe[0].Length -lt 1000000) { throw "Installer is unexpectedly small" }
+          Write-Host "Verified: $($exe[0].Name), $($exe[0].Length) bytes"
+
+      - name: Upload backup Actions artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NHL-Tracker-v1.8.6-Windows-Installer
+          path: release/*.exe
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Check whether this is the latest branch revision
+        id: freshness
+        shell: bash
+        run: |
+          latest=$(git ls-remote origin refs/heads/feature/telegram-notifications | cut -f1)
+          if [ "$latest" = "$GITHUB_SHA" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "This build is superseded by a newer commit. Skipping publication safely."
+          fi
+
+      - name: Publish GitHub Release (Check for Updates)
+        if: steps.freshness.outputs.publish == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > release-notes.md <<'EOF'
+          ## NHL Tracker v1.8.6 — Updater recovery & player identity package
+
+          What's new:
+          - Preserve v1.8.5 NHL player ID, EP40, Tom/Tommy Novak, sportsbook alias and safer Kalshi import fixes.
+          - New independent Electron-as-Node updater coordinator, with the PowerShell coordinator as a fallback.
+          - Both launch routes require a verified startup handshake BEFORE NHL Tracker closes.
+          - Real Windows CI smoke tests execute both launchers safely without installing anything.
+          - Silent NSIS installer targets the original executable folder, including custom G: drive paths.
+          - Startup errors are written to diagnostic logs; update launch failures keep the existing app open.
+
+          **Upgrade instructions**
+          - Install v1.8.6 manually over your current installed version, without uninstalling.
+          - Automatic updating is NOT yet proven end-to-end. Test it when v1.8.7 is published.
+          - User-defined sportsbook aliases are still stored locally and are not cloud-synchronized.
+
+          **Tester notes**
+          - In-app updating, Start/taskbar pins, automatic lineup-change alerts and repeat-sync behavior need real-world tester validation.
+          - Sportsbook balances and custom lists are currently stored per account on the device.
+          - Only changes committed to GitHub are included; unpublished local edits are not part of the installer.
+          - Windows may show an unsigned-app SmartScreen warning. Only install from this repository's official Releases page.
+          EOF
+          if gh release view "v1.8.6" >/dev/null 2>&1; then
+            gh release upload "v1.8.6" release/*.exe --clobber
+            gh release edit "v1.8.6" --title "NHL Tracker v1.8.6 — Boys Tester Release" --notes-file release-notes.md --latest
+          else
+            gh release create "v1.8.6" release/*.exe \
+              --target "$GITHUB_SHA" \
+              --title "NHL Tracker v1.8.6 — Boys Tester Release" \
+              --notes-file release-notes.md \
+              --latest
+          fi
+
+      - name: Confirm GitHub Release is visible
+        if: steps.freshness.outputs.publish == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "v1.8.6" --json tagName,isDraft,isPrerelease,assets,url
