@@ -149,3 +149,19 @@ header.themedTopNav .primaryNav button.active{border-bottom-color:var(--nav-acce
 .sectionAccentBets .matchupCategory > summary { background-color:color-mix(in srgb,var(--section-background,#0b151e) 18%,#0b1722)!important; }
 .sectionAccentEvents .feed > article.event:not(.goalWithArt) { background-color:color-mix(in srgb,var(--section-background,#0b151e) 15%,#0b1b29)!important; }
 .sectionAccentEvents .feed > article.event.goalWithArt { background-color:color-mix(in srgb,var(--section-background,#0b151e) 9%,#0b1b29)!important; }
+
+/* Balances navigation control follows the same smart-blue palette as the
+   Live Event Tracker, including user-chosen section colors. */
+header.themedTopNav button.balance-switch{
+  background:var(--balance-button-fill,#123147)!important;
+  border:1px solid color-mix(in srgb,var(--balance-button-border,#44b4ed) 66%,#244b65)!important;
+  color:#c5efff!important;
+  box-shadow:inset 0 0 0 1px #07162266;
+  transition:background .16s ease,border-color .16s ease,box-shadow .16s ease;
+}
+header.themedTopNav button.balance-switch:hover,
+header.themedTopNav button.balance-switch:focus-visible{
+  background:color-mix(in srgb,var(--balance-button-fill,#123147) 77%,#2a779b)!important;
+  border-color:var(--balance-button-border,#44b4ed)!important;
+  box-shadow:0 0 0 2px color-mix(in srgb,var(--balance-button-border,#44b4ed) 20%,transparent);
+}
