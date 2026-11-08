@@ -27,16 +27,29 @@ const run=async()=>{
   if(!fs.existsSync(config.installer))throw Error('Downloaded NSIS installer was not found')
   const original=fs.existsSync(config.appExecutable)?fs.statSync(config.appExecutable).mtimeMs:0
   log('Starting silent installer '+config.installer)
+  // NSIS /D= must be the final, unquoted argument. Explicitly point it
+  // at the running app's folder, including custom paths with spaces.
+  const installDir=path.dirname(config.appExecutable)
   const status=await new Promise((resolve,reject)=>{
-   const child=cp.spawn(config.installer,['/S'],{windowsHide:true,stdio:'ignore'})
-   child.on('error',reject)
-   child.on('exit',(code,signal)=>resolve({code,signal}))
+   const child=cp.spawn(config.installer,['/S','/D='+installDir],{
+    windowsHide:true,stdio:'ignore',windowsVerbatimArguments:true
+   })
+   let settled=false
+   const timer=setTimeout(()=>{
+    if(settled)return
+    settled=true
+    try{child.kill()}catch{}
+    reject(Error('NSIS installer timed out after four minutes'))
+   },240000)
+   child.on('error',error=>{if(!settled){settled=true;clearTimeout(timer);reject(error)}})
+   child.on('exit',(code,signal)=>{if(!settled){settled=true;clearTimeout(timer);resolve({code,signal})}})
   })
   log('Installer exit='+JSON.stringify(status))
   if(status.code!==0)throw Error('Installer failed: '+JSON.stringify(status))
   if(!fs.existsSync(config.appExecutable))throw Error('Installed NHL Tracker executable missing')
   const changed=fs.statSync(config.appExecutable).mtimeMs
   if(original&&changed<=original)throw Error('Installer finished but original application executable was not replaced (check custom install folder)')
+  log('Verified existing executable was replaced at '+config.appExecutable)
   outcome(true,'Installer completed and updated the NHL Tracker executable')
  }catch(e){failure=e;log('INSTALL FAILED '+(e.stack||e));outcome(false,String(e.message||e))}
  try{
