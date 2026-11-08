@@ -28,7 +28,7 @@ import {cloudBetsEqual, flushCloudWagers} from './liveCloudSync'
 import CloudBetHub from './CloudBetHub'
 import { importHistoricalWagers, listAllCloudWagers } from './liveMigrationUpload'
 import { parseMigrationBackup, compareMigration, type HistoricalWager } from './liveMigrationPreflight'
-import { addPlayerIdentities, resolvePlayerId, rosterEntries, syncPlayerDb, readPlayerDb, playerAliasKey, registerProviderPlayerAlias, resolveProviderPlayerAlias, providerPlayerAliasesForId } from './playerIdentityDb'
+import { addPlayerIdentities, resolvePlayerId, rosterEntries, syncPlayerDb, readPlayerDb, playerAliasKey, registerProviderPlayerAlias, resolveProviderPlayerAlias, providerPlayerAliasesForId, resolveAnyProviderPlayerId } from './playerIdentityDb'
 import { capturePredictions, finalizePredictions, linkWagers, readPredictions } from './confidencePerformance'
 import { CONFIDENCE_AS_OF, CONFIDENCE_STATUS, CONFIDENCE_TEAMS, CONFIDENCE_METRICS, confidenceTeam, matchupConfidence, confidenceColor } from './confidenceEngine'
 import {captureDfoSnapshot,readDfoSnapshot,brokenDfoUnits} from './dfoSnapshots'
@@ -281,14 +281,14 @@ async function verifiedPlayerLegs(legs:Leg[],games:Game[]):Promise<Leg[]>{
   if(!byGame.has(gameId)){
    const players:{playerId:number;player:string;gameId:string}[]=[];
    for(const leg of legs.filter(x=>String(x.gameId||'')===gameId)){
-    const known=resolvePlayerId(leg.player,leg.team);
+    const known=resolvePlayerId(leg.player,leg.team)||resolveAnyProviderPlayerId(leg.player,leg.team);
     if(known)players.push({playerId:known,player:leg.player,gameId});
    }
    // NHL verification remains the fallback for players not in the local index.
-   if(legs.some(x=>String(x.gameId||'')===gameId&&(!resolvePlayerId(x.player,x.team)||(Number(x.playerId)>0&&resolvePlayerId(x.player,x.team)!==Number(x.playerId))))){
+   if(legs.some(x=>String(x.gameId||'')===gameId&&(!(resolvePlayerId(x.player,x.team)||resolveAnyProviderPlayerId(x.player,x.team))||(Number(x.playerId)>0&&(resolvePlayerId(x.player,x.team)||resolveAnyProviderPlayerId(x.player,x.team))!==Number(x.playerId))))){
     try{players.push(...boxscoreIdentities(await window.nhlTracker.boxscore(Number(gameId)),Number(gameId)))}catch{}
    }
-   if(legs.some(x=>String(x.gameId||'')===gameId&&(!resolvePlayerId(x.player,x.team)||(Number(x.playerId)>0&&resolvePlayerId(x.player,x.team)!==Number(x.playerId)))))for(const team of [abbr(game.awayTeam),abbr(game.homeTeam)]){
+   if(legs.some(x=>String(x.gameId||'')===gameId&&(!(resolvePlayerId(x.player,x.team)||resolveAnyProviderPlayerId(x.player,x.team))||(Number(x.playerId)>0&&(resolvePlayerId(x.player,x.team)||resolveAnyProviderPlayerId(x.player,x.team))!==Number(x.playerId)))))for(const team of [abbr(game.awayTeam),abbr(game.homeTeam)]){
     try{
      const roster=await window.nhlTracker.roster(team);
      const walk=(v:any)=>{if(Array.isArray(v)){v.forEach(walk);return}if(!v||typeof v!=='object')return;
@@ -305,7 +305,7 @@ async function verifiedPlayerLegs(legs:Leg[],games:Game[]):Promise<Leg[]>{
  const verified=legs.map(l=>{
   if(l.kind==='TEAM')return l;
   const players=byGame.get(String(l.gameId))||[];
-  const byName=players.filter(p=>playerIdentityKey(p.player)===playerIdentityKey(l.player));
+  const providerId=resolveAnyProviderPlayerId(l.player,l.team);const byName=players.filter(p=>playerIdentityKey(p.player)===playerIdentityKey(l.player)||(providerId>0&&p.playerId===providerId));
   const ids=[...new Set(byName.map(p=>p.playerId))];
   const selectedId=Number(l.playerId)||0;
   // A selected NHL ID outranks name equality; two VAN players have the
