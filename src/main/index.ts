@@ -144,6 +144,17 @@ app.whenReady().then(() => {
   })
   ipcMain.handle('nhl:boxscore', async (_e, gameId: number) => nhlJson(`/gamecenter/${gameId}/boxscore`))
   ipcMain.handle('nhl:roster', async (_e, team: string) => nhlJson(`/roster/${encodeURIComponent(team)}/current`))
+  ipcMain.handle('nhl:playerById',async (_e,playerId:number)=>{
+    const id=Number(playerId)
+    if(!Number.isSafeInteger(id)||id<1000000||id>9999999)throw Error('Invalid seven-digit NHL player ID')
+    const profile=await nhlJson('/player/'+id+'/landing')
+    if(Number(profile?.playerId)!==id)throw Error('NHL player ID did not match the official profile')
+    const name=(v:any)=>typeof v==='string'?v:String(v?.default||'')
+    const full=[name(profile.firstName),name(profile.lastName)].filter(Boolean).join(' ').trim()
+    if(!full)throw Error('Official NHL profile has no full name')
+    const team=String(profile.currentTeamAbbrev?.default||profile.currentTeamAbbrev||'').toUpperCase()
+    return {id,name:full,team,position:String(profile.position||''),sweaterNumber:Number(profile.sweaterNumber||0)||undefined}
+  })
   ipcMain.handle('nhl:playerSearch', async (_e, query: string) => {
     const q=String(query||'').trim()
     if(q.length<3||q.length>80||!/^[\p{L}\p{M} .'-]+$/u.test(q)) throw new Error('Enter a valid player name (3–80 characters)')
