@@ -1,5 +1,5 @@
 import {spawn} from 'node:child_process'
-import {mkdir,readFile,unlink,writeFile,open} from 'node:fs/promises'
+import {mkdir,readFile,unlink,writeFile,appendFile} from 'node:fs/promises'
 import {join} from 'node:path'
 
 type UpdateConfig={installer:string;version:string;appExecutable:string;userData:string;parentPid:number;dryRun?:boolean}
@@ -84,15 +84,14 @@ export async function launchUpdateCoordinator(config:UpdateConfig){
  // meant a startup crash provided no actionable evidence.
  const startupLogFile=join(dir,'coordinator-startup.log')
  await writeFile(startupLogFile,'Starting PowerShell update coordinator for '+config.version+'\r\n','utf8')
- const log=await open(startupLogFile,'a')
- let child:ReturnType<typeof spawn>
- try{
-  child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',scriptPath],{
-   detached:true,stdio:['ignore',log.fd,log.fd],windowsHide:true
-  })
- }finally{
-  await log.close()
- }
+ // Pipes remain valid for the lifetime of the spawned process. Closing a
+ // parent-owned file descriptor immediately after spawn can leave the detached
+ // Windows child without a usable stderr channel.
+ const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',scriptPath],{
+  detached:true,stdio:['ignore','pipe','pipe'],windowsHide:true
+ })
+ child.stdout?.on('data',chunk=>{void appendFile(startupLogFile,chunk).catch(()=>{})})
+ child.stderr?.on('data',chunk=>{void appendFile(startupLogFile,chunk).catch(()=>{})})
  let failed:string|null=null
  child.on('error',error=>{failed=error.message})
  let ready=false
