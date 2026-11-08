@@ -31,7 +31,8 @@ test('Install passes official updater path from verified staged download',()=>{
 
 test('Windows updater captures hidden PowerShell launch errors without quitting Electron',()=>{
  assert.match(helper,/coordinator-startup\.log/)
- assert.match(helper,/stdio:\['ignore',log\.fd,log\.fd\]/)
+ assert.match(helper,/stdio:\['ignore','pipe','pipe'\]/)
+ assert.match(helper,/child\.stderr\?\.on\('data'/)
  assert.match(helper,/readFile\(startupLogFile,'utf8'\)/)
  assert.match(helper,/NHL Tracker will stay open/)
 })
