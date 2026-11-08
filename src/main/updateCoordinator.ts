@@ -93,9 +93,12 @@ export async function launchUpdateCoordinator(config:UpdateConfig){
  child.stdout?.on('data',chunk=>{void appendFile(startupLogFile,chunk).catch(()=>{})})
  child.stderr?.on('data',chunk=>{void appendFile(startupLogFile,chunk).catch(()=>{})})
  let failed:string|null=null
+ let startupOutput=''
+ child.stdout?.on('data',chunk=>{startupOutput+=String(chunk).slice(0,4000)})
+ child.stderr?.on('data',chunk=>{startupOutput+=String(chunk).slice(0,4000)})
  child.on('error',error=>{failed=error.message})
  let ready=false
- for(let i=0;i<60;i++){
+ for(let i=0;i<140;i++){
   if(failed)break
   try{ready=(await readFile(readyFile,'ascii')).trim()==='READY';if(ready)break}catch{}
   if(child.exitCode!==null||child.signalCode!==null)break
@@ -103,8 +106,17 @@ export async function launchUpdateCoordinator(config:UpdateConfig){
  }
  if(!ready){
   try{child.kill()}catch{}
-  const stderr=(await readFile(startupLogFile,'utf8').catch(()=>'' )).trim().slice(-1600)
-  throw new Error((failed||'Installer coordinator failed before startup confirmation.')+(stderr?' Details: '+stderr:'')+' Diagnostic log: '+startupLogFile+'. NHL Tracker will stay open.')
+  // Surface exit status and the actual generated script when a Windows runner
+  // cannot execute the coordinator. A single startup banner is not diagnostic.
+  await new Promise(resolve=>setTimeout(resolve,250))
+  const stderr=(await readFile(startupLogFile,'utf8').catch(()=>'' )).trim().slice(-2500)
+  const diagnostic=[failed||'Installer coordinator failed before startup confirmation.',
+   'exit='+String(child.exitCode),'signal='+String(child.signalCode),
+   startupOutput?'PowerShell output: '+startupOutput.slice(-2500):'',
+   stderr?'Startup log: '+stderr:'',
+   'Generated script: '+scriptPath,'Diagnostic log: '+startupLogFile,
+   'NHL Tracker remains open.'].filter(Boolean).join(' | ')
+  throw new Error(diagnostic)
  }
  child.unref()
  return {started:true,logFile,startupLogFile}
