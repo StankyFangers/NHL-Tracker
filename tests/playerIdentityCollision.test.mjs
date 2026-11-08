@@ -20,7 +20,7 @@ globalThis.localStorage={
  setItem:(k,v)=>store.set(k,String(v)),
  removeItem:k=>store.delete(k)
 }
-const roster={forwards:[{id:8478444,firstName:{default:'Elias'},lastName:{default:'Pettersson'},positionCode:'C',sweaterNumber:40}],
+const roster={forwards:[{id:8480012,firstName:{default:'Elias'},lastName:{default:'Pettersson'},positionCode:'C',sweaterNumber:40}],
  defensemen:[{id:8483678,firstName:{default:'Elias'},lastName:{default:'Pettersson'},positionCode:'D',sweaterNumber:25}]}
 
 test('Both Vancouver Elias Petterssons remain distinct in the local NHL player index',()=>{
@@ -31,8 +31,8 @@ test('Both Vancouver Elias Petterssons remain distinct in the local NHL player i
  db.api.addPlayerIdentities(entries)
  assert.equal(db.api.readPlayerDb().length,2)
  assert.equal(db.api.resolvePlayerId('Elias Pettersson','VAN'),undefined,'same name and team cannot pick an ID')
- assert.equal(db.api.resolvePlayerId('Elias Pettersson','VAN','C'),8478444)
- assert.equal(db.api.resolvePlayerId('Elias Pettersson','VAN',undefined,40),8478444)
+ assert.equal(db.api.resolvePlayerId('Elias Pettersson','VAN','C'),8480012)
+ assert.equal(db.api.resolvePlayerId('Elias Pettersson','VAN',undefined,40),8480012)
  assert.equal(db.api.resolvePlayerId('Elias Pettersson','VAN','D',25),8483678)
 })
 test('Bet Entry shows both candidates, with jersey and position, and verifies chosen ID',()=>{
@@ -50,7 +50,7 @@ test('Kalshi rejects indistinguishable same-team names, resolves explicit #40',a
  const leg=(sweaterNumber)=>({player:'Elias Pettersson',team:'VAN',kind:'PLAYER',qty:1,stat:'Point',side:'OVER',sweaterNumber})
  const candidate=(id,sweaterNumber)=>({id,bet:{legs:[leg(sweaterNumber)]}})
  const result=await kalshi.api.verifyKalshiIdentity([candidate('ambiguous',undefined),candidate('center',40),candidate('defense',25)],async()=>roster)
- assert.deepEqual(result.accepted.map(c=>[c.id,c.bet.legs[0].playerId]),[['center',8478444],['defense',8483678]])
+ assert.deepEqual(result.accepted.map(c=>[c.id,c.bet.legs[0].playerId]),[['center',8480012],['defense',8483678]])
  assert.deepEqual(result.rejected.map(c=>c.id),['ambiguous'])
  assert.match(result.rejected[0].reason,/Multiple NHL players share/)
 })
