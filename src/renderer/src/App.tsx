@@ -489,17 +489,16 @@ function TrackerApp({initialTestAccount,onTestLogout,liveAccount,onLiveLogout}:{
    const directId=/^#?(\d{7})$/.test(rawQuery)?Number(rawQuery.replace(/^#/,'')):rawQuery.toUpperCase()==='EP40'?8480012:0
    if(directId){
     const team=rawQuery.toUpperCase()==='EP40'?'VAN':devPlayerTeam.trim().toUpperCase()
-    const roster=await window.nhlTracker.roster(team)
-    const players=rosterEntries(roster,team)
-    const found=players.find(p=>p.id===directId)
-    if(!found){
-     setDevRosterMessage('NHL player #'+directId+' was not found on '+team+' current official roster. Select the correct team or refresh its roster; no player was added.')
+    const found=await (window.nhlTracker as any).playerById(directId) as {id:number;name:string;team:string;position?:string;sweaterNumber?:number}
+    if(found.team&&found.team!==team){
+     setDevRosterMessage('Official NHL profile lists '+found.name+' (#'+found.id+') with '+found.team+', not '+team+'. Select the correct team before saving. No player was added.')
+     setDevPlayerTeam(found.team)
      return
     }
     setDevPlayerTeam(team)
     setDevPlayerResults([{id:found.id,name:found.name,team}])
     setDevPlayerSelected(String(found.id))
-    setDevRosterMessage('VERIFIED · '+found.name+' · '+team+' · NHL #'+found.id+(found.sweaterNumber?' · Jersey #'+found.sweaterNumber:'')+'. Select Add to Shared LIVE Database.')
+    setDevRosterMessage('OFFICIAL NHL ID VERIFIED · '+found.name+' · '+team+' · NHL #'+found.id+(found.sweaterNumber?' · Jersey #'+found.sweaterNumber:'')+'. Select Add to Shared LIVE Database.')
     return
    }
    const query=playerAliasKey(devPlayerQuery)
@@ -534,10 +533,9 @@ function TrackerApp({initialTestAccount,onTestLogout,liveAccount,onLiveLogout}:{
   // Recheck the official NHL roster at save time: never trust a stale
   // suggestion, a mismatched team selection, or an arbitrary player ID.
   try{
-   const roster=await window.nhlTracker.roster(team)
-   const official=rosterEntries(roster,team).find(x=>x.id===p.id)
-   if(!official||playerAliasKey(official.name)!==playerAliasKey(p.name)){
-    setDevRosterMessage('Cannot save: NHL #'+p.id+' does not match '+p.name+' on '+team+' official roster. Recheck the team and select the verified player.')
+   const official=await (window.nhlTracker as any).playerById(p.id) as {id:number;name:string;team:string}
+   if(Number(official.id)!==p.id||playerAliasKey(official.name)!==playerAliasKey(p.name)||(official.team&&official.team!==team)){
+    setDevRosterMessage('Cannot save: NHL #'+p.id+' does not match '+p.name+' on '+team+' official NHL profile. Recheck the team and select the verified player.')
     return
    }
   }catch(e){setDevRosterMessage('Could not verify player with NHL roster; no registry change made. '+String(e));return}
