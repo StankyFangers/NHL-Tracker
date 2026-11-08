@@ -99,7 +99,10 @@ export async function launchUpdateCoordinator(config:UpdateConfig){
  const invocation='& '+ps(scriptPath)
  const encodedInvocation=Buffer.from(invocation,'utf16le').toString('base64')
  const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand',encodedInvocation],{
-  detached:true,stdio:['ignore','pipe','pipe'],windowsHide:true
+  // On Windows, CREATE_NEW_PROCESS_GROUP/DETACHED_PROCESS can cause
+  // PowerShell to exit without executing the script when started async.
+  // Windows child processes survive parent exit without detached:true.
+  detached:false,stdio:['ignore','pipe','pipe'],windowsHide:true
  })
  child.stdout?.on('data',chunk=>{void appendFile(startupLogFile,chunk).catch(()=>{})})
  child.stderr?.on('data',chunk=>{void appendFile(startupLogFile,chunk).catch(()=>{})})
