@@ -45,7 +45,23 @@ try {
  const script=join(userData,'update-cache','install-coordinator.ps1')
  const log=join(userData,'update-cache','coordinator-startup.log')
  console.error('Windows coordinator smoke test failed:',error)
- console.error('Generated coordinator script:\n',read(script,'utf8'))
+ console.error('Generated coordinator script:\\n',read(script,'utf8'))
+ // Directly execute the safe dry-run script to distinguish a parsing/script
+ // failure from the detached-launch/handshake behavior.
+ for (const mode of ['file','encoded','encoded-detached']) {
+   const args = mode==='file'
+     ? ['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',script]
+     : ['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand',
+        Buffer.from('& '+("'" + script.replace(/'/g,"''") + "'"),'utf16le').toString('base64')]
+   const result=spawnSync('powershell.exe',args,{
+     encoding:'utf8',timeout:12000,windowsHide:true,detached:mode==='encoded-detached'
+   })
+   console.error('DIRECT POWERSHELL DIAGNOSTIC',mode,JSON.stringify({
+     status:result.status,signal:result.signal,error:result.error?.message,
+     stdout:result.stdout?.slice(-3000),stderr:result.stderr?.slice(-3000),
+     readyFile:existsSync(join(userData,'update-cache','coordinator-ready.txt'))
+   }))
+ }
  console.error('Startup diagnostics:\n',existsSync(log)?read(log,'utf8'):'No startup log')
  throw error
 }
