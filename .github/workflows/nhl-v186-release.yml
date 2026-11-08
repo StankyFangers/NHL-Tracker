@@ -118,7 +118,16 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           for ($attempt = 1; $attempt -le 3; $attempt++) {
-            Write-Host "electron-builder NSIS attempt $attempt of 3"
+            # electron-builder downloads Electron again during packaging.
+            # npm ci's mirror setting is scoped to that earlier step, so
+            # explicitly configure a mirror here as well.
+            if ($attempt -eq 2) {
+              Remove-Item Env:ELECTRON_MIRROR -ErrorAction SilentlyContinue
+              Write-Host "electron-builder NSIS attempt $attempt of 3 (official Electron source)"
+            } else {
+              $env:ELECTRON_MIRROR = 'https://npmmirror.com/mirrors/electron/'
+              Write-Host "electron-builder NSIS attempt $attempt of 3 (Electron mirror)"
+            }
             & .\node_modules\.bin\electron-builder.cmd --win nsis --x64 --publish never
             if ($LASTEXITCODE -eq 0) {
               Write-Host 'Windows NSIS installer packaged successfully.'
