@@ -305,7 +305,7 @@ async function verifiedPlayerLegs(legs:Leg[],games:Game[]):Promise<Leg[]>{
  const verified=legs.map(l=>{
   if(l.kind==='TEAM')return l;
   const players=byGame.get(String(l.gameId))||[];
-  const providerId=resolveAnyProviderPlayerId(l.player,l.team);const byName=players.filter(p=>playerIdentityKey(p.player)===playerIdentityKey(l.player)||(providerId>0&&p.playerId===providerId));
+  const providerId=resolveAnyProviderPlayerId(l.player,l.team);const byName=players.filter(p=>playerIdentityKey(p.player)===playerIdentityKey(l.player)||(Number(providerId)>0&&p.playerId===providerId));
   const ids=[...new Set(byName.map(p=>p.playerId))];
   const selectedId=Number(l.playerId)||0;
   // A selected NHL ID outranks name equality; two VAN players have the
