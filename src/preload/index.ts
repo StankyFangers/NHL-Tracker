@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('nhlTracker', {
   boxscore: (gameId: number) => ipcRenderer.invoke('nhl:boxscore', gameId),
   roster: (team: string) => ipcRenderer.invoke('nhl:roster', team),
   playerSearch: (query: string) => ipcRenderer.invoke('nhl:playerSearch', query),
+  playerById: (id: number) => ipcRenderer.invoke('nhl:playerById', id),
   devBetsRequest: (payload: {method:'GET'|'PUT'|'DELETE';bets?:unknown[];revision?:number;confirm?:string}) => ipcRenderer.invoke('dev-bets:request', payload),
   telegramOpenLink: (url:string) => ipcRenderer.invoke('telegram:open-link',url),
   telegramAccountRequest: (payload: {action:string;preferences?:unknown;date?:string;teams?:string[]}) => ipcRenderer.invoke('telegram-account:request',payload),
