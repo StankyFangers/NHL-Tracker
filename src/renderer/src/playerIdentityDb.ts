@@ -1,6 +1,6 @@
 // NHL Tracker v1.7.5: persistent, local-first NHL player identity index.
 // No network calls are needed for an already resolved player ID.
-export type PlayerIdentity = { id:number; name:string; teams:string[] };
+export type PlayerIdentity = { id:number; name:string; teams:string[]; position?:string; sweaterNumber?:number };
 const KEY='nhlTracker:playerIdentityDb:v1';
 const META='nhlTracker:playerIdentityDb:lastFullSync';
 export const identityKey=(v:string)=>String(v||'').normalize('NFKD').toLowerCase()
@@ -13,31 +13,37 @@ export function readPlayerDb():PlayerIdentity[]{
 export function savePlayerDb(rows:PlayerIdentity[]){
  try{localStorage.setItem(KEY,JSON.stringify(rows))}catch(e){console.warn('Player identity database could not be saved',e)}
 }
-export function addPlayerIdentities(entries:{id:number;name:string;team?:string}[]):number{
+export function addPlayerIdentities(entries:{id:number;name:string;team?:string;position?:string;sweaterNumber?:number}[]):number{
  const rows=readPlayerDb(), byId=new Map(rows.map(p=>[p.id,p]));let changed=0;
  for(const e of entries){if(!valid(e.id)||!identityKey(e.name))continue;
   const id=Number(e.id), old=byId.get(id),team=String(e.team||'').toUpperCase();
-  if(!old){byId.set(id,{id,name:e.name,teams:team?[team]:[]});changed++;continue}
+  const position=String(e.position||'').toUpperCase()
+  const sweaterNumber=Number(e.sweaterNumber||0)
+  if(!old){byId.set(id,{id,name:e.name,teams:team?[team]:[],...(position?{position}:{}),...(sweaterNumber>0?{sweaterNumber}:{})});changed++;continue}
   const teams=team&&!old.teams.includes(team)?[...old.teams,team]:old.teams;
-  if(teams!==old.teams){byId.set(id,{...old,teams});changed++}
+  const next={...old,teams,position:position||old.position,sweaterNumber:sweaterNumber>0?sweaterNumber:old.sweaterNumber}
+  if(teams!==old.teams||next.position!==old.position||next.sweaterNumber!==old.sweaterNumber){byId.set(id,next);changed++}
  }
  if(changed)savePlayerDb([...byId.values()]);return changed;
 }
-export function resolvePlayerId(name:string,team?:string):number|undefined{
+export function resolvePlayerId(name:string,team?:string,position?:string,sweaterNumber?:number):number|undefined{
  const key=identityKey(name);if(!key)return undefined;
  const matches=readPlayerDb().filter(p=>identityKey(p.name)===key);
  if(!matches.length)return undefined;
- const ids=[...new Set(matches.map(p=>p.id))];
- if(ids.length===1)return ids[0];
- if(team){const filtered=[...new Set(matches.filter(p=>p.teams.includes(team.toUpperCase())).map(p=>p.id))];if(filtered.length===1)return filtered[0]}
- return undefined;
+ // The same name may belong to two players on the SAME team (VAN's Elias Petterssons).
+ // Never silently select either NHL player ID without distinguishing evidence.
+ const narrowed=matches.filter(p=>!team||p.teams.includes(team.toUpperCase()));
+ const byPosition=position?narrowed.filter(p=>p.position&&p.position.toUpperCase()===position.toUpperCase()):narrowed;
+ const byNumber=sweaterNumber?byPosition.filter(p=>p.sweaterNumber===sweaterNumber):byPosition;
+ const ids=[...new Set(byNumber.map(p=>p.id))];
+ return ids.length===1?ids[0]:undefined;
 }
 export function rosterEntries(roster:any,team:string){
- const out:{id:number;name:string;team:string}[]=[];
+ const out:{id:number;name:string;team:string;position?:string;sweaterNumber?:number}[]=[];
  for(const section of ['forwards','defensemen','goalies'])for(const p of roster?.[section]||[]){
   const n=(v:any)=>typeof v==='string'?v:v?.default||'';
   const full=[n(p.firstName),n(p.lastName)].filter(Boolean).join(' ')||n(p.name);
-  if(valid(p.id||p.playerId)&&full)out.push({id:Number(p.id||p.playerId),name:full,team});
+  if(valid(p.id||p.playerId)&&full)out.push({id:Number(p.id||p.playerId),name:full,team,position:String(p.positionCode||''),sweaterNumber:Number(p.sweaterNumber||0)||undefined});
  }
  return out;
 }
