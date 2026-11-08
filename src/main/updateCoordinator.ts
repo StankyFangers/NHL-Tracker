@@ -2,7 +2,7 @@ import {spawn} from 'node:child_process'
 import {mkdir,readFile,unlink,writeFile,open} from 'node:fs/promises'
 import {join} from 'node:path'
 
-type UpdateConfig={installer:string;version:string;appExecutable:string;userData:string;parentPid:number}
+type UpdateConfig={installer:string;version:string;appExecutable:string;userData:string;parentPid:number;dryRun?:boolean}
 const ps=(value:string)=>"'"+value.replace(/'/g,"''")+"'"
 
 /** Standalone Windows coordinator with a startup acknowledgment before Electron quits. */
@@ -23,6 +23,7 @@ export async function launchUpdateCoordinator(config:UpdateConfig){
   '$log = '+ps(logFile),
   '$targetVersion = '+ps(config.version),
   '$parentPid = '+config.parentPid,
+  '$dryRun = '+(config.dryRun?'$true':'$false'),
   'function Log($message) {',
   '  try { Add-Content -LiteralPath $log -Value ((Get-Date -Format o).ToString() + " " + $message) -Encoding UTF8 } catch {}',
   '}',
@@ -35,6 +36,7 @@ export async function launchUpdateCoordinator(config:UpdateConfig){
   'try {',
   "  Set-Content -LiteralPath $ready -Value 'READY' -Encoding ASCII",
   '  Log ("Coordinator started for " + $targetVersion)',
+  "  if ($dryRun) { Log 'Smoke test finished before exit, installer untouched'; exit 0 }",
   '  $elapsed = 0',
   '  while ((Get-Process -Id $parentPid -ErrorAction SilentlyContinue) -and $elapsed -lt 30000) {',
   '    Start-Sleep -Milliseconds 300',
@@ -97,7 +99,7 @@ export async function launchUpdateCoordinator(config:UpdateConfig){
  for(let i=0;i<60;i++){
   if(failed)break
   try{ready=(await readFile(readyFile,'ascii')).trim()==='READY';if(ready)break}catch{}
-  if(child.exitCode!==null)break
+  if(child.exitCode!==null||child.signalCode!==null)break
   await new Promise(resolve=>setTimeout(resolve,150))
  }
  if(!ready){
