@@ -1,0 +1,26 @@
+name: Verify Telegram Team Commands
+
+on:
+  push:
+    branches:
+      - feature/telegram-team-combo-commands
+    paths:
+      - telegram-cloud/src/worker.mjs
+      - telegram-cloud/test/**
+      - .github/workflows/telegram-team-commands-test.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify Telegram worker commands
+        working-directory: telegram-cloud
+        run: npm test
