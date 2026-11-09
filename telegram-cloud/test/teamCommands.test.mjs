@@ -43,3 +43,16 @@ test('manual team lookups cannot change cron confirmation baselines',()=>{
  assert.ok(segment.includes('parseLineSnapshot(html)'));
  assert.doesNotMatch(segment,/INSERT INTO line_status|UPDATE line_status|await queue\(/);
 })
+
+test('Alerts diagnostic command is available without changing the baseline',()=>{
+ assert.deepEqual(parseCmd('Alerts'),{type:'ALERTS'});
+ assert.deepEqual(parseCmd('/alerts'),{type:'ALERTS'});
+ const source=readFileSync(new URL('../src/worker.mjs',import.meta.url),'utf8');
+ assert.match(source,/subscription\.enabled===1/);
+ assert.match(source,/Last scheduled team check:/);
+});
+test('first confirmed observation triggers a notification and avoids repeated confirmations',()=>{
+ const source=readFileSync(new URL('../src/worker.mjs',import.meta.url),'utf8');
+ assert.match(source,/fresh\.status==='CONFIRMED'&&old\?\.status!=='CONFIRMED'/);
+ assert.match(source,/keyTeam\(date,team\)/);
+});
