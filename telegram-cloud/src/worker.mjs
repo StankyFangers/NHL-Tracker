@@ -220,25 +220,25 @@ export async function tick(env,now=new Date()){
 }
 
 function checkedTimeET(d){return new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',hour:'numeric',minute:'2-digit',hour12:true}).format(d).replace(/\u202f/g,' ')}
-async function refreshOnDemand(env,date,teams){
- const checkedAt=new Date(),stamp=checkedAt.getTime(),results=new Map();
- const before=new Map((await rows(env,date)).map(r=>[r.team,r.status]));
+// Commands read fresh Daily Faceoff data without modifying the scheduled monitor's
+// stored baseline. Otherwise a manual Status/Combos query can consume the
+// PROJECTED -> CONFIRMED transition before the cron can notify subscribers.
+async function refreshOnDemand(_env,date,teams){
+ const checkedAt=new Date(),results=new Map();
  for(let i=0;i<teams.length;i+=6){
   const batch=await Promise.all(teams.slice(i,i+6).map(async team=>{
-   try{const html=await getText('https://www.dailyfaceoff.com/teams/'+SLUGS[team]+'/line-combinations');return {team,...parseLineStatus(html,date),lineup:parseLineSnapshot(html),success:true}}
-   catch(e){console.error('On-demand source failed',team,String(e));return {team,status:'UNKNOWN',source:'Unavailable',success:false}}
+   try{
+    const html=await getText('https://www.dailyfaceoff.com/teams/'+SLUGS[team]+'/line-combinations');
+    return {team,...parseLineStatus(html,date),lineup:parseLineSnapshot(html),success:true};
+   }catch(e){
+    console.error('On-demand source failed',team,String(e));
+    return {team,status:'UNKNOWN',source:'Unavailable',success:false};
+   }
   }));
   for(const item of batch)results.set(item.team,item);
  }
- for(const r of results.values())if(r.success){
-  await env.DB.prepare('INSERT INTO line_status(game_date,team,status,last_checked_at,source) VALUES(?,?,?,?,?) ON CONFLICT(game_date,team) DO UPDATE SET status=excluded.status,last_checked_at=excluded.last_checked_at,source=excluded.source')
-   .bind(date,r.team,r.status,stamp,r.source).run();
-  if(r.status==='CONFIRMED'&&before.get(r.team)==='PROJECTED')
-   await queue(env,keyTeam(date,r.team),'TEAM','✅ '+r.team+' — Lines Confirmed\nDaily Faceoff has a same-day named-source lineup.',[r.team]);
- }
  return {checkedAt,results};
 }
-
 export function parseCmd(raw){
  const x=String(raw||'').trim().replace(/^\//,'').replace(/@\w+$/,'').toUpperCase().replace(/\s+/g,' ');
  const m=x.match(/^(\d{1,2}):([0-5]\d)(?:\s*(AM|PM))?$/);
