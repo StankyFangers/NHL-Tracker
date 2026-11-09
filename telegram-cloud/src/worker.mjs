@@ -31,6 +31,37 @@ export function parseLineSnapshot(html){
  const rows=(xs,n)=>Array.from({length:Math.ceil(xs.length/n)},(_,i)=>xs.slice(i*n,(i+1)*n).join(', '));
  return {'Forward lines':rows(f,3),'Defensive pairs':rows(d,2),'PP1':[p1.join(', ')],'PP2':[p2.join(', ')]};
 }
+/** NHL Tracker combo rule: shared forward line AND shared power-play unit.
+ * Keep three-player combos as trios, not duplicate pairs.
+ */
+export function qualifyingForwardCombos(snapshot){
+ if(!snapshot)return [];
+ const forward=Array.isArray(snapshot['Forward lines'])?snapshot['Forward lines']:[];
+ const units=[['PP1',snapshot.PP1?.[0]],['PP2',snapshot.PP2?.[0]]];
+ const names=value=>String(value||'').split(',').map(n=>n.trim()).filter(Boolean);
+ const combos=[];
+ for(let i=0;i<forward.length;i++){
+  const line=names(forward[i]);
+  for(const [unit,players] of units){
+   const onPP=new Set(names(players).map(n=>n.toLowerCase()));
+   const shared=line.filter(n=>onPP.has(n.toLowerCase()));
+   if(shared.length>=2)combos.push({line:'FL'+(i+1),unit,players:shared});
+  }
+ }
+ return combos;
+}
+function teamStatusText(team,item){
+ const status=item?.status||'UNKNOWN';
+ const symbol=status==='CONFIRMED'?'✅':status==='PROJECTED'?'⏳':'❔';
+ return symbol+' '+team+' — '+status+(item?.success?'':' (source unavailable)');
+}
+function teamComboText(team,item){
+ if(!item?.success||!item?.lineup)return '🏒 '+team+' — Combos unavailable. Daily Faceoff lineup could not be read completely.';
+ const combos=qualifyingForwardCombos(item.lineup),status=item.status==='CONFIRMED'?'CONFIRMED':item.status==='PROJECTED'?'PROJECTED':'UNVERIFIED';
+ return '🏒 '+team+' — '+status+' COMBOS\n'+
+  (combos.length?combos.map(c=>'• '+c.line+' / '+c.unit+': '+c.players.join(' + ')).join('\n'):'No qualifying forward-line + power-play combos in the current lineup.');
+}
+
 export function lineupChanges(oldValue,newValue){
  const before=JSON.parse(oldValue),out=[];
  for(const label of Object.keys(newValue)){
@@ -194,7 +225,7 @@ async function refreshOnDemand(env,date,teams){
  const before=new Map((await rows(env,date)).map(r=>[r.team,r.status]));
  for(let i=0;i<teams.length;i+=6){
   const batch=await Promise.all(teams.slice(i,i+6).map(async team=>{
-   try{return {team,...parseLineStatus(await getText('https://www.dailyfaceoff.com/teams/'+SLUGS[team]+'/line-combinations'),date),success:true}}
+   try{const html=await getText('https://www.dailyfaceoff.com/teams/'+SLUGS[team]+'/line-combinations');return {team,...parseLineStatus(html,date),lineup:parseLineSnapshot(html),success:true}}
    catch(e){console.error('On-demand source failed',team,String(e));return {team,status:'UNKNOWN',source:'Unavailable',success:false}}
   }));
   for(const item of batch)results.set(item.team,item);
@@ -208,12 +239,20 @@ async function refreshOnDemand(env,date,teams){
  return {checkedAt,results};
 }
 
-function parseCmd(raw){const x=String(raw||'').trim().replace(/^\//,'').replace(/@\w+$/,'').toUpperCase(),m=x.match(/^(\d{1,2}):([0-5]\d)(?:\s*(AM|PM))?$/);if(['STATUS','SLATE','NEXT','REMAINING','HELP','START','PING','ID'].includes(x))return{type:x};if(SLUGS[x])return{type:'TEAM',team:x};if(m&&+m[1]>0&&+m[1]<=12)return{type:'TIME',h:+m[1],m:+m[2],ampm:m[3]||''};return{type:'HELP'}}
+export function parseCmd(raw){
+ const x=String(raw||'').trim().replace(/^\//,'').replace(/@\w+$/,'').toUpperCase().replace(/\s+/g,' ');
+ const m=x.match(/^(\d{1,2}):([0-5]\d)(?:\s*(AM|PM))?$/);
+ if(['STATUS','SLATE','NEXT','REMAINING','HELP','START','PING','ID'].includes(x))return {type:x};
+ const team=x.match(/^([A-Z]{2,3})(?: (STATUS|COMBOS))?$/);
+ if(team&&SLUGS[team[1]])return {type:'TEAM',team:team[1],detail:team[2]||'BOTH'};
+ if(m&&+m[1]>0&&+m[1]<=12)return {type:'TIME',h:+m[1],m:+m[2],ampm:m[3]||''};
+ return {type:'HELP'};
+}
 async function answer(env,message,chat){
  const cmd=parseCmd(message);
  if(cmd.type==='PING')return '🏒 NHL Tracker cloud bot is online.';
  if(cmd.type==='ID')return 'Your Telegram chat ID is '+chat;
- if(['START','HELP'].includes(cmd.type))return '🏒 NHL Tracker Cloud\nStatus — live daily confirmations\nNext — live next puck drop\nRemaining — live unconfirmed teams\n7:00 — live start-time status ET\nCAR — live team lookup\nPing — bot test';
+ if(['START','HELP'].includes(cmd.type))return '🏒 NHL Tracker Cloud\nStatus — live daily confirmations\nNext — live next puck drop\nRemaining — live unconfirmed teams\n7:00 — live start-time status ET\nTBL — team status + qualifying combos\nTBL Status — team status only\nTBL Combos — qualifying combos only\nPing — bot test';
  const now=new Date(),date=dateET(now),all=await getGames(date);
  let games=all;
  if(cmd.type==='NEXT'){
@@ -231,6 +270,15 @@ async function answer(env,message,chat){
  if(!games.length)return '🏒 No matching games today.\nLast Checked: '+checkedTimeET(new Date())+' ET (NHL schedule)';
  const teams=[...new Set(games.flatMap(g=>[g.away,g.home]))];
  const {results,checkedAt}=await refreshOnDemand(env,date,teams);
+ if(cmd.type==='TEAM'){
+  const item=results.get(cmd.team);
+  const stamp='\nLast Checked: '+checkedTimeET(checkedAt)+' ET (Daily Faceoff)';
+  const status=teamStatusText(cmd.team,item);
+  const combos=teamComboText(cmd.team,item);
+  if(cmd.detail==='STATUS')return status+stamp;
+  if(cmd.detail==='COMBOS')return combos+stamp;
+  return status+'\n\n'+combos+stamp;
+ }
  const confirmed=teams.filter(t=>results.get(t)?.status==='CONFIRMED');
  const unknown=teams.filter(t=>results.get(t)?.status==='UNKNOWN');
  const selected=cmd.type==='REMAINING'?teams.filter(t=>results.get(t)?.status!=='CONFIRMED'):teams;
