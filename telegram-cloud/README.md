@@ -17,6 +17,16 @@ The D1 schema uses `CREATE TABLE IF NOT EXISTS`; applying it to the existing dat
 
 In the desktop app, sign in to the intended LIVE account (or TEST account under `npm run dev`), then go to **Settings → Phone Notification Setup → Setup**. Click **Connect Telegram**, open the deep link, press **Start** in the Telegram bot, and return to **Refresh Connection**. This link is one-time and expires in ten minutes. Set **Enable phone notifications**, choose options, and click **Save Notification Preferences to Cloud**. Verify **Send Test Notification**.
 
+## Team commands (on-demand)
+
+You can text a team abbreviation in a private Telegram chat:
+
+- `TBL` — show Daily Faceoff confirmation status **and** all qualifying correlated forward combos.
+- `TBL Status` — show only the team's confirmation status and last-checked time.
+- `TBL Combos` — show only the qualifying combos and last-checked time, labeled PROJECTED or CONFIRMED.
+
+A qualifying combo contains at least two players who are on the **same forward line** and **same power-play unit** (PP1 or PP2). Three overlapping players are listed as one trio. If Daily Faceoff cannot provide a complete line snapshot, the bot reports combos unavailable rather than making up combinations. These on-demand commands don't depend on having enabled automatic alerts.
+
 - All-team notifications use Daily Faceoff's scheduled monitor.
 - Pending-wager-only delivery relies on the signed-in desktop app periodically uploading just the date and team abbreviations of pending NHL wagers; no wager prices, stakes or personal wager details go to Telegram. If the desktop has never synced a recent pending-team snapshot, pending-only alerts will not be delivered.
 - Optional confirmed-lineup changes compare known forward lines, defensive pairs, PP1 and PP2. A complete valid lineup is required; a first observation sets the baseline without a false change alert.
