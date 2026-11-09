@@ -115,7 +115,7 @@ async function linkChat(env,chat,code){
   env.DB.prepare('INSERT INTO telegram_accounts(account_key,chat_id,enabled,scope,lineup_changes,progress_mode,created_at,updated_at) VALUES(?,?,0,\'ALL\',0,\'OFF\',?,?) ON CONFLICT(account_key) DO UPDATE SET chat_id=excluded.chat_id,updated_at=excluded.updated_at').bind(row.account_key,chat,now,now),
   env.DB.prepare('DELETE FROM telegram_link_codes WHERE account_key=?').bind(row.account_key)
  ]);
- return '✅ Telegram linked to NHL Tracker. Set your notification preferences in the desktop app. Send Ping or Status here to test commands.';
+ return '✅ Telegram linked to NHL Tracker. Set your notification preferences in the desktop app. Send Ping, Status, or Alerts here to test commands.';
 }
 async function accountAPI(req,env,path){
  let key;
@@ -194,7 +194,10 @@ export async function tick(env,now=new Date()){
   const results=await Promise.all(due.slice(i,i+5).map(async team=>{try{const html=await getText('https://www.dailyfaceoff.com/teams/'+SLUGS[team]+'/line-combinations');return {team,...parseLineStatus(html,date),lineup:parseLineSnapshot(html)}}catch(e){console.error('DFO unavailable',team,String(e));return{team,status:'UNKNOWN',source:'Unavailable'}}}));
   for(const fresh of results){
    const old=known.get(fresh.team),next=fresh.status==='UNKNOWN'&&old?old.status:fresh.status;
-   if(old?.status==='PROJECTED'&&fresh.status==='CONFIRMED')changed.push(fresh.team);
+   // A team may be confirmed before our first successful scheduled poll. Treat
+   // the first observed CONFIRMED state as an event as well, not only
+   // PROJECTED -> CONFIRMED. The deterministic event key prevents duplicates.
+   if(fresh.status==='CONFIRMED'&&old?.status!=='CONFIRMED')changed.push(fresh.team);
    if(fresh.status==='CONFIRMED'&&fresh.lineup){
     const snapshot=JSON.stringify(fresh.lineup),prevLineup=await env.DB.prepare('SELECT snapshot FROM confirmed_lineups WHERE game_date=? AND team=?').bind(date,fresh.team).first();
     if(prevLineup&&prevLineup.snapshot!==snapshot&&old?.status==='CONFIRMED'){
@@ -242,7 +245,7 @@ async function refreshOnDemand(_env,date,teams){
 export function parseCmd(raw){
  const x=String(raw||'').trim().replace(/^\//,'').replace(/@\w+$/,'').toUpperCase().replace(/\s+/g,' ');
  const m=x.match(/^(\d{1,2}):([0-5]\d)(?:\s*(AM|PM))?$/);
- if(['STATUS','SLATE','NEXT','REMAINING','HELP','START','PING','ID'].includes(x))return {type:x};
+ if(['STATUS','SLATE','NEXT','REMAINING','HELP','START','PING','ID','ALERTS'].includes(x))return {type:x};
  const team=x.match(/^([A-Z]{2,3})(?: (STATUS|COMBOS))?$/);
  if(team&&SLUGS[team[1]])return {type:'TEAM',team:team[1],detail:team[2]||'BOTH'};
  if(m&&+m[1]>0&&+m[1]<=12)return {type:'TIME',h:+m[1],m:+m[2],ampm:m[3]||''};
@@ -252,7 +255,24 @@ async function answer(env,message,chat){
  const cmd=parseCmd(message);
  if(cmd.type==='PING')return '🏒 NHL Tracker cloud bot is online.';
  if(cmd.type==='ID')return 'Your Telegram chat ID is '+chat;
- if(['START','HELP'].includes(cmd.type))return '🏒 NHL Tracker Cloud\nStatus — live daily confirmations\nNext — live next puck drop\nRemaining — live unconfirmed teams\n7:00 — live start-time status ET\nTBL — team status + qualifying combos\nTBL Status — team status only\nTBL Combos — qualifying combos only\nPing — bot test';
+ if(cmd.type==='ALERTS'){
+  const subscription=await env.DB.prepare('SELECT enabled,scope,lineup_changes,progress_mode FROM telegram_accounts WHERE chat_id=?').bind(chat).first();
+  if(!subscription)return '⚠️ Telegram chat is not linked to an NHL Tracker account.';
+  const today=dateET(new Date());
+  const stored=(await rows(env,today)).filter(x=>x.last_checked_at);
+  const last=stored.length?Math.max(...stored.map(x=>Number(x.last_checked_at)||0)):0;
+  const pending=await env.DB.prepare('SELECT COUNT(*) AS n FROM delivery WHERE chat_id=? AND delivered_at IS NULL').bind(chat).first();
+  return '🏒 NHL Tracker — Automatic Alerts Diagnostics\n'+
+   'Push notifications: '+(subscription.enabled===1?'ON ✅':'OFF ❌')+'\n'+
+   'Teams: '+(subscription.scope||'ALL')+'\n'+
+   'Confirmed lineup changes: '+(subscription.lineup_changes===1?'ON':'OFF')+'\n'+
+   'Progress notifications: '+(subscription.progress_mode||'OFF')+'\n'+
+   'Last scheduled team check: '+(last?checkedTimeET(new Date(last))+' ET':'none recorded today')+'\n'+
+   'Teams checked today: '+stored.length+'\n'+
+   'Undelivered messages: '+Number(pending?.n||0)+'\n'+
+   (subscription.enabled===1?'Push enabled. Team confirmation alerts are automatic for eligible monitored teams.':'⚠️ Enable automatic notifications and SAVE in NHL Tracker → Settings → Telegram Notifications.');
+ }
+ if(['START','HELP'].includes(cmd.type))return '🏒 NHL Tracker Cloud\nStatus — live daily confirmations\nNext — live next puck drop\nRemaining — live unconfirmed teams\n7:00 — live start-time status ET\nTBL — team status + qualifying combos\nTBL Status — team status only\nTBL Combos — qualifying combos only\nPing — bot test\nAlerts — push settings and scheduler diagnostics';
  const now=new Date(),date=dateET(now),all=await getGames(date);
  let games=all;
  if(cmd.type==='NEXT'){
