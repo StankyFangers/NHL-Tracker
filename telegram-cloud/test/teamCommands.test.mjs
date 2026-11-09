@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import {readFileSync} from 'node:fs'
 import {parseCmd,qualifyingForwardCombos} from '../src/worker.mjs'
 
 test('team abbreviation alone returns both status and combos',()=>{
@@ -33,4 +34,12 @@ test('qualifying forwards must share same line and power-play unit',()=>{
 test('one-player overlap and absent lineup produce no combos',()=>{
  assert.deepEqual(qualifyingForwardCombos(null),[])
  assert.deepEqual(qualifyingForwardCombos({'Forward lines':['A, B, C'],PP1:['A, D, E, F, G'],PP2:['B, H, I, J, K']}),[])
+})
+
+test('manual team lookups cannot change cron confirmation baselines',()=>{
+ const source=readFileSync(new URL('../src/worker.mjs',import.meta.url),'utf8');
+ const segment=source.split('async function refreshOnDemand(')[1].split('export function parseCmd(')[0];
+ assert.ok(segment.includes('parseLineStatus(html,date)'));
+ assert.ok(segment.includes('parseLineSnapshot(html)'));
+ assert.doesNotMatch(segment,/INSERT INTO line_status|UPDATE line_status|await queue\(/);
 })
