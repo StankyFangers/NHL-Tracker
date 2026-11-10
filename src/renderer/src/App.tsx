@@ -1114,7 +1114,8 @@ function TrackerApp({initialTestAccount,onTestLogout,liveAccount,onLiveLogout}:{
     if(newCount<previousCount){
      if(candidate?.team===corrected&&candidate.score===value&&candidate.count===newCount)candidate.checks++;
      else watch.candidate={team:corrected,score:value,count:newCount,checks:1};
-     if(watch.candidate.checks>=2){
+     const confirmed=watch.candidate;
+     if(confirmed&&confirmed.checks>=2){
       const liveIds=new Set(currentGoals.map(e=>e.id));
       const missing=watch.goals.filter(e=>e.team===corrected&&!liveIds.has(e.id));
       for(const goal of missing)removedGoalIds.add(goal.id);
@@ -1122,7 +1123,7 @@ function TrackerApp({initialTestAccount,onTestLogout,liveAccount,onLiveLogout}:{
       const now=Date.now(),opponent=corrected===awayTeam?homeTeam:awayTeam;
       // The alert has its own stable identity and remains in the feed after
       // the cancelled GOAL card is removed.
-      const correctionId=`${g.id}-goal-overturned-${corrected}-${removed?.goalPeriod||0}-${removed?.goalElapsed??'score'}-${watch.candidate.count}`;
+      const correctionId=`${g.id}-goal-overturned-${corrected}-${removed?.goalPeriod||0}-${removed?.goalElapsed??'score'}-${confirmed.count}`;
       collected.push({id:correctionId,gameId:g.id,team:corrected,opponent,type:'GOAL OVERTURNED',
        title:'GOAL OVERTURNED',detail:'Goal removed from official score',
        meta:`${awayTeam} ${awayScore} – ${homeTeam} ${homeScore} · Official NHL score correction`,
@@ -1136,6 +1137,9 @@ function TrackerApp({initialTestAccount,onTestLogout,liveAccount,onLiveLogout}:{
    }
   }
  }
+ // While the lower score is still tentative, retain the previous goal card.
+ // Remove it only when the second NHL observation confirms the correction.
+ if(goalScoreWatchRef.current[gameKey]?.candidate)checkedGoalGameIds.delete(g.id);
  for(const goal of currentGoals){
   if(goal.type!=='GOAL')continue;
   const prior=goalIceProgressRef.current[goal.id];
