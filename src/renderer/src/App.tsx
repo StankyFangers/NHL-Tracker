@@ -1641,7 +1641,9 @@ function LiveCommandCenter({sectionColors,date,setDate,games,events,bets,setBets
  const allKeys=[...gameOptions.map((x:any)=>x.key),'MULTI'].filter(k=>groups.has(k));
  const isToday=date===(localStorage.getItem('activeSlateDate')||localDate());const activeKeys=isToday?allKeys.filter(k=>!groupIsFinal(k,groups.get(k)||[])):[];const finalizedKeys=isToday?allKeys.filter(k=>groupIsFinal(k,groups.get(k)||[])):allKeys;
  const keys=selectedId&&isToday?[String(selectedId)].filter(k=>activeKeys.includes(k)):activeKeys; const shownFinalizedKeys=selectedId?[String(selectedId)].filter(k=>finalizedKeys.includes(k)):finalizedKeys;
- const betNetUnits=(bs:Bet[])=>bs.reduce((n,b)=>n+((b.status||'PENDING')==='PENDING'?0:cashNetUnits(b)),0);
+ // Match the game accordion's Running P/L: pending wagers still have their
+ // stakes at risk, so exclude only VOID returns, not pending wagers.
+ const betNetUnits=(bs:Bet[])=>bs.reduce((n,b)=>n+cashNetUnits(b),0);
  const finalizedNet=shownFinalizedKeys.reduce((n,k)=>n+betNetUnits(groups.get(k)||[]),0);
  // Part 3A — first-intermission DNP guard. Only players on pending wagers are inspected.
  const firstIntermissionGames=new Set((events as FeedEvent[]).filter(e=>e.type==='INTERMISSION'&&/END OF 1ST/i.test(e.title)).map(e=>String(e.gameId)));
