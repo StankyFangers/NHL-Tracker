@@ -1,0 +1,39 @@
+name: NHL v1.8.14 DEV simulator build check
+
+on:
+  push:
+    branches:
+      - feature/v1.8.14-live-event-and-pl-fixes
+    paths:
+      - src/renderer/src/App.tsx
+      - src/renderer/src/styles.css
+      - .github/workflows/v1814-dev-check.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build Electron app for DEV testing
+        run: npm run build
+      - name: Verify simulated event and timer markers
+        shell: pwsh
+        run: |
+          $app = Get-Content src/renderer/src/App.tsx -Raw
+          $css = Get-Content src/renderer/src/styles.css -Raw
+          foreach ($marker in @("GOAL OVERTURNED","PowerPlayTimer","OVERTURN GOAL","ppDuration","scoreGoal","powerPlayFromPbp")) {
+            if (-not $app.Contains($marker)) { throw "Missing simulator or live feature: $marker" }
+          }
+          if (-not $css.Contains("overturnedRedX")) { throw "Overturned-goal icon styling missing" }
+          Write-Output "All NHL v1.8.14 simulator markers present."
