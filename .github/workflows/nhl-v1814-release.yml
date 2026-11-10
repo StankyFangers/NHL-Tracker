@@ -170,8 +170,8 @@ jobs:
           if ($exe.Length -lt 1000000) { throw 'Installer is unexpectedly small' }
           if ($blockmap.Length -lt 100) { throw 'Differential update blockmap missing/empty' }
           $manifestText = Get-Content -LiteralPath $manifest.FullName -Raw
-          if ($manifestText -notmatch 'version:\s*1\.8\.13') { throw 'latest.yml has wrong version' }
-          if ($manifestText -notmatch 'NHL\.Tracker\.Setup\.1\.8\.13\.exe') { throw 'latest.yml does not point to release installer' }
+          if ($manifestText -notmatch 'version:\s*1\.8\.14') { throw 'latest.yml has wrong version' }
+          if ($manifestText -notmatch 'NHL\.Tracker\.Setup\.1\.8\.14\.exe') { throw 'latest.yml does not point to release installer' }
           if ($manifestText -notmatch 'sha512:') { throw 'latest.yml is missing checksum' }
           if ($manifestText -notmatch 'size:') { throw 'latest.yml is missing installer size' }
           Write-Host "Verified: $($exe.Name), latest.yml, and $($blockmap.Name)"
