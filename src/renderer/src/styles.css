@@ -1096,9 +1096,9 @@ html,body,#root,.app,main{scrollbar-width:thin;scrollbar-color:#3e7898 #0a1118}
 /* Goal overturned inherits the team's full-sized mascot artwork and original
    transparent goal icon; the red X is a small scalable CSS overlay. */
 .event.goal-overturned{border-left-color:#ff5263;background:linear-gradient(110deg,#291018,#101821)}
-.event.goal-overturned.goalWithArt{--goal-glow:#ff5263}
+.event.goal-overturned.goalWithArt{position:relative;isolation:isolate;overflow:hidden;min-height:142px;height:auto;--goal-glow:#ff5263;border:1px solid #ff5263;border-left:4px solid #ff5263;background:#091a25;box-shadow:0 0 7px #ff526366,0 8px 24px #0008}
 .event.goal-overturned .eventType,.event.goal-overturned h2{color:#ff6575}
-.event.goal-overturned.goalWithArt .goalMascotArt{position:absolute;z-index:0;right:0;top:0;height:100%;width:auto;max-width:none;pointer-events:none;object-fit:fill;mask-image:linear-gradient(90deg,transparent 0%,black 12%);-webkit-mask-image:linear-gradient(90deg,transparent 0%,black 12%)}
+.event.goal-overturned.goalWithArt .goalMascotArt{position:absolute;z-index:0;top:-4.4%;right:-1%;height:110%;width:auto;max-width:none;pointer-events:none;object-fit:fill;clip-path:inset(4% 1% 5% 62%);-webkit-mask-image:linear-gradient(90deg,transparent 62%,black 73%);mask-image:linear-gradient(90deg,transparent 62%,black 73%)}
 .event.goal-overturned.goalWithArt .eventIcon,.event.goal-overturned.goalWithArt .eventContent{position:relative;z-index:2}
 .event.goal-overturned.goalWithArt .eventContent{padding-right:clamp(110px,28%,260px)}
 .overturnedGoalIcon{position:relative;display:inline-grid;place-items:center;width:64px;height:64px}
@@ -1110,3 +1110,7 @@ html,body,#root,.app,main{scrollbar-width:thin;scrollbar-color:#3e7898 #0a1118}
 @media(max-width:620px){.event.goal-overturned.goalWithArt .eventContent{padding-right:95px}}
 .nhlPpCountdown{display:block;color:#facc15;font-size:10px;font-weight:900;white-space:nowrap;line-height:13px;text-shadow:0 0 6px #facc1533}
 .simPpAndSog{margin:12px 0 0;padding:8px 10px;background:#0c1c2d;border:1px solid #244b6d;border-radius:6px;min-height:36px}
+
+/* Dev sandbox and live feed: keep team goal artwork physically inside its own card. */
+.devSandbox .event.goal-overturned.goalWithArt{max-width:100%;min-width:0;box-sizing:border-box}
+.devSandbox .event.goal-overturned.goalWithArt .eventContent{min-width:0}
