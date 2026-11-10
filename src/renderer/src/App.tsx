@@ -104,7 +104,7 @@ const comboNameKey=(v:string)=>String(v).normalize('NFD').replace(/[\u0300-\u036
 const comboMoney=(n:number)=>`${n<0?'(':'+'}$${Math.abs(n).toFixed(2)}${n<0?')':''}`
 const comboUnits=(n:number)=>`${n>=0?'+':''}${n.toFixed(2)}u`
 type Game = any
-type FeedEvent = { liveEligible?:boolean; id:string; gameId:number; team:string; opponent:string; type:'GAME START'|'PERIOD START'|'GOAL'|'GOAL OVERTURNED'|'POWER PLAY'|'EMPTY NET'|'INTERMISSION'|'FINAL'|'BET HIT'|'STAT CORRECTION'|'NIGHT VERIFIED'; title:string; detail:string; meta:string; sort:number; sequence?:number; onIcePlayers?:OnIcePlayer[]; goalPeriod?:number; goalElapsed?:number; goalDetailsSettling?:boolean }
+type FeedEvent = { liveEligible?:boolean; id:string; gameId:number; team:string; opponent:string; type:'GAME START'|'PERIOD START'|'GOAL'|'GOAL OVERTURNED'|'POWER PLAY'|'EMPTY NET'|'INTERMISSION'|'FINAL'|'BET HIT'|'STAT CORRECTION'|'NIGHT VERIFIED'; title:string; detail:string; meta:string; sort:number; sequence?:number; onIcePlayers?:OnIcePlayer[]; goalPeriod?:number; goalElapsed?:number; goalDetailsSettling?:boolean; simFinalizeAt?:number }
 type Leg = { player:string; qty:number; stat:string; playerId?:number; team?:string; opponent?:string; position?:string; gameId?:string; kind?:'PLAYER'|'TEAM'; side?:'OVER'|'UNDER'; voided?:boolean; voidedAt?:string; voidReason?:string }
 type BetStatus='PENDING'|'WON'|'LOST'|'VOID'
 type BetCategory=string
@@ -2545,6 +2545,7 @@ function DevGameSandbox({onExit}:{onExit:()=>void}){
  const [period,setPeriod]=useState(1),[seconds,setSeconds]=useState(1200),[running,setRunning]=useState(false),[phase,setPhase]=useState<'LIVE'|'STOP'|'INT'|'FINAL'>('LIVE');
  const [away,setAway]=useState(0),[home,setHome]=useState(0),[pp,setPp]=useState<string>(''),[pulled,setPulled]=useState<string>('');
  const [ppDuration,setPpDuration]=useState(120),[ppStart,setPpStart]=useState<number|null>(null);
+ const [autoFinalizeGoals,setAutoFinalizeGoals]=useState(true);
  const elapsed=(period-1)*1200+(1200-seconds);
  const ppRemaining=pp&&ppStart!==null?Math.max(0,ppDuration-(elapsed-ppStart)):0;
  const activePP=ppRemaining>0?pp:'';
@@ -2556,10 +2557,10 @@ function DevGameSandbox({onExit}:{onExit:()=>void}){
    ?['Sidney Crosby','Evgeni Malkin','Bryan Rust','Kris Letang','Erik Karlsson'].map((name,i)=>({playerId:9001+i,name,team}))
    :['Forward 1','Forward 2','Forward 3','Defense 1','Defense 2'].map((name,i)=>({playerId:9001+i,name,team}));
    const headline=team==='PIT'?'Sidney Crosby: '+scorer:team+' GOAL'+(strength?' · '+strength:'');
-   setEvents(old=>[{id:`dev-goal-${Date.now()}-${Math.random()}`,gameId:-1001,team,opponent:team===awayTeam?homeTeam:awayTeam,type:'GOAL',title:headline+(strength?' · '+strength:''),detail:'Scorer credited · assists pending',meta:`${period}P · ${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')} · ${new Date().toLocaleTimeString()}`,sort:Date.now(),onIcePlayers:simulatedPlayers,goalDetailsSettling:true},...old]);
+   setEvents(old=>[{id:`dev-goal-${Date.now()}-${Math.random()}`,gameId:-1001,team,opponent:team===awayTeam?homeTeam:awayTeam,type:'GOAL',title:headline+(strength?' · '+strength:''),detail:'Scorer credited · assists pending',meta:`${period}P · ${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')} · ${new Date().toLocaleTimeString()}`,sort:Date.now(),onIcePlayers:simulatedPlayers,goalDetailsSettling:true,simFinalizeAt:autoFinalizeGoals?Date.now()+10000:undefined},...old]);
    if(strength==='PP'&&ppDuration===120){setPp('');setPpStart(null)}
  };
- const finalizeGoal=(team:string)=>setEvents(old=>{let updated=false;return old.map(e=>{if(!updated&&e.type==='GOAL'&&e.team===team&&e.goalDetailsSettling){updated=true;return {...e,onIcePlayers:undefined,goalDetailsSettling:false,detail:team==='PIT'?'Assists: Evgeni Malkin, Kris Letang':'Assists: Forward 1, Defense 1'}}return e})});
+ const finalizeGoal=(team:string)=>setEvents(old=>{let updated=false;return old.map(e=>{if(!updated&&e.type==='GOAL'&&e.team===team&&e.goalDetailsSettling){updated=true;return {...e,onIcePlayers:undefined,goalDetailsSettling:false,detail:team==='PIT'?'Assists: Evgeni Malkin, Kris Letang':'Assists: Forward 1, Defense 1',simFinalizeAt:undefined}}return e})});
  const overturnGoal=(team:string)=>{const count=team===awayTeam?away:home;if(count<=0)return;
    if(team===awayTeam)setAway(n=>Math.max(0,n-1));else setHome(n=>Math.max(0,n-1));
    setEvents(old=>{let removed=false;return old.filter(e=>{if(!removed&&e.type==='GOAL'&&e.team===team){removed=true;return false}return true})});
@@ -2569,6 +2570,15 @@ function DevGameSandbox({onExit}:{onExit:()=>void}){
  const [intermissionLeft,setIntermissionLeft]=useState(18*60);
  const stateRef=useRef({period,seconds,running,phase});stateRef.current={period,seconds,running,phase};
  useEffect(()=>{const timer=window.setInterval(()=>{const x=stateRef.current;if(x.phase==='LIVE'&&x.running)setSeconds(v=>{if(v<=1){setRunning(false);setPhase('STOP');return 0}return v-1});if(x.phase==='INT')setIntermissionLeft(v=>Math.max(0,v-1))},1000);return()=>window.clearInterval(timer)},[]);
+ // DEV-only automatic official-scoring confirmation preview. Independent of
+ // the simulated game clock, and scoped to each unique goal event ID.
+ useEffect(()=>{const timer=window.setInterval(()=>{const now=Date.now();setEvents(old=>{
+  if(!old.some(e=>e.goalDetailsSettling&&e.simFinalizeAt&&now>=e.simFinalizeAt))return old;
+  return old.map(e=>e.type==='GOAL'&&e.goalDetailsSettling&&e.simFinalizeAt&&now>=e.simFinalizeAt
+   ?{...e,goalDetailsSettling:false,onIcePlayers:undefined,simFinalizeAt:undefined,
+     detail:e.team==='PIT'?'Assists: Evgeni Malkin, Kris Letang':'Assists: Forward 1, Defense 1'}:e);
+ })},500);return()=>window.clearInterval(timer)},[]);
+
  const game:Game={id:-1001,gameState:phase==='FINAL'?'FINAL':'LIVE',awayTeam:{abbrev:awayTeam,score:away},homeTeam:{abbrev:homeTeam,score:home},periodDescriptor:{number:period},clock:{running:running&&phase==='LIVE',timeRemaining:`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`},_trackerIntermissionPeriod:phase==='INT'?period:0,_trackerIntermissionSyncSeconds:phase==='INT'?intermissionLeft:undefined,situationCode:activePP===awayTeam?'1541':activePP===homeTeam?'1451':'1551',_trackerPowerPlay:activePP?{team:activePP,startElapsed:ppStart??elapsed,duration:ppDuration,period}:undefined,_trackerEmptyNetTeam:pulled||undefined};
  const add=(type:FeedEvent['type'],title:string,detail:string,team=awayTeam)=>setEvents(old=>[{id:`dev-${Date.now()}-${Math.random()}`,gameId:-1001,team,opponent:team===awayTeam?homeTeam:awayTeam,type,title,detail,meta:`${period}P · ${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')} · ${new Date().toLocaleTimeString()}`,sort:Date.now()},...old]);
  const reset=()=>{setPeriod(1);setSeconds(1200);setRunning(false);setPhase('LIVE');setAway(0);setHome(0);setPp('');setPpStart(null);setPpDuration(120);setPulled('');setEvents([]);setPenalties(0);setTestBets([]);setIntermissionLeft(1080)};
@@ -2578,7 +2588,7 @@ function DevGameSandbox({onExit}:{onExit:()=>void}){
   <DevLineComboReport/>
   <section className="settingsCard" style={{padding:16,marginBottom:14}}><h2>TEAM MATCHUP · GOAL ART & ZAMBONI TEST</h2><div style={{display:'flex',gap:14,flexWrap:'wrap',alignItems:'center'}}><label>AWAY TEAM <select aria-label="Simulator away team" value={awayTeam} onChange={e=>{if(e.target.value===homeTeam)setHomeTeam(awayTeam);setAwayTeam(e.target.value);reset()}}>{ALL_TEAMS.map(t=><option key={t} value={t}>{t}</option>)}</select></label><label>HOME TEAM <select aria-label="Simulator home team" value={homeTeam} onChange={e=>{if(e.target.value===awayTeam)setAwayTeam(homeTeam);setHomeTeam(e.target.value);reset()}}>{ALL_TEAMS.map(t=><option key={t} value={t}>{t}</option>)}</select></label><span style={{color:'#ffc65c'}}>Choose any matchup, then simulate a GOAL or intermission. Reset clears test events only.</span></div></section>
   <section className="settingsCard" style={{padding:20,marginBottom:14}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:20}}><h2 style={{fontSize:25}}>{awayTeam} {away} — {home} {homeTeam}</h2><div style={{minWidth:340,width:'42%',fontSize:20}}><LiveGameState game={game}/></div></div><div className="simPpAndSog">{activePP&&<PowerPlayTimer game={game} team={activePP}/>}<div className="scoreboardSog">SoG: —</div></div><p style={{marginTop:10}}>Mock game clock and status. Intermission uses the real Zamboni component and CSS.</p></section>
-  <section className="settingsCard" style={{padding:16,marginBottom:14}}><h2>SIMULATOR CONTROLS</h2><div style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:8}}>
+  <section className="settingsCard" style={{padding:16,marginBottom:14}}><h2>SIMULATOR CONTROLS</h2><label style={{display:'inline-flex',alignItems:'center',gap:8,marginBottom:12}}><input type="checkbox" checked={autoFinalizeGoals} onChange={e=>setAutoFinalizeGoals(e.target.checked)}/> Auto-finalize goal after 10 seconds (DEV preview)</label><div style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:8}}>
   {button(running?'PAUSE CLOCK':'START / RESUME',()=>{setPhase('LIVE');setRunning(v=>!v)})}
   {button('STOPPAGE',()=>{setRunning(false);setPhase('STOP');add('POWER PLAY','STOPPAGE','Whistle blown')})}
   {button('🚜 INTERMISSION',()=>{setRunning(false);setPhase('INT');setIntermissionLeft(1080);add('INTERMISSION',`END OF ${period}P`,'Zamboni on the ice')})}
