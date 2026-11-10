@@ -2441,37 +2441,55 @@ function DevGameSandbox({onExit}:{onExit:()=>void}){
  const [awayTeam,setAwayTeam]=useState('PIT'),[homeTeam,setHomeTeam]=useState('WSH');
  const [period,setPeriod]=useState(1),[seconds,setSeconds]=useState(1200),[running,setRunning]=useState(false),[phase,setPhase]=useState<'LIVE'|'STOP'|'INT'|'FINAL'>('LIVE');
  const [away,setAway]=useState(0),[home,setHome]=useState(0),[pp,setPp]=useState<string>(''),[pulled,setPulled]=useState<string>('');
+ const [ppDuration,setPpDuration]=useState(120),[ppStart,setPpStart]=useState<number|null>(null);
+ const elapsed=(period-1)*1200+(1200-seconds);
+ const ppRemaining=pp&&ppStart!==null?Math.max(0,ppDuration-(elapsed-ppStart)):0;
+ const activePP=ppRemaining>0?pp:'';
+ const beginPP=(team:string)=>{setPp(team);setPpStart(elapsed);add('POWER PLAY',team+' POWER PLAY','Penalty · '+Math.floor(ppDuration/60)+':'+String(ppDuration%60).padStart(2,'0')+' at '+period+'P '+(Math.floor((1200-seconds)/60))+':'+String((1200-seconds)%60).padStart(2,'0'),team)};
+ const scoreGoal=(team:string)=>{const strength=activePP?(activePP===team?'PP':'SH'):'';
+   const scorer=team===awayTeam?away+1:home+1;
+   if(team===awayTeam)setAway(n=>n+1);else setHome(n=>n+1);
+   add('GOAL',team+' GOAL'+(strength?' · '+strength:''),team+' · goal #'+scorer,team);
+   if(strength==='PP'&&ppDuration===120){setPp('');setPpStart(null)}
+ };
+ const overturnGoal=(team:string)=>{const count=team===awayTeam?away:home;if(count<=0)return;
+   if(team===awayTeam)setAway(n=>Math.max(0,n-1));else setHome(n=>Math.max(0,n-1));
+   setEvents(old=>old.map(e=>e.type==='GOAL'&&e.team===team&&!e.meta.includes(' · OVERTURNED')?{...e,meta:e.meta+' · OVERTURNED',detail:'Goal removed after review'}:e));
+   add('GOAL OVERTURNED','GOAL OVERTURNED','Goal removed',team);
+ };
  const [events,setEvents]=useState<FeedEvent[]>([]),[penalties,setPenalties]=useState(0),[testBets,setTestBets]=useState<{id:number;label:string;status:string}[]>([]);
  const [intermissionLeft,setIntermissionLeft]=useState(18*60);
  const stateRef=useRef({period,seconds,running,phase});stateRef.current={period,seconds,running,phase};
  useEffect(()=>{const timer=window.setInterval(()=>{const x=stateRef.current;if(x.phase==='LIVE'&&x.running)setSeconds(v=>{if(v<=1){setRunning(false);setPhase('STOP');return 0}return v-1});if(x.phase==='INT')setIntermissionLeft(v=>Math.max(0,v-1))},1000);return()=>window.clearInterval(timer)},[]);
- const game:Game={id:-1001,gameState:phase==='FINAL'?'FINAL':'LIVE',awayTeam:{abbrev:awayTeam,score:away},homeTeam:{abbrev:homeTeam,score:home},periodDescriptor:{number:period},clock:{running:running&&phase==='LIVE',timeRemaining:`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`},_trackerIntermissionPeriod:phase==='INT'?period:0,_trackerIntermissionSyncSeconds:phase==='INT'?intermissionLeft:undefined,situationCode:pp===awayTeam?'1541':pp===homeTeam?'1451':'1551',_trackerEmptyNetTeam:pulled||undefined};
+ const game:Game={id:-1001,gameState:phase==='FINAL'?'FINAL':'LIVE',awayTeam:{abbrev:awayTeam,score:away},homeTeam:{abbrev:homeTeam,score:home},periodDescriptor:{number:period},clock:{running:running&&phase==='LIVE',timeRemaining:`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`},_trackerIntermissionPeriod:phase==='INT'?period:0,_trackerIntermissionSyncSeconds:phase==='INT'?intermissionLeft:undefined,situationCode:activePP===awayTeam?'1541':activePP===homeTeam?'1451':'1551',_trackerPowerPlay:activePP?{team:activePP,startElapsed:ppStart??elapsed,duration:ppDuration,period}:undefined,_trackerEmptyNetTeam:pulled||undefined};
  const add=(type:FeedEvent['type'],title:string,detail:string,team=awayTeam)=>setEvents(old=>[{id:`dev-${Date.now()}-${Math.random()}`,gameId:-1001,team,opponent:team===awayTeam?homeTeam:awayTeam,type,title,detail,meta:`${period}P · ${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')} · ${new Date().toLocaleTimeString()}`,sort:Date.now()},...old]);
- const reset=()=>{setPeriod(1);setSeconds(1200);setRunning(false);setPhase('LIVE');setAway(0);setHome(0);setPp('');setPulled('');setEvents([]);setPenalties(0);setTestBets([]);setIntermissionLeft(1080)};
+ const reset=()=>{setPeriod(1);setSeconds(1200);setRunning(false);setPhase('LIVE');setAway(0);setHome(0);setPp('');setPpStart(null);setPpDuration(120);setPulled('');setEvents([]);setPenalties(0);setTestBets([]);setIntermissionLeft(1080)};
  const button=(label:string,click:()=>void)=> <button type="button" onClick={click} style={{padding:'9px 10px',minHeight:38}}>{label}</button>;
  return <main className="commandCenter devSandbox" style={{padding:'16px 20px'}}>
   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}><div><h1>SIMULATED GAME · {awayTeam} @ {homeTeam}</h1><small style={{color:'#ffc65c'}}>DEV MODE · ISOLATED TEST DATA · NOT A REAL NHL GAME</small></div><button onClick={onExit}>EXIT DEV MODE</button></div>
   <DevLineComboReport/>
   <section className="settingsCard" style={{padding:16,marginBottom:14}}><h2>TEAM MATCHUP · GOAL ART & ZAMBONI TEST</h2><div style={{display:'flex',gap:14,flexWrap:'wrap',alignItems:'center'}}><label>AWAY TEAM <select aria-label="Simulator away team" value={awayTeam} onChange={e=>{if(e.target.value===homeTeam)setHomeTeam(awayTeam);setAwayTeam(e.target.value);reset()}}>{ALL_TEAMS.map(t=><option key={t} value={t}>{t}</option>)}</select></label><label>HOME TEAM <select aria-label="Simulator home team" value={homeTeam} onChange={e=>{if(e.target.value===awayTeam)setAwayTeam(homeTeam);setHomeTeam(e.target.value);reset()}}>{ALL_TEAMS.map(t=><option key={t} value={t}>{t}</option>)}</select></label><span style={{color:'#ffc65c'}}>Choose any matchup, then simulate a GOAL or intermission. Reset clears test events only.</span></div></section>
-  <section className="settingsCard" style={{padding:20,marginBottom:14}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:20}}><h2 style={{fontSize:25}}>{awayTeam} {away} — {home} {homeTeam}</h2><div style={{minWidth:340,width:'42%',fontSize:20}}><LiveGameState game={game}/></div></div><p style={{marginTop:10}}>Mock game clock and status. Intermission uses the real Zamboni component and CSS.</p></section>
+  <section className="settingsCard" style={{padding:20,marginBottom:14}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:20}}><h2 style={{fontSize:25}}>{awayTeam} {away} — {home} {homeTeam}</h2><div style={{minWidth:340,width:'42%',fontSize:20}}><LiveGameState game={game}/></div></div><div className="simPpAndSog">{activePP&&<PowerPlayTimer game={game} team={activePP}/>}<div className="scoreboardSog">SoG: —</div></div><p style={{marginTop:10}}>Mock game clock and status. Intermission uses the real Zamboni component and CSS.</p></section>
   <section className="settingsCard" style={{padding:16,marginBottom:14}}><h2>SIMULATOR CONTROLS</h2><div style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:8}}>
   {button(running?'PAUSE CLOCK':'START / RESUME',()=>{setPhase('LIVE');setRunning(v=>!v)})}
   {button('STOPPAGE',()=>{setRunning(false);setPhase('STOP');add('POWER PLAY','STOPPAGE','Whistle blown')})}
   {button('🚜 INTERMISSION',()=>{setRunning(false);setPhase('INT');setIntermissionLeft(1080);add('INTERMISSION',`END OF ${period}P`,'Zamboni on the ice')})}
   {button('NEXT PERIOD',()=>{setPeriod(v=>Math.min(4,v+1));setSeconds(period>=3?300:1200);setPhase('LIVE');setRunning(false);add('PERIOD START','NEXT PERIOD','Ready for puck drop')})}
-  {button(`${awayTeam} PP`,()=>{setPp(awayTeam);add('POWER PLAY',`${awayTeam} POWER PLAY`,`${awayTeam} advantage`)})}
-  {button(`${homeTeam} PP`,()=>{setPp(homeTeam);add('POWER PLAY',`${homeTeam} POWER PLAY`,`${homeTeam} advantage`,homeTeam)})}
-  {button('END PP',()=>setPp(''))}
+  {button(`${awayTeam} PP`,()=>beginPP(awayTeam))}
+  {button(`${homeTeam} PP`,()=>beginPP(homeTeam))}
+  {button('END PP',()=>{setPp('');setPpStart(null)})}
   {button('PENALTY',()=>{setPenalties(v=>v+1);add('POWER PLAY','PENALTY',`Penalty #${penalties+1}`)})}
   {button(`${awayTeam} PULL GOALIE`,()=>{setPulled(v=>v===awayTeam?'':awayTeam);add('EMPTY NET',`${awayTeam} GOALIE`,pulled===awayTeam?'Returned':'Pulled')})}
   {button(`${homeTeam} PULL GOALIE`,()=>{setPulled(v=>v===homeTeam?'':homeTeam);add('EMPTY NET',`${homeTeam} GOALIE`,pulled===homeTeam?'Returned':'Pulled',homeTeam)})}
-  {button(`${awayTeam} GOAL`,()=>{setAway(v=>v+1);add('GOAL',`${awayTeam} GOAL`,`${awayTeam} ${away+1} – ${homeTeam} ${home}`)})}
-  {button(`${homeTeam} GOAL`,()=>{setHome(v=>v+1);add('GOAL',`${homeTeam} GOAL`,`${awayTeam} ${away} – ${homeTeam} ${home+1}`,homeTeam)})}
+  {button(`${awayTeam} GOAL`,()=>scoreGoal(awayTeam))}
+  {button(`${homeTeam} GOAL`,()=>scoreGoal(homeTeam))}
+  {button(`${awayTeam} OVERTURN GOAL`,()=>overturnGoal(awayTeam))}
+  {button(`${homeTeam} OVERTURN GOAL`,()=>overturnGoal(homeTeam))}
   {button('STAT CORRECTION',()=>add('STAT CORRECTION','STAT CORRECTION','Simulated goal or assist correction'))}
   {button('BET HIT',()=>{setTestBets(v=>[{id:Date.now(),label:'Mock player prop',status:'WON'},...v]);add('BET HIT','MOCK BET HIT','Simulated wager completed')})}
   {button('FINAL',()=>{setRunning(false);setPhase('FINAL');add('FINAL','FINAL',`${awayTeam} ${away} – ${homeTeam} ${home}`)})}
   {button('RESET ALL',reset)}
-  </div><div style={{display:'flex',alignItems:'center',gap:10,marginTop:12}}><label>Set game clock <input type="number" min="0" max="20" value={Math.floor(seconds/60)} onChange={e=>setSeconds(Math.max(0,Math.min(20,Number(e.target.value)||0))*60+seconds%60)} style={{width:65}}/> min</label><input type="number" min="0" max="59" value={seconds%60} onChange={e=>setSeconds(Math.floor(seconds/60)*60+Math.max(0,Math.min(59,Number(e.target.value)||0)))} style={{width:65}}/> sec <span>· Period {period} · {phase} · {running?'RUNNING':'PAUSED'}</span></div></section>
+  </div><div style={{display:'flex',alignItems:'center',gap:10,marginTop:12,flexWrap:'wrap'}}><label>Penalty duration <select aria-label="Simulator penalty duration" value={ppDuration} onChange={e=>setPpDuration(Number(e.target.value))}><option value={120}>2:00 minor</option><option value={240}>4:00 double minor</option><option value={300}>5:00 major</option></select></label><label>Set game clock <input type="number" min="0" max="20" value={Math.floor(seconds/60)} onChange={e=>setSeconds(Math.max(0,Math.min(20,Number(e.target.value)||0))*60+seconds%60)} style={{width:65}}/> min</label><input type="number" min="0" max="59" value={seconds%60} onChange={e=>setSeconds(Math.floor(seconds/60)*60+Math.max(0,Math.min(59,Number(e.target.value)||0)))} style={{width:65}}/> sec <span>· Period {period} · {phase} · {running?'RUNNING':'PAUSED'}</span></div></section>
   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}><section className="settingsCard" style={{padding:16}}><h2>SIMULATED LIVE EVENTS</h2><EventFeed events={events}/></section><section className="settingsCard" style={{padding:16}}><h2>MOCK BETS</h2><p>Test wagers are temporary and never saved.</p>{testBets.length?testBets.map(b=><p key={b.id}>{b.label} — {b.status}</p>):<p>No simulated bets yet. Use BET HIT to test an event.</p>}</section></div>
  </main>
 }
