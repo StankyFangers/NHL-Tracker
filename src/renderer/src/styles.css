@@ -1091,3 +1091,22 @@ html,body,#root,.app,main{scrollbar-width:thin;scrollbar-color:#3e7898 #0a1118}
 .compactBetPrice.pending{color:#f0c95c}
 .compactBetPrice.hit{color:#5ee0a0}
 .compactBetPrice.miss{color:#ff6f80}
+
+
+/* Goal overturned inherits the team's full-sized mascot artwork and original
+   transparent goal icon; the red X is a small scalable CSS overlay. */
+.event.goal-overturned{border-left-color:#ff5263;background:linear-gradient(110deg,#291018,#101821)}
+.event.goal-overturned.goalWithArt{--goal-glow:#ff5263}
+.event.goal-overturned .eventType,.event.goal-overturned h2{color:#ff6575}
+.event.goal-overturned.goalWithArt .goalMascotArt{position:absolute;z-index:0;right:0;top:0;height:100%;width:auto;max-width:none;pointer-events:none;object-fit:fill;mask-image:linear-gradient(90deg,transparent 0%,black 12%);-webkit-mask-image:linear-gradient(90deg,transparent 0%,black 12%)}
+.event.goal-overturned.goalWithArt .eventIcon,.event.goal-overturned.goalWithArt .eventContent{position:relative;z-index:2}
+.event.goal-overturned.goalWithArt .eventContent{padding-right:clamp(110px,28%,260px)}
+.overturnedGoalIcon{position:relative;display:inline-grid;place-items:center;width:64px;height:64px}
+.overturnedGoalIcon .eventAsset{width:64px;height:64px}
+.overturnedRedX{position:absolute;inset:7px 10px;pointer-events:none;filter:drop-shadow(0 0 3px #ff3333)}
+.overturnedRedX:before,.overturnedRedX:after{content:"";position:absolute;left:50%;top:50%;width:61px;height:8px;border:1px solid #ffb5b5;border-radius:5px;background:linear-gradient(#ff616c,#ed1125,#9c0616);box-shadow:0 0 8px #ff263b,0 0 13px #f13a47;transform-origin:center}
+.overturnedRedX:before{transform:translate(-50%,-50%) rotate(45deg)}
+.overturnedRedX:after{transform:translate(-50%,-50%) rotate(-45deg)}
+@media(max-width:620px){.event.goal-overturned.goalWithArt .eventContent{padding-right:95px}}
+.nhlPpCountdown{display:block;color:#facc15;font-size:10px;font-weight:900;white-space:nowrap;line-height:13px;text-shadow:0 0 6px #facc1533}
+.simPpAndSog{margin:12px 0 0;padding:8px 10px;background:#0c1c2d;border:1px solid #244b6d;border-radius:6px;min-height:36px}
