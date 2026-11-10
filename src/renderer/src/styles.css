@@ -1114,3 +1114,15 @@ html,body,#root,.app,main{scrollbar-width:thin;scrollbar-color:#3e7898 #0a1118}
 /* Dev sandbox and live feed: keep team goal artwork physically inside its own card. */
 .devSandbox .event.goal-overturned.goalWithArt{max-width:100%;min-width:0;box-sizing:border-box}
 .devSandbox .event.goal-overturned.goalWithArt .eventContent{min-width:0}
+
+/* Goal-time ice lineup: a compact, unfilled betting-impact preview.
+   It lives inside the event card and never covers the mascot artwork. */
+.goalOnIcePreview{display:flex;flex-direction:column;gap:5px;max-width:100%;margin:8px 0 3px;padding:0;border:0;background:none}
+.goalOnIcePreview>strong{font-size:10px;letter-spacing:.07em;color:#c1dbed;font-weight:900}
+.goalOnIcePreview>strong small{font-size:10px;color:#82b9d3;font-weight:800}
+.goalOnIcePreview>div{display:flex;align-items:center;flex-wrap:wrap;gap:5px 12px}
+.goalIcePlayer{font-size:12px;font-weight:800;color:#e3f5ff;white-space:nowrap;text-shadow:0 0 7px #14a8f744}
+.goalIceNote{font-size:9px;color:#80a5b9;letter-spacing:.015em}
+.event.goal.goalWithArt:has(.goalOnIcePreview){min-height:160px}
+.event.goal.goalWithArt .goalOnIcePreview{position:relative;z-index:3}
+@media(max-width:620px){.goalOnIcePreview>div{gap:4px 8px}.goalIcePlayer{font-size:11px}}
