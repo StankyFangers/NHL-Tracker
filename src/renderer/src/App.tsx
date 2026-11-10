@@ -1162,7 +1162,6 @@ function TrackerApp({initialTestAccount,onTestLogout,liveAccount,onLiveLogout}:{
    }
    if(!successfulIds.size)throw new Error('All game boxscore requests failed');
    const now=new Date().toISOString();
-   let corrections=0;
    setGames(freshGames);
    setLiveStats(latest);
    setBets(old=>old.map(original=>{
@@ -1178,7 +1177,6 @@ function TrackerApp({initialTestAccount,onTestLogout,liveAccount,onLiveLogout}:{
      const legs=wager.legs.filter(l=>!l.voided&&l.kind!=='TEAM');
      if(!legs.length||!legs.every(l=>l.playerId&&l.gameId&&successfulIds.has(String(l.gameId))&&latest[`${l.gameId}:${l.playerId}`]?.rostered))return wager;
     }
-    corrections++;
     return {...wager,status:next,settledAt:next==='PENDING'?undefined:(wager.settledAt||now),
      hitAt:next==='WON'?wager.hitAt:undefined,verifiedAt:undefined,
      regradeNote:`Manual live slate refresh · ${previous} → ${next}${next==='PENDING'?' · payout removed':''}`};
