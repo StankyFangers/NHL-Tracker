@@ -104,3 +104,13 @@
 .entrySlip .betSlipHeaderDate input{width:142px;min-width:142px}
 .entrySlip .betSlipHeaderActions>button{white-space:nowrap}
 @media(max-width:790px){.entrySlip .betSlipHeaderActions{gap:8px}.entrySlip .betSlipHeaderDate input{width:126px;min-width:126px}}
+
+/* Bet Entry date navigation: match the blue NHL slate arrows while keeping the
+   calendar picker and the existing slip-change confirmation. */
+.entrySlip .betSlipHeaderDate .slate-day-controls{display:inline-flex;align-items:center;gap:5px}
+.entrySlip .betSlipHeaderDate .slate-day-arrow{display:inline-grid;place-items:center;width:28px;min-width:28px;height:32px;padding:0;border:1px solid #376481;border-radius:6px;background:#10263c;color:#8ed8ff;font-size:23px;font-weight:700;line-height:1;cursor:pointer}
+.entrySlip .betSlipHeaderDate .slate-day-arrow:hover:not(:disabled){border-color:#69c6f9;background:#173a58;color:#e6f7ff}
+.entrySlip .betSlipHeaderDate .slate-day-arrow:focus-visible{outline:2px solid #fbbf24;outline-offset:2px}
+.entrySlip .betSlipHeaderDate .slate-day-arrow:disabled{opacity:.45;cursor:not-allowed}
+.entrySlip .betSlipHeaderDate .slate-day-controls input{width:142px;min-width:142px}
+@media(max-width:790px){.entrySlip .betSlipHeaderDate .slate-day-controls input{width:126px;min-width:126px}}
