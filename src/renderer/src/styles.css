@@ -1117,7 +1117,7 @@ html,body,#root,.app,main{scrollbar-width:thin;scrollbar-color:#3e7898 #0a1118}
 
 /* Goal-time ice lineup: a compact, unfilled betting-impact preview.
    It lives inside the event card and never covers the mascot artwork. */
-.goalOnIcePreview{display:flex;flex-direction:column;gap:5px;max-width:100%;margin:8px 0 3px;padding:0;border:0;background:none}
+.goalOnIcePreview{display:flex;flex-direction:column;gap:5px;width:min(100%,290px);max-width:100%;min-width:0;margin:8px 0 3px;padding:0;border:0;background:none;box-sizing:border-box}
 .goalOnIcePreview>strong{font-size:10px;letter-spacing:.07em;color:#c1dbed;font-weight:900}
 .goalOnIcePreview>strong small{font-size:10px;color:#82b9d3;font-weight:800}
 .goalOnIcePreview>div{display:flex;align-items:center;flex-wrap:wrap;gap:5px 12px}
@@ -1126,3 +1126,8 @@ html,body,#root,.app,main{scrollbar-width:thin;scrollbar-color:#3e7898 #0a1118}
 .event.goal.goalWithArt:has(.goalOnIcePreview){min-height:160px}
 .event.goal.goalWithArt .goalOnIcePreview{position:relative;z-index:3}
 @media(max-width:620px){.goalOnIcePreview>div{gap:4px 8px}.goalIcePlayer{font-size:11px}}
+
+/* Keep preliminary goal-lineup names left of the team mascot at all widths. */
+.event.goal.goalWithArt .goalOnIcePreview>div{max-width:100%;min-width:0;justify-content:flex-start;align-content:flex-start}
+.event.goal.goalWithArt .goalIcePlayer{max-width:100%;white-space:normal;overflow-wrap:break-word}
+@media(max-width:700px){.event.goal.goalWithArt .goalOnIcePreview{width:min(100%,220px)}.event.goal.goalWithArt .goalIcePlayer{font-size:10px}}
