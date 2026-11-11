@@ -840,9 +840,7 @@ function TrackerApp({initialTestAccount,onTestLogout,liveAccount,onLiveLogout}:{
  };
  refresh();const interval=window.setInterval(refresh,60000);return()=>{alive=false;window.clearInterval(interval)}
  },[date,pregameTeamKey]);
- const detectedOrderRef=useRef<Record<string,number>>(loadDetectedEvents(date)); const gameStateRef=useRef<Record<string,string>>({}); const hitDetectedRef=useRef<Record<string,number>>({}); const hitSequenceRef=useRef(0); const scoreboardStripRef=useRef<HTMLDivElement|null>(null);
- const scrollScoreStrip=(direction:number)=>{const strip=scoreboardStripRef.current;if(!strip)return;const card=strip.querySelector<HTMLElement>('.nhl1815Matchup');strip.scrollBy({left:direction*(card?.getBoundingClientRect().width||196),behavior:'smooth'})};
- const notifiedRef=useRef<Set<string>>(new Set()); const notifiedGoalKeysRef=useRef<Set<string>>(new Set()); const notificationPrimedRef=useRef(false);
+ const detectedOrderRef=useRef<Record<string,number>>(loadDetectedEvents(date)); const gameStateRef=useRef<Record<string,string>>({}); const hitDetectedRef=useRef<Record<string,number>>({}); const hitSequenceRef=useRef(0); const notifiedRef=useRef<Set<string>>(new Set()); const notifiedGoalKeysRef=useRef<Set<string>>(new Set()); const notificationPrimedRef=useRef(false);
  void hitDetectedRef; void hitSequenceRef;
  const[replayGame,setReplayGame]=useState<Game|null>(null),[replayEvents,setReplayEvents]=useState<FeedEvent[]>([]),[replayIndex,setReplayIndex]=useState(0),[replayRunning,setReplayRunning]=useState(false),[replaySpeed,setReplaySpeed]=useState(1200);const replayTimer=useRef<number|null>(null)
  void setReplaySpeed;
@@ -1647,6 +1645,8 @@ function LegacyHistoricalMaintenance({bets,setBets,unitSize}:{bets:Bet[],setBets
 }
 
 function LiveCommandCenter({sectionColors,date,setDate,games,events,bets,setBets,liveStats,hiddenGameIds,selectedGame,setSelectedGame,unitSize,pnlUnits,pnlDollars,maxReturnDollars,completedPnlDollars,completedPnlUnits,won,lost,pending,verifyNight,updateGameStats,verifyStatus,verifyGame,verifyGameStatus,correctionPopup,dismissCorrection,viewCorrection,correctionReviews,correctionReviewOpen,closeCorrectionReview,resolveCorrection,addBetOpen,setAddBetOpen,teamHistory,leagueStandings,clubStats,startingGoalies,slateDfo,checkSlateLines,lineCheckBusy,lineCheckLast,lineCheckError,lineupAlerts}:any){
+ const scoreboardStripRef=useRef<HTMLDivElement|null>(null);
+ const scrollScoreStrip=(direction:number)=>{const strip=scoreboardStripRef.current;if(!strip)return;const card=strip.querySelector<HTMLElement>('.nhl1815Matchup');strip.scrollBy({left:direction*(card?.getBoundingClientRect().width||196),behavior:'smooth'})};
  const [accordionMemory,setAccordionMemory]=useState<Record<string,boolean>>({});
  const accordionDateKey=(id:string)=>`nhl.accordion.${date}.${id}`;
  const accordionOpen=(id:string)=>accordionMemory[accordionDateKey(id)]??localStorage.getItem(accordionDateKey(id))==='true';
