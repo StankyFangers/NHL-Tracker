@@ -1233,3 +1233,51 @@ html,body,#root,.app,main{scrollbar-width:thin;scrollbar-color:#3e7898 #0a1118}
   text-align:center;
   letter-spacing:-.03em!important;
 }
+
+
+/* v1.8.15 DEV: nine-matchup edge-to-edge scoreboard, reserved arrow gutters. */
+.nhl1815ScoreRail{
+ display:flex;
+ align-items:stretch;
+ width:100%;
+ min-width:0;
+ background:#0f1821;
+}
+.scoreboardShell .nhl1815ScoreRail>.nhl1815ScrollArrow{
+ flex:0 0 30px;
+ width:30px;
+ min-width:30px;
+ padding:0;
+ border:0;
+ border-right:1px solid rgba(118,159,186,.35);
+ border-radius:0;
+ color:#8dcdec;
+ background:#101e2a;
+ font-size:28px;
+ font-weight:700;
+ line-height:1;
+ cursor:pointer;
+}
+.scoreboardShell .nhl1815ScoreRail>.nhl1815ScrollArrow:last-child{border-right:0;border-left:1px solid rgba(118,159,186,.35)}
+.scoreboardShell .nhl1815ScoreRail>.nhl1815ScrollArrow:hover{background:#193449;color:#daf4ff}
+.scoreboardShell .nhl1815ScoreStrip{flex:1 1 0;min-width:0;gap:0;scrollbar-width:none;scroll-behavior:smooth}
+.scoreboardShell .nhl1815ScoreStrip::-webkit-scrollbar{display:none}
+.scoreStrip.nhl1815ScoreStrip>.scoreTile.nhl1815Matchup{
+ flex:0 0 max(190px,calc(100% / 9))!important;
+ min-width:190px!important;
+ width:max(190px,calc(100% / 9))!important;
+ border-right:1px solid rgba(118,159,186,.35)!important;
+}
+.nhl1815AllGamesButton{
+ flex-shrink:0;
+ padding:4px 8px!important;
+ border:1px solid rgba(100,181,229,.42)!important;
+ border-radius:5px;
+ background:#102638!important;
+ color:#8bdcff!important;
+ font-size:9px!important;
+ font-weight:900!important;
+ letter-spacing:.05em;
+ cursor:pointer;
+}
+.nhl1815AllGamesButton[aria-pressed="true"]{background:#205270!important;color:white!important}
