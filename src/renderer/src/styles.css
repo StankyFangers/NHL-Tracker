@@ -1190,3 +1190,33 @@ html,body,#root,.app,main{scrollbar-width:thin;scrollbar-color:#3e7898 #0a1118}
   flex-shrink:0;
   margin-left:0!important;
 }
+
+
+/* v1.8.15 DEV QA: make scores a larger, vertically centered far-right column. */
+.scoreTile.nhl1815Matchup .nhl1815ScoreTeams{width:100%;min-width:0}
+.scoreTile.nhl1815Matchup .nhl1815ScoreTeams>span{
+  width:100%;
+  min-width:0;
+  box-sizing:border-box;
+  grid-template-columns:minmax(0,1fr) 34px;
+  grid-template-rows:minmax(24px,auto) minmax(11px,auto);
+  column-gap:5px;
+}
+.scoreTile.nhl1815Matchup .nhl1815ScoreTeams>span>.nhl1815GoalTotal{
+  grid-column:2;
+  grid-row:1 / span 2;
+  align-self:center!important;
+  justify-self:end!important;
+  width:34px;
+  min-width:34px;
+  padding:0;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-end!important;
+}
+.scoreTile.nhl1815Matchup .nhl1815ScoreTeams>span>.nhl1815GoalTotal>strong{
+  font-size:23px!important;
+  line-height:1!important;
+  font-weight:900!important;
+  font-variant-numeric:tabular-nums;
+}
