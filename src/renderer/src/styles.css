@@ -1220,3 +1220,16 @@ html,body,#root,.app,main{scrollbar-width:thin;scrollbar-color:#3e7898 #0a1118}
   font-weight:900!important;
   font-variant-numeric:tabular-nums;
 }
+
+
+/* v1.8.15 DEV QA: pregame confidence badges should not inherit the 23px live goal font. */
+.scoreTile.nhl1815Matchup .nhl1815ScoreTeams>span>.nhl1815GoalTotal>strong.pregameConfidenceScore{
+  font-size:12px!important;
+  line-height:1.25!important;
+  min-width:0!important;
+  width:34px;
+  padding:4px 2px!important;
+  box-sizing:border-box;
+  text-align:center;
+  letter-spacing:-.03em!important;
+}
