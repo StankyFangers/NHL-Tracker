@@ -1114,9 +1114,23 @@ function TrackerApp({initialTestAccount,onTestLogout,liveAccount,onLiveLogout}:{
  const landingAway=landing?.awayTeam?.score,landingHome=landing?.homeTeam?.score;
  const scoreConfirmed=valid&&landingAway!=null&&landingHome!=null
   &&Number(landingAway)===awayScore&&Number(landingHome)===homeScore;
- const disputedSides=scoreConfirmed?(['away','home'] as const).filter(side=>
-  goalsFor(currentGoals,side==='away'?awayTeam:homeTeam)>(side==='away'?awayScore:homeScore)):[];
- const disagreementKey=disputedSides.map(side=>side+':'+(side==='away'?awayScore:homeScore)+':'+goalsFor(currentGoals,side==='away'?awayTeam:homeTeam)).join('|');
+ const boxTeamStats=box?.playerByGameStats||box?.boxscore?.playerByGameStats||{};
+ const boxGoals=(side:'away'|'home')=>{
+  const seen=new Set<number>();let total=0;
+  const walk=(v:any):void=>{
+   if(Array.isArray(v)){v.forEach(walk);return}
+   if(!v||typeof v!=='object')return;
+   const id=Number(v.playerId||0);
+   if(id&&!seen.has(id)){seen.add(id);total+=Number(v.goals||0)}
+   for(const child of Object.values(v))if(child&&typeof child==='object')walk(child);
+  };
+  walk(boxTeamStats[side==='away'?'awayTeam':'homeTeam']);return total;
+ };
+ const disputedSides=scoreConfirmed?(['away','home'] as const).filter(side=>{
+  const target=side==='away'?awayScore:homeScore;
+  return goalsFor(currentGoals,side==='away'?awayTeam:homeTeam)>target||boxGoals(side)>target;
+ }):[];
+ const disagreementKey=disputedSides.map(side=>side+':'+(side==='away'?awayScore:homeScore)).join('|');
  const priorDisagreement=staleGoalSummaryRef.current[gameKey];
  if(disagreementKey)staleGoalSummaryRef.current[gameKey]=priorDisagreement?.key===disagreementKey
   ?{key:disagreementKey,checks:priorDisagreement.checks+1}:{key:disagreementKey,checks:1};
