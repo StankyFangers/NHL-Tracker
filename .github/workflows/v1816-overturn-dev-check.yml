@@ -1,0 +1,31 @@
+name: NHL v1.8.16 DEV overturned-goal regression check
+
+on:
+  push:
+    branches:
+      - feature/v1.8.16-overturn-regrade-dev
+    paths:
+      - src/renderer/src/App.tsx
+      - tests/electronUpdaterMigration.test.mjs
+      - .github/workflows/v1816-overturn-dev-check.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Run bet and updater regression tests
+        run: node --test tests/electronUpdaterMigration.test.mjs tests/kalshiCategoryPreservation.test.mjs tests/kalshiAmericanOdds.test.mjs tests/sportsbookPricingFormats.test.mjs tests/playerIdentityCollision.test.mjs
+      - name: Build Electron application
+        run: npm run build
