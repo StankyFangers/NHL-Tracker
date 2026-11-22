@@ -6,7 +6,9 @@ on:
       - feature/v1.8.16-slate-finalization-fix
     paths:
       - src/renderer/src/App.tsx
+      - src/renderer/src/styles.css
       - tests/slateFinalization.test.mjs
+      - tests/teamConfidenceFlags.test.mjs
       - .github/workflows/slate-finalization-dev.yml
   workflow_dispatch:
 
@@ -26,6 +28,6 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
       - name: Test slate classification and existing regressions
-        run: node --test tests/slateFinalization.test.mjs tests/electronUpdaterMigration.test.mjs tests/kalshiCategoryPreservation.test.mjs tests/kalshiAmericanOdds.test.mjs
+        run: node --test tests/slateFinalization.test.mjs tests/teamConfidenceFlags.test.mjs tests/electronUpdaterMigration.test.mjs tests/kalshiCategoryPreservation.test.mjs tests/kalshiAmericanOdds.test.mjs
       - name: Build Electron
         run: npm run build
