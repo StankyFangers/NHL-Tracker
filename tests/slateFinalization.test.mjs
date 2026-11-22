@@ -21,6 +21,8 @@ test('empty-slate verification is past-only, wager-free, and explicitly confirme
  assert.match(verification,/window\.confirm\(/)
  assert.match(verification,/EMPTY NIGHT VERIFIED · 0 GAMES/)
  assert.match(verification,/freshGames\.some\(g=>!\['FINAL','OFF'\]/)
+ assert.match(verification,/String\(g\.gameDate\|\|''\)\.slice\(0,10\)===date/)
+ assert.match(source,/SLATE FIX DEV · NOV22-B/)
 })
 
 test('normal live/pregame games never qualify as fully finalized',()=>{
