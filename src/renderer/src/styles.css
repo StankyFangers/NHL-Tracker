@@ -1366,3 +1366,23 @@ html,body,#root,.app,main{scrollbar-width:thin;scrollbar-color:#3e7898 #0a1118}
 .scoreboardTeamFlag-bets-entered{background:#185476!important;color:#d7f6ff!important;border:1px solid #52c7ff}
 .scoreboardTeamFlag-fade{background:#692a38!important;color:#ffe1e6!important;border:1px solid #fa7188}
 .scoreboardTeamFlag-boost{background:#215f3e!important;color:#dbffe7!important;border:1px solid #6be59a}
+
+
+/* Keep manual status pills from inheriting the narrow 34px confidence-score rule. */
+.scoreTile.nhl1815Matchup .nhl1815ScoreTeams>span>.nhl1815GoalTotal>strong.pregameConfidenceScore.scoreboardTeamFlag{
+ width:76px!important;
+ min-width:76px!important;
+ max-width:76px!important;
+ height:auto!important;
+ padding:5px 3px!important;
+ display:flex!important;
+ justify-content:center!important;
+ align-items:center!important;
+ font-size:10px!important;
+ line-height:1.15!important;
+ letter-spacing:0!important;
+ white-space:normal!important;
+ overflow-wrap:normal;
+ word-break:normal;
+ text-align:center!important;
+}
