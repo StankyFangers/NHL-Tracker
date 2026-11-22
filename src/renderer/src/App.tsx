@@ -2073,12 +2073,10 @@ function ConfidenceBreakdown({away,home,slateDate,showAll=false}:{away:string,ho
  const [flags,setFlags]=useState<Record<string,TeamConfidenceFlag>>(()=>readTeamConfidenceFlags(slateDate))
  useEffect(()=>{setFlags(readTeamConfidenceFlags(slateDate))},[slateDate])
  const setTeamFlag=(team:string,flag:TeamConfidenceFlag)=>{
-  setFlags(previous=>{
-   const next={...previous};
-   if(next[team]===flag)delete next[team];else next[team]=flag;
-   localStorage.setItem('nhl.teamConfidenceFlags:'+slateDate,JSON.stringify(next));
-   return next
-  })
+  const next={...readTeamConfidenceFlags(slateDate)}
+  if(next[team]===flag)delete next[team];else next[team]=flag
+  localStorage.setItem('nhl.teamConfidenceFlags:'+slateDate,JSON.stringify(next))
+  setFlags(next)
  }
  const sides=[{team:away,opponent:home},{team:home,opponent:away}]
  const fmt=(v:any,d=2)=>Number.isFinite(v)?Number(v).toFixed(d):'—'
