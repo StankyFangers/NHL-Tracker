@@ -27,3 +27,18 @@ test('confidence flag appearance is styled independently of underlying scores',(
  assert.match(css,/\.confidenceTeamFlag-fade/)
  assert.match(css,/\.confidenceTeamFlag-bets-entered/)
 })
+
+test('pregame scoreboard displays saved team status immediately and keeps live goals numeric',()=>{
+ const slot=app.slice(app.indexOf('function ConfidenceScoreSlot('),app.indexOf('type TeamConfidenceFlag='))
+ assert.match(slot,/readTeamConfidenceFlags\(slateDate\)\[team\]/)
+ assert.match(slot,/window\.addEventListener\('nhl:team-confidence-flag',onChange\)/)
+ assert.match(slot,/if\(!pre\) return <strong>\{goals\?\?'-'\}<\/strong>/)
+ assert.match(slot,/if\(flag\)return <strong className=\{/)
+ assert.match(slot,/scoreboardTeamFlag/)
+ assert.match(app,/window\.dispatchEvent\(new CustomEvent\('nhl:team-confidence-flag'/)
+ assert.match(app,/<ConfidenceScoreSlot team=\{abbr\(g\.awayTeam\)\}[^>]*slateDate=\{date\}/)
+ assert.match(app,/<ConfidenceScoreSlot team=\{abbr\(g\.homeTeam\)\}[^>]*slateDate=\{date\}/)
+ assert.match(css,/\.scoreboardTeamFlag-bets-entered/)
+ assert.match(css,/\.scoreboardTeamFlag-fade/)
+ assert.match(css,/\.scoreboardTeamFlag-boost/)
+})
