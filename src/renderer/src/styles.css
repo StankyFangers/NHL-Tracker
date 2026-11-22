@@ -1335,3 +1335,34 @@ html,body,#root,.app,main{scrollbar-width:thin;scrollbar-color:#3e7898 #0a1118}
  .confidenceFlagControls{justify-content:flex-start}
 }
 @media(max-width:560px){.confidenceCards{grid-template-columns:1fr}}
+
+
+/* Matchup status follows each team onto its pregame scoreboard card. */
+.scoreTile.nhl1815Matchup .nhl1815ScoreTeams>span:has(.scoreboardTeamFlag){
+ grid-template-columns:minmax(0,1fr) 76px;
+}
+.scoreTile.nhl1815Matchup .nhl1815ScoreTeams>span>.nhl1815GoalTotal:has(.scoreboardTeamFlag){
+ width:76px;
+ min-width:76px;
+}
+.scoreTile.nhl1815Matchup .nhl1815ScoreTeams>span>.nhl1815GoalTotal>.scoreboardTeamFlag{
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ min-width:0!important;
+ width:76px;
+ max-width:76px;
+ box-sizing:border-box;
+ padding:4px 3px!important;
+ font-size:10px!important;
+ line-height:1.15!important;
+ font-weight:900!important;
+ text-align:center;
+ white-space:normal;
+ overflow-wrap:normal;
+ letter-spacing:0!important;
+ border-radius:5px;
+}
+.scoreboardTeamFlag-bets-entered{background:#185476!important;color:#d7f6ff!important;border:1px solid #52c7ff}
+.scoreboardTeamFlag-fade{background:#692a38!important;color:#ffe1e6!important;border:1px solid #fa7188}
+.scoreboardTeamFlag-boost{background:#215f3e!important;color:#dbffe7!important;border:1px solid #6be59a}
