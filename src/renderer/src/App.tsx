@@ -2058,16 +2058,40 @@ function ConfidenceScoreSlot({team,opponent,gameState,goals}:{team:string,oppone
  return <strong className="pregameConfidenceScore" style={{backgroundColor:score==null?'transparent':confidenceColor(score),color:score==null?'#8496a4':'#09151a'}} title={title}>{score==null?'—':score.toFixed(1)}</strong>
 }
 
-function ConfidenceBreakdown({away,home,showAll=false}:{away:string,home:string,showAll?:boolean}) {
+type TeamConfidenceFlag='BETS ENTERED'|'FADE'|'BOOST'
+const TEAM_CONFIDENCE_FLAGS:TeamConfidenceFlag[]=['BETS ENTERED','FADE','BOOST']
+const readTeamConfidenceFlags=(slateDate:string):Record<string,TeamConfidenceFlag>=>{
+ try {
+  const saved=JSON.parse(localStorage.getItem('nhl.teamConfidenceFlags:'+slateDate)||'{}');
+  if(!saved||typeof saved!=='object'||Array.isArray(saved))return {};
+  return Object.fromEntries(Object.entries(saved).filter(([team,value])=>/^[A-Z]{3,4}$/.test(team)&&TEAM_CONFIDENCE_FLAGS.includes(value as TeamConfidenceFlag))) as Record<string,TeamConfidenceFlag>;
+ }catch{return {}}
+}
+function ConfidenceBreakdown({away,home,slateDate,showAll=false}:{away:string,home:string,slateDate:string,showAll?:boolean}) {
  const [expanded,setExpanded]=useState<string|null>(null)
  const [metricOpen,setMetricOpen]=useState<Record<string,boolean>>({})
+ const [flags,setFlags]=useState<Record<string,TeamConfidenceFlag>>(()=>readTeamConfidenceFlags(slateDate))
+ useEffect(()=>{setFlags(readTeamConfidenceFlags(slateDate))},[slateDate])
+ const setTeamFlag=(team:string,flag:TeamConfidenceFlag)=>{
+  setFlags(previous=>{
+   const next={...previous};
+   if(next[team]===flag)delete next[team];else next[team]=flag;
+   localStorage.setItem('nhl.teamConfidenceFlags:'+slateDate,JSON.stringify(next));
+   return next
+  })
+ }
  const sides=[{team:away,opponent:home},{team:home,opponent:away}]
  const fmt=(v:any,d=2)=>Number.isFinite(v)?Number(v).toFixed(d):'—'
  return <section className="confidenceAnalysis">
   <div className="confidenceAnalysisHeading"><b>CONFIDENCE ENGINE</b><small>Model {MODEL_VERSION} · baseline inputs {CONFIDENCE_AS_OF}</small></div>
-  <div className="confidenceCards">{sides.map(({team,opponent})=>{const score=matchupConfidence(team,opponent);return <button key={team} type="button" className={`confidenceCard ${expanded===team?'active':''}`} onClick={()=>setExpanded(x=>x===team?null:team)} aria-expanded={expanded===team}>
-    <small>{team} ATTACKING {opponent}</small><strong style={{color:confidenceColor(score)}}>{score==null?'—':score.toFixed(1)}<span> / 100</span></strong><span>{expanded===team?'▼ Hide breakdown':'▶ View breakdown'}</span>
-  </button>})}</div>
+  <div className="confidenceCards">{sides.map(({team,opponent})=>{const score=matchupConfidence(team,opponent),flag=flags[team];return <div key={team} className={`confidenceCard confidenceFlagCard ${expanded===team?'active':''}`}>
+   <button type="button" className="confidenceCardReadout" onClick={()=>setExpanded(x=>x===team?null:team)} aria-expanded={expanded===team}>
+    <small>{team} ATTACKING {opponent}</small>
+    <strong className={flag?'confidenceTeamFlag confidenceTeamFlag-'+flag.replace(' ','-').toLowerCase():''} style={{color:flag?undefined:confidenceColor(score)}} title={flag?`Original confidence: ${score==null?'unavailable':score.toFixed(1)+'/100'}`:undefined}>{flag||<>{score==null?'—':score.toFixed(1)}<span> / 100</span></>}</strong>
+    <span>{expanded===team?'▼ Hide breakdown':'▶ View breakdown'}</span>
+   </button>
+   <div className="confidenceFlagControls" aria-label={`${team} team wager status`}>{TEAM_CONFIDENCE_FLAGS.map(choice=><button key={choice} type="button" className={`confidenceFlagButton ${flags[team]===choice?'selected':''}`} aria-pressed={flags[team]===choice} onClick={()=>setTeamFlag(team,choice)} title={flags[team]===choice?'Click again to restore confidence score':`Set ${team} to ${choice}`}>{choice==='BETS ENTERED'?'Bets Entered':choice==='FADE'?'Fade':'Boost'}</button>)}</div>
+  </div>})}</div>
   {sides.filter(({team})=>showAll||expanded===team).map(({team,opponent})=>{const offense=confidenceTeam(team,opponent),defense=confidenceTeam(opponent,team);if(!offense||!defense)return <p key={team}>Confidence data unavailable.</p>;const score=matchupConfidence(team,opponent)
    return <div className="confidenceDetails" key={team}>
     <div className="confidenceEquation"><b>{team} OFFENSE <em>{fmt(offense.off_score,1)}/100</em></b><b>{opponent} DEFENSIVE VULNERABILITY <em>{fmt(defense.def_score,1)}/100</em></b><strong>= {fmt(score,2)}/100</strong></div>
@@ -2089,7 +2113,7 @@ function MatchupAnalysis({game,clubStats,verifyGame,verifyStatus,startingGoalies
  return <section className={`matchupAnalysis ${open?'':'collapsed'}`}>
   <button className="matchupHead matchupToggle" onClick={()=>setOpen(x=>!x)}><div><small>MATCHUP ANALYSIS</small><b>{away} @ {home}</b></div><span>Confidence Engine · matchup ratings and underlying evidence</span><i>{open?'▼':'▶'}</i></button>
   <div className="gameVerifyBar"><button className="verifyButton" onClick={()=>{verifyGame?.(game.id);void startingGoalies.refresh(true)}}>{['FINAL','OFF'].includes(String(game.gameState||''))?'VERIFY GAME':'UPDATE STATS'}</button><small>{verifyStatus||(['FINAL','OFF'].includes(String(game.gameState||''))?'Re-check official final NHL stats · sportsbook settlement preserved':'Force-refresh current NHL stats')}</small></div>
-  {open&&<><ConfidenceBreakdown away={away} home={home}/><MatchupGoalies game={game} date={slateDate} feed={startingGoalies.feed} loading={startingGoalies.loading} error={startingGoalies.error} refresh={()=>startingGoalies.refresh(true)} clubStats={clubStats}/></>}
+  {open&&<><ConfidenceBreakdown away={away} home={home} slateDate={slateDate}/><MatchupGoalies game={game} date={slateDate} feed={startingGoalies.feed} loading={startingGoalies.loading} error={startingGoalies.error} refresh={()=>startingGoalies.refresh(true)} clubStats={clubStats}/></>}
  </section>
 }
 
