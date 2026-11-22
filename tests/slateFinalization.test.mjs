@@ -36,3 +36,11 @@ test('normal live/pregame games never qualify as fully finalized',()=>{
  assert.deepEqual(allKeys.filter(k=>!groupIsFinal(k)),['pregame','live'])
  assert.deepEqual(allKeys.filter(k=>groupIsFinal(k)),['final'])
 })
+
+test('empty-night confirmation is visible in the banner, rather than a browser confirm dialog',()=>{
+ assert.match(source,/const \[emptyNightConfirmDate,setEmptyNightConfirmDate\]=useState/)
+ assert.match(source,/CONFIRM EMPTY NIGHT/)
+ assert.match(source,/EMPTY NIGHT VERIFICATION CANCELLED/)
+ assert.match(verification,/if\(emptyNightConfirmDate!==date\)/)
+ assert.doesNotMatch(verification,/window\.confirm\(`NHL reports no games/)
+})
