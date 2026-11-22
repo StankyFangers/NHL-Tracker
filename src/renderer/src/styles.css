@@ -1281,3 +1281,57 @@ html,body,#root,.app,main{scrollbar-width:thin;scrollbar-color:#3e7898 #0a1118}
  cursor:pointer;
 }
 .nhl1815AllGamesButton[aria-pressed="true"]{background:#205270!important;color:white!important}
+
+
+/* Matchup analysis: independent manual status markers for each team/date.
+   These replace only the visible confidence readout, not the model score. */
+.confidenceCard.confidenceFlagCard{
+ display:grid;
+ grid-template-columns:minmax(0,1fr) auto;
+ align-items:center;
+ column-gap:14px;
+ cursor:default;
+}
+.confidenceCardReadout{
+ display:flex;
+ flex-direction:column;
+ gap:5px;
+ align-items:flex-start;
+ text-align:left;
+ min-width:0;
+ padding:0;
+ margin:0;
+ border:0;
+ background:transparent;
+ color:inherit;
+ cursor:pointer;
+}
+.confidenceCardReadout small{font-size:10px;color:#9cb7c8;font-weight:800}
+.confidenceCardReadout strong{font-size:27px;line-height:1.2;font-weight:900;font-variant-numeric:tabular-nums}
+.confidenceCardReadout strong span{font-size:12px;color:#91aabd}
+.confidenceCardReadout>span{font-size:10px;color:#77cfff}
+.confidenceCardReadout .confidenceTeamFlag{font-size:23px;letter-spacing:.01em}
+.confidenceTeamFlag-bets-entered{color:#62d9ff}
+.confidenceTeamFlag-fade{color:#fb7185}
+.confidenceTeamFlag-boost{color:#7dec9c}
+.confidenceFlagControls{display:flex;gap:5px;align-items:center;justify-content:flex-end;flex-wrap:wrap;max-width:310px}
+.confidenceFlagButton{
+ padding:7px 9px;
+ border:1px solid #3d6177;
+ border-radius:5px;
+ background:#0c1c29;
+ color:#b6cede;
+ font-size:10px;
+ font-weight:850;
+ cursor:pointer;
+ white-space:nowrap;
+}
+.confidenceFlagButton:hover{background:#214356;border-color:#6acbff}
+.confidenceFlagButton.selected{background:#204d64;border-color:#77d5ff;color:#fff}
+.confidenceFlagButton.selected:nth-child(2){background:#603039;border-color:#fb7185}
+.confidenceFlagButton.selected:nth-child(3){background:#245d3d;border-color:#7dec9c}
+@media(max-width:1000px){
+ .confidenceCard.confidenceFlagCard{grid-template-columns:minmax(0,1fr);gap:10px}
+ .confidenceFlagControls{justify-content:flex-start}
+}
+@media(max-width:560px){.confidenceCards{grid-template-columns:1fr}}
