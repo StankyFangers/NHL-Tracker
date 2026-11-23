@@ -59,8 +59,8 @@ export function officialLegEvidence(leg:WagerStatLeg,box?:OfficialGameRecords):L
  if(leg.voided)return{result:'VOID'}
  if(leg.kind==='TEAM'||!box)return{result:'UNVERIFIED'}
  let player=leg.playerId?box.byId.get(Number(leg.playerId)):undefined
- if(!player){
-  // Name fallback is permitted only for exactly one unambiguous NHL player.
+ if(!player&&!leg.playerId){
+  // Name fallback is permitted only for missing IDs and one unambiguous NHL player.
   const found=box.byName.get(keyName(leg.player))||[]
   if(found.length===1)player=found[0]
  }
