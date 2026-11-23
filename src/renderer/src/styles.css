@@ -1386,3 +1386,16 @@ html,body,#root,.app,main{scrollbar-width:thin;scrollbar-color:#3e7898 #0a1118}
  word-break:normal;
  text-align:center!important;
 }
+
+
+/* Export settled wagers across an inclusive date range. */
+.settledExportRange{
+ display:flex;align-items:end;flex-wrap:wrap;gap:10px;grid-column:1/-1;
+ border:1px solid #355c6a;border-radius:8px;background:#102a36;padding:14px;
+}
+.settledExportRange>strong{width:100%;font-size:12px;color:#87dbfa;letter-spacing:.04em}
+.settledExportRange>small{width:100%;font-size:11px;color:#a9c8d7}
+.settledExportRange>label{display:flex;flex-direction:column;gap:6px;font-size:10px;color:#acd0e0;font-weight:800}
+.settledExportRange input{padding:8px;border:1px solid #3c6a7b;background:#091e29;color:white;border-radius:5px}
+.settledExportRange button{padding:10px 15px;background:#17664c;color:white;border:1px solid #32be88;border-radius:6px;cursor:pointer}
+.settledExportRange button:hover{background:#1e8764}
