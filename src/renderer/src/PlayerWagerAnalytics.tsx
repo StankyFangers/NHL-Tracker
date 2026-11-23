@@ -17,8 +17,9 @@ const net=(b:SearchBet)=>{
  const risk=b.bonusBet?0:stake(b)
  if(b.status==='VOID')return 0
  if(b.status!=='WON')return -risk
- const full=Number.isFinite(b.payout)?Number(b.payout):b.odds!=null?stake(b)*(1+(b.odds>0?b.odds/100:100/Math.abs(b.odds))):stake(b)
- return full-risk
+ const gross=b.payout!=null?Number(b.payout):b.odds!=null?stake(b)*(1+(b.odds>0?b.odds/100:100/Math.abs(b.odds))):0
+ const returned=Math.max(0,gross-(b.bonusBet?stake(b):0))
+ return returned-risk
 }
 const matches=(leg:WagerStatLeg,player:PlayerChoice)=>{
  if(leg.kind==='TEAM')return false
