@@ -8,7 +8,7 @@ export type WagerStatLeg = {
 export type OfficialPlayerRecord = {
  id:number; name:string; goals:number; assists:number; points:number; shots:number
 }
-export type OfficialGameRecords = {byId:Map<number,OfficialPlayerRecord>; byName:Map<string,OfficialPlayerRecord[]>}
+export type OfficialGameRecords = {byId:Map<number,OfficialPlayerRecord>; byName:Map<string,OfficialPlayerRecord[]>; isFinal:boolean}
 export type LegEvidence = {result:'HIT'|'MISS'|'UNVERIFIED'|'VOID'; actual?:number}
 const keyName=(n:string)=>String(n||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')
 const fullName=(item:any)=>[item?.firstName,item?.lastName].map(v=>typeof v==='string'?v:v?.default||'').filter(Boolean).join(' ')||String(item?.name?.default||item?.name||item?.playerName?.default||item?.playerName||'')
@@ -50,7 +50,7 @@ export function officialWagerBoxscore(gameId:number):Promise<OfficialGameRecords
   }
   walk(root)
   if(!byId.size)throw Error('Official player boxscore is not available')
-  return {byId,byName}
+  return {byId,byName,isFinal:['FINAL','OFF'].includes(String(box?.gameState||box?.boxscore?.gameState||''))}
  }).catch(error=>{cache.delete(gameId);throw error})
  cache.set(gameId,promise)
  return promise
@@ -68,6 +68,7 @@ export function officialLegEvidence(leg:WagerStatLeg,box?:OfficialGameRecords):L
  const market=String(leg.stat||'').toLowerCase()
  const value=market.startsWith('goal')?player.goals:market.startsWith('assist')?player.assists:market.startsWith('shot')?player.shots:market.startsWith('point')?player.points:undefined
  if(value===undefined||!Number.isFinite(leg.qty))return{result:'UNVERIFIED'}
+ if(leg.side==='UNDER'&&!box.isFinal)return{result:'UNVERIFIED',actual:value}
  const hit=leg.side==='UNDER'?value<leg.qty:value>=leg.qty
  return{result:hit?'HIT':'MISS',actual:value}
 }
