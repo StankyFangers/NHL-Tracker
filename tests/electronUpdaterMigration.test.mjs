@@ -8,6 +8,7 @@ const updater=file('src/main/appUpdater.ts')
 const preload=file('src/preload/index.ts')
 const ui=file('src/renderer/src/App.tsx')
 const pkg=JSON.parse(file('package.json'))
+const lock=JSON.parse(file('package-lock.json'))
 
 test('Electron updater is the only active installer path',()=>{
  assert.match(main,/registerAppUpdater\(\)/)
@@ -32,7 +33,9 @@ test('Explicit check, download and install retain the existing renderer IPC cont
 })
 
 test('GitHub NSIS installer has the same app identity and update metadata publisher',()=>{
- assert.equal(pkg.version,'1.8.16')
+ assert.match(pkg.version,/^\d+\.\d+\.\d+$/)
+ assert.equal(pkg.version,lock.version)
+ assert.equal(pkg.version,lock.packages[''].version)
  assert.equal(pkg.build.appId,'com.nhltracker.app')
  assert.equal(pkg.build.productName,'NHL Tracker')
  assert.equal(pkg.build.executableName,'NHL Tracker')
