@@ -217,7 +217,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cat > release-notes.md <<'EOF'
-                    ## NHL Tracker v1.8.17 — Player Search, Settled Export and Leg Results
+          ## NHL Tracker v1.8.17 — Player Search, Settled Export and Leg Results
 
           **What's new**
           - Successful player legs stay green on a losing multi-leg wager when verified by NHL boxscores.
