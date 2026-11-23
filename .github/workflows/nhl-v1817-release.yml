@@ -3,7 +3,7 @@ name: NHL Tracker v1.8.17 Windows Release
 on:
   push:
     branches:
-      - feature/v1.8.17-slate-finalization-fix
+      - feature/v1.8.17-player-analytics-export-leg-colors
     paths:
       - .github/workflows/nhl-v1817-release.yml
       - src/main/index.ts
@@ -75,7 +75,7 @@ jobs:
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add package-lock.json
             git commit -m "Lock electron-updater dependencies for v1.8.17"
-            git push origin HEAD:refs/heads/feature/v1.8.17-slate-finalization-fix
+            git push origin HEAD:refs/heads/feature/v1.8.17-player-analytics-export-leg-colors
           fi
           node -e "const p=require('./package-lock.json');if(!p.packages['node_modules/electron-updater'])process.exit(1)"
           echo "Exact updater dependency graph is committed."
@@ -201,7 +201,7 @@ jobs:
         id: freshness
         shell: bash
         run: |
-          latest=$(git ls-remote origin refs/heads/feature/v1.8.17-slate-finalization-fix | cut -f1)
+          latest=$(git ls-remote origin refs/heads/feature/v1.8.17-player-analytics-export-leg-colors | cut -f1)
           built=$(git rev-parse HEAD)
           if [ "$latest" = "$built" ]; then
             echo "publish=true" >> "$GITHUB_OUTPUT"
