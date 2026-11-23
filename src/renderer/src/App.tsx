@@ -2168,9 +2168,38 @@ function LiveBetGameAccordion({label,bets,liveStats,gameOptions,onPatch,onDelete
  if(flat)return <div className="liveBetBody compactBetList">{bets.map(b=><CompactLiveBet key={b.id} b={b} liveStats={liveStats} gameOptions={gameOptions} onPatch={(p:any)=>onPatch(b.id,p)} onEdit={(p:any)=>onPatch(b.id,p)} onDelete={()=>onDelete(b.id)}/>)}</div>
  return <details className="liveBetAccordion" open={open}><summary><b>{label}</b><span>{bets.length} Bet{bets.length===1?'':'s'} · {out.toFixed(2)}u Out · {returned.toFixed(2)}u Returned</span><strong className={net>0?'winText':net<0?'lossText':''}>{net>=0?`+${net.toFixed(2)}u Profit`:`(${Math.abs(net).toFixed(2)}u) Loss`}</strong><small>{w}W–{l}L–{p}P</small>{verifyGameId&&verifyGame&&<button type="button" className={`rowVerifyButton ${verifyStatus.includes('CORRECTION')?'adjustment':verifyStatus.includes('VERIFIED')?'verified':''}`} onClick={e=>{e.preventDefault();e.stopPropagation();verifyGame(verifyGameId)}} disabled={verifyStatus==='VERIFYING…'}>{verifyStatus==='VERIFYING…'?(verifyMode==='LIVE'?'UPDATING…':'VERIFYING…'):verifyStatus.includes('CORRECTION')||verifyStatus.includes('ADJUSTMENT')?'ADJUSTMENT FOUND ⚠':verifyMode==='LIVE'?'UPDATE STATS':'VERIFY GAME'}</button>}</summary><div className="liveBetBody compactBetList">{bets.map(b=><CompactLiveBet key={b.id} b={b} liveStats={liveStats} gameOptions={gameOptions} onPatch={(patch:any)=>onPatch(b.id,patch)} onEdit={(patch:any)=>onPatch(b.id,patch)} onDelete={()=>onDelete(b.id)}/>)}</div></details>
 }
+function useOfficialSettledLegStats(b:Bet,liveStats:LiveStats){
+ const [official,setOfficial]=useState<Record<string,OfficialGameRecords>>({})
+ const gameIds=[...new Set(b.legs.filter(l=>l.kind!=='TEAM'&&!l.voided&&l.gameId).map(l=>Number(l.gameId)).filter(n=>Number.isInteger(n)&&n>0))]
+ const key=gameIds.slice().sort((a,b)=>a-b).join(',')
+ useEffect(()=>{
+  let alive=true
+  setOfficial({})
+  if(!['WON','LOST','VOID'].includes(String(b.status||'PENDING')))return()=>{alive=false}
+  for(const id of gameIds){
+   void officialWagerBoxscore(id).then(box=>{if(alive)setOfficial(old=>({...old,[id]:box}))}).catch(()=>{})
+  }
+  return()=>{alive=false}
+ },[b.id,b.status,key])
+ const combined:LiveStats={...liveStats}
+ for(const [gameId,box] of Object.entries(official)){
+  for(const player of box.byId.values()){
+   combined[`${gameId}:${player.id}`]={goals:player.goals,assists:player.assists,points:player.points,shots:player.shots,rostered:true}
+  }
+ }
+ return {official,combined}
+}
 function CompactLiveBet({b,liveStats,gameOptions,onPatch,onEdit,onDelete}:{b:Bet,liveStats:LiveStats,gameOptions:{key:string,label:string}[],onPatch:any,onEdit:any,onDelete:any}){
- const stake=b.units*b.unitSize;const odds=b.odds??(b.payout?americanFromReturn(stake,b.payout):undefined);const teamSet=[...new Set(b.legs.map(l=>l.team).filter(Boolean))];const prefix=teamSet.length===1?teamSet[0]:(teamSet.length>1?'MULTI':'BET');const status=b.status||'PENDING'
- return <details className={`compactBet ${status.toLowerCase()}`}><summary><span className="compactBetTeam">{prefix}</span><span className="compactBetLegs">{b.legs.map((leg,i)=>{const pr=legProgress(leg,liveStats);const legState=leg.voided?'voided':status==='WON'?'hit':status==='LOST'?'miss':leg.side==='UNDER'?'pending':leg.kind==='TEAM'?'pending':pr.hit?'hit':'pending';return <span key={i} className={`compactLeg ${legState}`}>{leg.voided?`${leg.player} VOID`:leg.kind==='TEAM'?(leg.stat==='Game Total'?`${leg.player} ${leg.side==='OVER'?'O':'U'} ${leg.qty}`:leg.stat==='Spread'?`${leg.team} ${leg.qty>0?'+':''}${leg.qty}`:`${leg.team} ML`):`${leg.player} ${propLegLabel(leg)}`}{i<b.legs.length-1?' + ':''}</span>})}</span><span className={`compactBetPrice ${status==='WON'?'hit':status==='LOST'?'miss':'pending'}`}>{b.units.toFixed(2)}u @ {displayAmericanOdds(odds,b.book)}{b.book?.trim()?` - ${b.book.trim()}`:''}</span></summary><div className="compactBetDetails"><BetCard b={b} liveStats={liveStats} gameOptions={gameOptions} onPatch={onPatch} onEdit={onEdit} onDelete={onDelete}/></div></details>
+ const stake=b.units*b.unitSize;const odds=b.odds??(b.payout?americanFromReturn(stake,b.payout):undefined);const teamSet=[...new Set(b.legs.map(l=>l.team).filter(Boolean))];const prefix=teamSet.length===1?teamSet[0]:(teamSet.length>1?'MULTI':'BET');const status=b.status||'PENDING';const {official,combined}=useOfficialSettledLegStats(b,liveStats)
+ return <details className={`compactBet ${status.toLowerCase()}`}><summary><span className="compactBetTeam">{prefix}</span><span className="compactBetLegs">{b.legs.map((leg,i)=>{const pr=legProgress(leg,combined);
+ const verified=officialLegEvidence(leg,official[String(leg.gameId||'')]);
+ const known=!!(leg.playerId&&leg.gameId&&combined[`${leg.gameId}:${leg.playerId}`]?.rostered);
+ const legState=leg.voided?'voided':
+ leg.kind==='TEAM'?status==='WON'?'hit':'pending':
+ verified.result==='HIT'?'hit':verified.result==='MISS'?'miss':
+ status==='WON'?'hit':
+ known&&leg.side!=='UNDER'&&pr.hit?'hit':
+ 'pending';return <span key={i} className={`compactLeg ${legState}`}>{leg.voided?`${leg.player} VOID`:leg.kind==='TEAM'?(leg.stat==='Game Total'?`${leg.player} ${leg.side==='OVER'?'O':'U'} ${leg.qty}`:leg.stat==='Spread'?`${leg.team} ${leg.qty>0?'+':''}${leg.qty}`:`${leg.team} ML`):`${leg.player} ${propLegLabel(leg)}`}{i<b.legs.length-1?' + ':''}</span>})}</span><span className={`compactBetPrice ${status==='WON'?'hit':status==='LOST'?'miss':'pending'}`}>{b.units.toFixed(2)}u @ {displayAmericanOdds(odds,b.book)}{b.book?.trim()?` - ${b.book.trim()}`:''}</span></summary><div className="compactBetDetails"><BetCard b={b} liveStats={combined} gameOptions={gameOptions} onPatch={onPatch} onEdit={onEdit} onDelete={onDelete}/></div></details>
 }
 
 
