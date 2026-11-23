@@ -11,6 +11,7 @@ on:
       - src/renderer/src/playerWagerAnalytics.css
       - src/renderer/src/wagerLegEvidence.ts
       - tests/playerAnalyticsFeatures.test.mjs
+      - tests/wagerLegEvidence.test.mjs
       - .github/workflows/nhl-v1817-dev-validation.yml
   workflow_dispatch:
 
@@ -31,6 +32,6 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
       - name: Run regressions
-        run: node --test tests/playerAnalyticsFeatures.test.mjs tests/slateFinalization.test.mjs tests/teamConfidenceFlags.test.mjs tests/electronUpdaterMigration.test.mjs
+        run: node --test tests/playerAnalyticsFeatures.test.mjs tests/wagerLegEvidence.test.mjs tests/slateFinalization.test.mjs tests/teamConfidenceFlags.test.mjs tests/electronUpdaterMigration.test.mjs
       - name: Compile renderer and Electron main
         run: npm run build
