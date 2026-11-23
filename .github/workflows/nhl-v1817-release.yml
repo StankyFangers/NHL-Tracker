@@ -178,8 +178,80 @@ jobs:
           if ($exe.Length -lt 1000000) { throw 'Installer is unexpectedly small' }
           if ($blockmap.Length -lt 100) { throw 'Differential update blockmap missing/empty' }
           $manifestText = Get-Content -LiteralPath $manifest.FullName -Raw
-          if ($manifestText -notmatch 'version:\s*1\.8\.16') { throw 'latest.yml has wrong version' }
-          if ($manifestText -notmatch 'NHL\.Tracker\.Setup\.1\.8\.16\.exe') { throw 'latest.yml does not point to release installer' }
+          $expectedVersion = (Get-Content -LiteralPath 'package.json' -Raw | ConvertFrom-Json).version
+          $escapedVersion = [regex]::Escape($expectedVersion)
+          if ($manifestText -notmatch ('(?m)^version:\s*' + $escapedVersion + '\s*
+          if ($manifestText -notmatch 'sha512:') { throw 'latest.yml is missing checksum' }
+          if ($manifestText -notmatch 'size:') { throw 'latest.yml is missing installer size' }
+          Write-Host "Verified: $($exe.Name), latest.yml, and $($blockmap.Name)"
+
+      - name: Upload verified Windows updater release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: NHL-Tracker-v1.8.17-Windows-Updater
+          path: |
+            release/*.exe
+            release/*.yml
+            release/*.blockmap
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      # Publish only after building the final branch revision, not superseded commits.
+      - name: Check whether this is the latest branch revision
+        id: freshness
+        shell: bash
+        run: |
+          latest=$(git ls-remote origin refs/heads/feature/v1.8.17-player-analytics-export-leg-colors | cut -f1)
+          built=$(git rev-parse HEAD)
+          if [ "$latest" = "$built" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "This build is superseded by a newer commit. Skipping publication safely."
+          fi
+
+      - name: Publish GitHub Release (Check for Updates)
+        if: steps.freshness.outputs.publish == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > release-notes.md <<'EOF'
+          ## NHL Tracker v1.8.17 — Player Search, Settled Export and Leg Results
+
+          **What's new**
+          - Successful player legs stay green on a losing multi-leg wager when verified by NHL boxscores.
+          - Deep Bet Analytics Player Search: wager history, player market hit rates, partners, sportsbooks and monthly breakdown.
+          - Inclusive date-range XLSX export of settled wagers, with recorded units and P/L.
+
+          **Upgrade from installed v1.8.16**
+          1. Open Settings > Updates > Check for Updates.
+          2. Download v1.8.17 and choose Install & Restart.
+          3. Verify the app reopens on v1.8.17.
+
+          Installer uses established app identity and GitHub latest.yml.
+          EOF
+          if gh release view "v1.8.17" >/dev/null 2>&1; then
+            gh release upload "v1.8.17" release/*.exe release/*.yml release/*.blockmap --clobber
+            gh release edit "v1.8.17" --title "NHL Tracker v1.8.17 — Player Search, Settled Export and Leg Results" --notes-file release-notes.md --latest
+          else
+            gh release create "v1.8.17" release/*.exe release/*.yml release/*.blockmap \
+              --target "$(git rev-parse HEAD)" \
+              --title "NHL Tracker v1.8.17 — Player Search, Settled Export and Leg Results" \
+              --notes-file release-notes.md \
+              --latest
+          fi
+
+      - name: Confirm GitHub Release is visible
+        if: steps.freshness.outputs.publish == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "v1.8.17" --json tagName,isDraft,isPrerelease,assets,url
+)) { throw "latest.yml has wrong version; expected $expectedVersion" }
+          if ($manifestText -notmatch ('NHL\.Tracker\.Setup\.' + $escapedVersion + '\.exe')) { throw 'latest.yml does not point to release installer' }
           if ($manifestText -notmatch 'sha512:') { throw 'latest.yml is missing checksum' }
           if ($manifestText -notmatch 'size:') { throw 'latest.yml is missing installer size' }
           Write-Host "Verified: $($exe.Name), latest.yml, and $($blockmap.Name)"
