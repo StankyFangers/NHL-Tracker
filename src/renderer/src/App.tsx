@@ -1995,23 +1995,18 @@ function PregameComboAnalyzer({unitSize,accountKey,game,bets,onRebet,onBatch,sla
   return {prices:index,grades}
  },[bets,team,slateDate,entryActive])
  const pairingEstimates=(players:string[],line:string,pp:string)=>{
-  const groups=[players]
-  if(players.length===3)groups.push([players[0],players[1]],[players[0],players[2]],[players[1],players[2]])
-  return <div aria-label="Historical combo stats" style={{marginLeft:'auto',textAlign:'right',fontSize:12,lineHeight:1.5,maxWidth:'100%'}}>{groups.map(names=>{
-   const key=pairingKey(names)
+   const key=pairingKey(players)
    const {odds,count}=lastFivePrice(pairingHistory.prices.get(key))
    const results=Array.from(pairingHistory.grades.get(key)?.values()??[]).filter(day=>day.size===1)
    const hits=results.filter(day=>day.has(true)).length
-   const category=classifyResearch({players:names,odds,forwardLine:Number(line.slice(1)),ppUnit:Number(pp.slice(2))})
+   const category=classifyResearch({players,odds,forwardLine:Number(line.slice(1)),ppUnit:Number(pp.slice(2))})
    const units=RULES[category][profile]
-   return <div key={key}>
-    {groups.length>1&&<b>{names.join(' + ')} · </b>}
+   return <div aria-label="Historical combo stats" style={{marginLeft:'auto',textAlign:'right',fontSize:12,lineHeight:1.5,maxWidth:'100%'}}>
     <abbr style={{textDecoration:'none'}} title="Hits / prior graded games for this exact combo">{hits}/{results.length} hit</abbr>
     {' | '}{results.length?(100*hits/results.length).toFixed(1)+'%':'—'} hit
     {' | '}<abbr style={{textDecoration:'none'}} title={`Based on ${count} of 5 prior priced games`}>L5 Avg Odds: {odds===null?'—':odds>0?'+'+odds:odds}</abbr>
     {' | '}<strong title={`${profile}u strategy`}>{category==='UNKNOWN'?'Awaiting odds':units?`${units}u ($${(units*unitSize).toFixed(2)})`:'SKIP'}</strong>
    </div>
-  })}</div>
  }
  const settled=bets.filter(b=>['WON','LOST','VOID'].includes(String(b.status||''))&&b.legs.filter(l=>!l.voided&&l.kind!=='TEAM').length>=2)
  const calcUnits=(b:Bet)=>{if(b.status==='VOID')return 0;if(b.status==='LOST')return-b.units;const stake=b.units*b.unitSize;const profit=b.payout!=null?b.payout-stake:b.odds!=null?(b.odds>0?stake*b.odds/100:stake*100/Math.abs(b.odds)):0;return b.unitSize?profit/b.unitSize:0}
