@@ -2,7 +2,8 @@ export type ResearchCombo = {
   id:string; date:string; gameId:string; team:string; opponent?:string; matchup?:string;
   players:string[]; playerIds?:number[]|null; forwardLine:number|null; ppUnit:number|null; odds:number|null;
   result:'HIT'|'MISS'|'UNVERIFIED'; venue?:'HOME'|'AWAY'|null; goalieGaa?:number|null;
-  goalieDifferential?:number|null; snapshotAt?:string; source?:string
+  goalieDifferential?:number|null; snapshotAt?:string; source?:string;
+  context?:Record<string,number|boolean|null>
 }
 export const RESEARCH_PROFILES = ['300','350','400','450','500','550','600'] as const
 export type ResearchProfile = typeof RESEARCH_PROFILES[number]
@@ -79,7 +80,8 @@ export function validResearchCombo(input:unknown):ResearchCombo|null {
   playerIds:Array.isArray(x.playerIds)&&x.playerIds.length===players.length&&x.playerIds.every((v:unknown)=>Number.isInteger(Number(v))&&Number(v)>0)?x.playerIds.map(Number):null,
   ppUnit:pp,forwardLine:fl,odds:odds===null||Math.abs(odds)<100?null:odds,result:status,
   matchup:String(x.matchup||''),opponent:String(x.opponent||''),venue:x.venue==='HOME'||x.venue==='AWAY'?x.venue:null,
-  goalieGaa:num(x.goalieGaa),goalieDifferential:num(x.goalieDifferential),snapshotAt:String(x.snapshotAt||''),source:String(x.source||'')}
+  goalieGaa:num(x.goalieGaa),goalieDifferential:num(x.goalieDifferential),snapshotAt:String(x.snapshotAt||''),source:String(x.source||''),
+  context:typeof x.context==='object'&&x.context!==null?Object.fromEntries(['goalsForPerGame','powerPlayPct','opponentGoalsAllowedPerGame','opponentXGAllowedPerGame','opponentPKPct','restDays','opponentRestDays','backToBack'].map(key=>[key,key==='backToBack'?(x.context as any)[key]===true:num((x.context as any)[key])])):{}}
 }
 export function parseResearchImport(data:unknown):{rows:ResearchCombo[];invalid:number}{
  const payload=data as any
@@ -101,7 +103,7 @@ export function parseResearchImport(data:unknown):{rows:ResearchCombo[];invalid:
    odds:null,
    result:e.result?.status==='HIT'||e.result?.status==='MISS'?e.result.status:'UNVERIFIED',
    venue:e.context?.home===true?'HOME':e.context?.home===false?'AWAY':null,
-   goalieGaa:e.context?.gaa,goalieDifferential:e.context?.goalieDifferential,
+   goalieGaa:e.context?.gaa,goalieDifferential:e.context?.goalieDifferential,context:e.context,
    snapshotAt:e.lineupObservedAt||e.at,source:'Combo Logger 0.1.0'
   }:entry
   const r=validResearchCombo(candidate)
