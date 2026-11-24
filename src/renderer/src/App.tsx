@@ -1953,11 +1953,20 @@ function PregameComboAnalyzer({unitSize,accountKey,game,bets,onRebet,onBatch,sla
  const loadDfo=async(t:string,manual=false)=>{if(!t||t==='???')return;setDfoStatus(s=>({...s,[t]:manual?'Checking for line adjustments…':'Loading Daily Faceoff…'}));try{const next=await window.nhlTracker.dfoLines(t);setDfo(old=>({...old,[t]:next}));try{const toi=await (window.nhlTracker as any).dfoGoalieToi(t,next.goalies||[]);setDfoGoalieToi(old=>({...old,[t]:toi}))}catch{}const names=[...(next.forwardLines||[]).flat(),...(next.defensePairs||[]).flat()];try{const stats=await window.nhlTracker.dfoPlayerStats(t,[...new Set(names)]);setDfoStats(old=>({...old,[t]:stats}))}catch{}setDfoStatus(s=>({...s,[t]:manual?'Daily Faceoff check complete.':'Daily Faceoff loaded.'}))}catch(e:any){setDfoStatus(s=>({...s,[t]:'DFO check failed · '+(e?.message||'unavailable')}))}}
  useEffect(()=>{loadDfo(away);if(home!==away)loadDfo(home)},[game?.id,away,home])
  const profile=savedResearchProfile(accountKey)
- const pricesByPairing=useMemo(()=>{
+ const pairingHistory=useMemo(()=>{
   const index=new Map<string,Map<string,Set<number>>>()
-  const add=(players:string[],date:string,price:number|null|undefined)=>{
-   if(!date||date>=slateDate||price==null||!Number.isFinite(price)||Math.abs(price)<100)return
+  const grades=new Map<string,Map<string,Set<boolean>>>()
+  const add=(players:string[],date:string,price:number|null|undefined,hit:boolean|null)=>{
+   if(!date||date>=slateDate)return
    const key=pairingKey(players)
+   if(hit!==null){
+    const days=grades.get(key)??new Map<string,Set<boolean>>()
+    const results=days.get(date)??new Set<boolean>()
+    results.add(hit)
+    days.set(date,results)
+    grades.set(key,days)
+   }
+   if(price==null||!Number.isFinite(price)||Math.abs(price)<100)return
    const days=index.get(key)??new Map<string,Set<number>>()
    const prices=days.get(date)??new Set<number>()
    prices.add(price)
@@ -1965,28 +1974,34 @@ function PregameComboAnalyzer({unitSize,accountKey,game,bets,onRebet,onBatch,sla
    index.set(key,days)
   }
   for(const row of readResearchHistory()){
-   if(row.team===team)add(row.players,row.date,row.odds)
+   if(row.team===team)add(row.players,row.date,row.odds,row.result==='HIT'?true:row.result==='MISS'?false:null)
   }
   for(const bet of bets){
    if(bet.status==='VOID'||bet.voidAudit?.length||bet.legs.length<2||bet.legs.length>3)continue
    if(!bet.legs.every(l=>l.team===team&&!l.voided&&l.kind!=='TEAM'&&l.side!=='UNDER'&&l.qty===1&&['p','point','points'].includes(l.stat.toLowerCase())))continue
    const stake=bet.units*bet.unitSize
    const price=normalizedAmericanOdds(bet.odds,bet.book)??(stake>0&&bet.payout!=null?americanFromReturn(stake,bet.payout):undefined)
-   add(bet.legs.map(l=>l.player),bet.date,price)
+   add(bet.legs.map(l=>l.player),bet.date,price,bet.status==='WON'?true:bet.status==='LOST'?false:null)
   }
-  return index
+  return {prices:index,grades}
  },[bets,team,slateDate,entryActive])
  const pairingEstimates=(players:string[],line:string,pp:string)=>{
   const groups=[players]
   if(players.length===3)groups.push([players[0],players[1]],[players[0],players[2]],[players[1],players[2]])
-  return <div aria-label="Historical combo prices"><small>L5 AVG ODDS · {profile}u STRATEGY</small>{groups.map(names=>{
-   const {odds,count}=lastFivePrice(pricesByPairing.get(pairingKey(names)))
+  return <div aria-label="Historical combo stats" style={{marginLeft:'auto',textAlign:'right',fontSize:12,lineHeight:1.5,maxWidth:'100%'}}>{groups.map(names=>{
+   const key=pairingKey(names)
+   const {odds,count}=lastFivePrice(pairingHistory.prices.get(key))
+   const results=Array.from(pairingHistory.grades.get(key)?.values()??[]).filter(day=>day.size===1)
+   const hits=results.filter(day=>day.has(true)).length
    const category=classifyResearch({players:names,odds,forwardLine:Number(line.slice(1)),ppUnit:Number(pp.slice(2))})
    const units=RULES[category][profile]
-   return <p key={pairingKey(names)}>{groups.length>1&&<b>{names.join(' + ')} · </b>}
-    {odds==null?'No prior priced games':`${odds>0?'+':''}${odds} (${count}/5 games)`}
-    {category!=='UNKNOWN'&&<strong> · {units?`Suggested ${units}u ($${(units*unitSize).toFixed(2)})`:'Skip'}</strong>}
-   </p>
+   return <div key={key}>
+    {groups.length>1&&<b>{names.join(' + ')} · </b>}
+    <span title="Hits / prior graded games for this exact combo">{hits}/{results.length} hit</span>
+    {' | '}<span>{results.length?(100*hits/results.length).toFixed(1)+'%':'—'} hit</span>
+    {' | '}<span title={`Based on ${count} of 5 prior priced games`}>L5 Avg Odds: {odds===null?'—':odds>0?'+'+odds:odds}</span>
+    {' | '}<strong title={`${profile}u strategy`}>{category==='UNKNOWN'?'Awaiting odds':units?`${units}u ($${(units*unitSize).toFixed(2)})`:'SKIP'}</strong>
+   </div>
   })}</div>
  }
  const settled=bets.filter(b=>['WON','LOST','VOID'].includes(String(b.status||''))&&b.legs.filter(l=>!l.voided&&l.kind!=='TEAM').length>=2)
@@ -2051,7 +2066,7 @@ function PregameComboAnalyzer({unitSize,accountKey,game,bets,onRebet,onBatch,sla
  {view==='TODAY'?<>{freshness}{!onAddLegs&&<div className="comboSubTabs"><button className={todayTab==='COMBOS'?'selected':''} onClick={()=>setTodayTab('COMBOS')}>LINE COMBOS</button><button className={todayTab==='HISTORY'?'selected':''} onClick={()=>setTodayTab('HISTORY')}>BET HISTORY</button><button className={todayTab==='FORWARDS'?'selected':''} onClick={()=>setTodayTab('FORWARDS')}>FORWARD LINES</button><button className={todayTab==='DEFENSE'?'selected':''} onClick={()=>setTodayTab('DEFENSE')}>DEFENSE PAIRS</button><button className={todayTab==='PP'?'selected':''} onClick={()=>setTodayTab('PP')}>POWER PLAYS</button></div>}
  {!info?<div className="comboEmpty"><b>Loading {team} from Daily Faceoff…</b><span>{dfoStatus[team]||'Startup check in progress.'}</span></div>:<>
  {dfoStatus[team]&&<div className="dfoStatus">{dfoStatus[team]}</div>}
- {todayTab==='COMBOS'&&<div className="dfoComboGrid">{pairsNow.map((r:any,i:number)=><div className="dfoComboCard" key={r.line+'|'+r.pp}><div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:10}}><div className="comboNameStatus"><b>{r.players.join(' + ')}</b><span className={`comboStatus ${dfoConfirmed(info,slateDate)?'confirmed':'projected'}`} title={dfoConfirmed(info,slateDate)?'DFO confirmed this team lineup':'DFO has not confirmed this team lineup'}>{dfoConfirmed(info,slateDate)?'✓ CONFIRMED':'◷ PROJECTED'}</span></div><kbd style={{fontSize:17,color:'#b6f5ff',border:'1px solid #247c9b',borderRadius:6,padding:'3px 9px'}} title="Keyboard shortcut">{i<9?i+1:i===9?'0':'—'}</kbd></div><div><span>{r.line} ✓</span><span>{r.pp} ✓</span></div><small>SAME FORWARD LINE + SAME POWER PLAY</small>{dfoConfirmed(info,slateDate)&&pairingEstimates(r.players,r.line,r.pp)}<div className="comboQuickRows"><button type="button" onClick={()=>launchCombo(r.players)}>{onAddLegs?'ADD COMBO TO BET SLIP':'QUICK BET COMBO'}</button></div></div>)}</div>}
+ {todayTab==='COMBOS'&&<div className="dfoComboGrid">{pairsNow.map((r:any,i:number)=><div className="dfoComboCard" key={r.line+'|'+r.pp}><div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:10}}><div className="comboNameStatus"><b>{r.players.join(' + ')}</b><span className={`comboStatus ${dfoConfirmed(info,slateDate)?'confirmed':'projected'}`} title={dfoConfirmed(info,slateDate)?'DFO confirmed this team lineup':'DFO has not confirmed this team lineup'}>{dfoConfirmed(info,slateDate)?'✓ CONFIRMED':'◷ PROJECTED'}</span></div><kbd style={{fontSize:17,color:'#b6f5ff',border:'1px solid #247c9b',borderRadius:6,padding:'3px 9px'}} title="Keyboard shortcut">{i<9?i+1:i===9?'0':'—'}</kbd></div><div><span>{r.line} ✓</span><span>{r.pp} ✓</span></div><small>SAME FORWARD LINE + SAME POWER PLAY</small><div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',flexWrap:'wrap',gap:8,marginTop:'auto'}}><div className="comboQuickRows"><button type="button" onClick={()=>launchCombo(r.players)}>{onAddLegs?'ADD COMBO TO BET SLIP':'QUICK BET COMBO'}</button></div>{pairingEstimates(r.players,r.line,r.pp)}</div></div>)}</div>}
  {todayTab==='HISTORY'&&<div className="betHistoryList">{historyRows.length?historyRows.map(r=><div className="betHistoryRow" key={r.key}><div className="betHistorySummary"><b>{r.label}</b><span>{r.wins}W–{r.losses}L{r.pending?`–${r.pending}P`:''}</span><strong className={r.units>=0?'good':'bad'}>{r.units>=0?'+':''}{r.units.toFixed(2)}u</strong><em>{r.hit.toFixed(0)}% WIN · {r.arr.length} BET{r.arr.length===1?'':'S'}</em></div><button className="inlineRebet" onClick={()=>onRebet(r.sample)}>QUICK BET</button></div>):<div className="comboEmpty"><b>No {team} bet history yet.</b><span>Wagers involving {team} players will appear here, grouped by exact configuration and sorted by win percentage.</span></div>}</div>}
  {todayTab==='FORWARDS'&&<div className="dfoGroups">{(info.forwardLines||[]).map((ln:string[],i:number)=><section key={i}><h3>LINE {i+1}</h3><div className="dfoPlayerGrid">{ln.map(n=><Player key={n} name={n} line={'L'+(i+1)} pp={ppOf(n)}/>)}</div></section>)}</div>}
  {todayTab==='DEFENSE'&&<div className="dfoGroups">{(info.defensePairs||[]).map((ln:string[],i:number)=><section key={i}><h3>PAIR {i+1}</h3><div className="dfoPlayerGrid defense">{ln.map(n=><Player key={n} name={n} line={'D'+(i+1)} pp={ppOf(n)}/>)}</div></section>)}</div>}
