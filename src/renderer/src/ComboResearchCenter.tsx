@@ -1,6 +1,7 @@
 import {useEffect,useMemo,useState,type ChangeEvent} from 'react'
 import {RESEARCH_PROFILES,RULES,RULE_NAMES,analyzeProfile,parseResearchImport,type ResearchCombo,type ResearchProfile} from './comboResearchModel'
 import './comboResearch.css'
+import {overlaySettledWagerOdds} from './comboResearchPrices'
 const STORE='nhlTracker:research:preview:v1'
 const API_KEY='nhlTracker:research:apiUrl:v1'
 const money=(n:number)=>`${n>=0?'+':''}${n.toFixed(2)}u`
@@ -32,6 +33,16 @@ export default function ComboResearchCenter({unitSize}:{unitSize:number}){
   }catch(e){setMessage('Cloud sync unavailable: '+String(e))}
   finally{setLoading(false)}
  }
+ const importWagerPrices=async(e:ChangeEvent<HTMLInputElement>)=>{
+  const input=e.target,file=input.files?.[0];if(!file)return
+  try{
+   if(!rows.length)throw Error('Import Combo Logger records first, then overlay wager prices.')
+   const result=await overlaySettledWagerOdds(file,rows)
+   setRows(result.rows);localStorage.setItem(STORE,JSON.stringify(result.rows))
+   setMessage(`Local wager-price overlay: ${result.matchedCount} uniquely priced combos; ${result.ambiguous} ambiguous; ${result.invalid} unmatched or invalid wagers. The XLSX file was never uploaded.`)
+  }catch(err){setMessage('Price overlay failed: '+String(err))}
+  input.value=''
+ }
  const importFile=async(e:ChangeEvent<HTMLInputElement>)=>{
   const input=e.target;const file=input.files?.[0];if(!file)return
   try{
@@ -48,7 +59,7 @@ export default function ComboResearchCenter({unitSize}:{unitSize:number}){
   <div className="researchNav">{(['EXPLORER','STRATEGIES','STATUS'] as const).map(x=><button key={x} className={section===x?'on':''} onClick={()=>setSection(x)}>{x==='EXPLORER'?'HIT RATE EXPLORER':x==='STRATEGIES'?'STRATEGY PERFORMANCE':'COLLECTION STATUS'}</button>)}</div>
   {message&&<p className="researchNotice" role="status">{message}</p>}
   <div className="researchMetrics"><div><small>COMBOS FILTERED</small><strong>{filtered.length}</strong></div><div><small>GRADED</small><strong>{graded.length}</strong></div><div><small>HIT RATE</small><strong>{graded.length?(wins/graded.length*100).toFixed(1)+'%':'—'}</strong></div><div><small>DISTINCT GAMES</small><strong>{totalGames}</strong></div></div>
-  {section==='STATUS'?<div className="researchCard"><h2>Research collection status</h2><p>This DEV screen accepts normalized Combo Research records and can query the standalone research Worker. An empty screen means no research data has been imported or synced yet; no example results are invented.</p><label>RESEARCH CLOUD URL<input placeholder="https://your-research-worker.workers.dev" value={apiUrl} onChange={e=>setApiUrl(e.target.value)}/></label><p>Current preview: <strong>{rows.length}</strong> distinct local records. The production research database is not deployed by this branch.</p><label className="researchImport">IMPORT NORMALIZED RESEARCH JSON<input type="file" accept=".json,application/json" onChange={e=>void importFile(e)}/></label><p>Accepted JSON: an array or an object with <code>combos</code> containing date, gameId, team, players, ppUnit, forwardLine, odds, and result. Records must have valid identifiers; unverifiable combinations are not silently graded.</p><button onClick={()=>{if(window.confirm('Clear only the locally cached research preview? Your Bet Hub wagers will not be changed.')){setRows([]);localStorage.removeItem(STORE);setMessage('Local research preview cleared.')}}}>CLEAR LOCAL RESEARCH PREVIEW</button></div>:<>
+  {section==='STATUS'?<div className="researchCard"><h2>Research collection status</h2><p>This DEV screen accepts normalized Combo Research records and can query the standalone research Worker. An empty screen means no research data has been imported or synced yet; no example results are invented.</p><label>RESEARCH CLOUD URL<input placeholder="https://your-research-worker.workers.dev" value={apiUrl} onChange={e=>setApiUrl(e.target.value)}/></label><p>Current preview: <strong>{rows.length}</strong> distinct local records. The production research database is not deployed by this branch.</p><label className="researchImport">IMPORT NORMALIZED RESEARCH JSON<input type="file" accept=".json,application/json" onChange={e=>void importFile(e)}/></label><p>Accepts the original Combo Logger 0.1.0 export (rows / combo / context) or normalized research JSON. Standalone logger records include pregame lineups and results but do not contain wager prices.</p><label className="researchImport">OVERLAY ODDS FROM PRIVATE SETTLED XLSX<input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={e=>void importWagerPrices(e)}/></label><p>The XLSX is read only on this computer. Odds attach only to a uniquely matched game-date / player combination. Private bets and unit sizes are not shared with the research cloud.</p><button onClick={()=>{if(window.confirm('Clear only the locally cached research preview? Your Bet Hub wagers will not be changed.')){setRows([]);localStorage.removeItem(STORE);setMessage('Local research preview cleared.')}}}>CLEAR LOCAL RESEARCH PREVIEW</button></div>:<>
    <div className="researchFilters">
     <label>FROM<input type="date" value={start} onChange={e=>setStart(e.target.value)}/></label><label>THROUGH<input type="date" value={end} onChange={e=>setEnd(e.target.value)}/></label>
     <label>TEAM<select value={team} onChange={e=>setTeam(e.target.value)}><option value="ALL">All teams</option>{teams.map(x=><option key={x} value={x}>{x}</option>)}</select></label>
