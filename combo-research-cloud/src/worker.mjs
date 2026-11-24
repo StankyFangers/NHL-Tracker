@@ -1,3 +1,4 @@
+import {collectPregame} from './collector.mjs'
 // Shared Combo Research service: intentionally separate from private wager and Telegram databases.
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','access-control-allow-origin':'*'}})
 const allowed=(req,env)=>Boolean(env.RESEARCH_INGEST_TOKEN)&&req.headers.get('Authorization')==='Bearer '+env.RESEARCH_INGEST_TOKEN
@@ -84,14 +85,22 @@ export default {
    if(p==='/health')return json({ok:true,service:'nhl-combo-research',database:!!env.DB})
    if(p==='/research/combos'&&req.method==='GET')return list(req,env)
    if(p==='/research/combos'&&req.method==='POST')return importRows(req,env)
+   if(p==='/research/collect'&&req.method==='POST'){if(!allowed(req,env))return json({error:'Unauthorized'},401);return json(await collectPregame(env))}
    if(p==='/research/grade'&&req.method==='POST'){if(!allowed(req,env))return json({error:'Unauthorized'},401);return json(await gradePending(env))}
    if(p==='/research/status'&&req.method==='GET'){
     const counts=await env.DB.prepare("SELECT COUNT(*) total,SUM(CASE WHEN result!='UNVERIFIED' THEN 1 ELSE 0 END) graded,COUNT(DISTINCT game_id) games FROM research_combos").first()
     const check=await env.DB.prepare('SELECT * FROM research_checks ORDER BY id DESC LIMIT 1').first()
-    return json({counts,check})
+    const captures=await env.DB.prepare('SELECT game_date,team,capture_status,lineup_status,combo_count,captured_at,error FROM research_capture_state ORDER BY checked_ms DESC LIMIT 60').all()
+    return json({counts,check,captures:captures.results||[]})
    }
    return json({error:'Not Found'},404)
   }catch(e){console.error('Research API error',String(e));return json({error:'Research service failure'},500)}
  },
- async scheduled(_event,env,ctx){ctx.waitUntil(gradePending(env).catch(e=>console.error('Research grading failed',String(e))))}
+ async scheduled(_event,env,ctx){
+  ctx.waitUntil((async()=>{
+   try{await collectPregame(env)}catch(e){console.error('Research capture failed',String(e))}
+   // Restrict NHL boxscore grading to occasional ticks to avoid repeated API calls.
+   if(new Date().getUTCMinutes()%15===0)try{await gradePending(env)}catch(e){console.error('Research grading failed',String(e))}
+  })())
+ }
 }
