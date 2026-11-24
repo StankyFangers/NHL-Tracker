@@ -13,7 +13,8 @@ function normalized(raw){
  const odds=numeric(raw.odds),pp=numeric(raw.ppUnit),fl=numeric(raw.forwardLine)
  const ids=Array.isArray(raw.playerIds)&&raw.playerIds.length===players.length&&raw.playerIds.every(x=>Number.isInteger(Number(x))&&Number(x)>0)?raw.playerIds.map(Number):null
  const id=String(raw.id||[date,gameId,team,...players.map(nameKey).sort()].join(':'))
- return {id,date,gameId,team,opponent:String(raw.opponent||''),matchup:String(raw.matchup||''),players,playerIds:ids,forwardLine:fl,ppUnit:pp,odds:odds!==null&&Math.abs(odds)>=100?odds:null,venue:raw.venue==='HOME'||raw.venue==='AWAY'?raw.venue:null,goalieGaa:numeric(raw.goalieGaa),goalieDifferential:numeric(raw.goalieDifferential),snapshotAt:String(raw.snapshotAt||''),source:String(raw.source||'import').slice(0,80)}
+ const result=['HIT','MISS','UNVERIFIED'].includes(String(raw.result))?String(raw.result):'UNVERIFIED'
+ return {id,date,gameId,team,result,opponent:String(raw.opponent||''),matchup:String(raw.matchup||''),players,playerIds:ids,forwardLine:fl,ppUnit:pp,odds:odds!==null&&Math.abs(odds)>=100?odds:null,venue:raw.venue==='HOME'||raw.venue==='AWAY'?raw.venue:null,goalieGaa:numeric(raw.goalieGaa),goalieDifferential:numeric(raw.goalieDifferential),snapshotAt:String(raw.snapshotAt||''),source:String(raw.source||'import').slice(0,80)}
 }
 async function list(req,env){
  const u=new URL(req.url),limit=Math.min(10000,Math.max(1,Number(u.searchParams.get('limit'))||1000))
@@ -31,8 +32,8 @@ async function importRows(req,env){
   const r=normalized(input);if(!r){rejected++;continue}
   // Existing snapshots are immutable here: importer cannot silently rewrite pregame odds or lineup conditions.
   await env.DB.prepare(`INSERT OR IGNORE INTO research_combos
-  (id,game_date,game_id,team,opponent,matchup,players_json,player_ids_json,forward_line,pp_unit,odds,venue,goalie_gaa,goalie_differential,snapshot_at,source)
-  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(r.id,r.date,r.gameId,r.team,r.opponent,r.matchup,JSON.stringify(r.players),r.playerIds?JSON.stringify(r.playerIds):null,r.forwardLine,r.ppUnit,r.odds,r.venue,r.goalieGaa,r.goalieDifferential,r.snapshotAt,r.source).run()
+  (id,game_date,game_id,team,opponent,matchup,players_json,player_ids_json,forward_line,pp_unit,odds,venue,goalie_gaa,goalie_differential,snapshot_at,source,result)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(r.id,r.date,r.gameId,r.team,r.opponent,r.matchup,JSON.stringify(r.players),r.playerIds?JSON.stringify(r.playerIds):null,r.forwardLine,r.ppUnit,r.odds,r.venue,r.goalieGaa,r.goalieDifferential,r.snapshotAt,r.source,r.result).run()
   accepted++
  }
  return json({accepted,rejected,duplicatesPossible:true})
