@@ -67,7 +67,7 @@ async function captureTeam(env,game,team,opponent,now){
   return {captured:combos.length,skipped:0,replaced:Number(existing?.n||0)}
  }catch(err){
   const error=String(err).slice(0,350)
-  await env.DB.prepare(`INSERT INTO research_capture_state(game_id,game_date,team,checked_ms,capture_status,error) VALUES (?,?,?,'?',?,?)`).bind(game.gameId,game.date,team,now,'FAILED',error).run().catch(()=>{})
+  await env.DB.prepare(`INSERT INTO research_capture_state(game_id,game_date,team,checked_ms,capture_status,error) VALUES (?,?,?,?,?,?) ON CONFLICT(game_id,team) DO UPDATE SET checked_ms=excluded.checked_ms,capture_status=excluded.capture_status,error=excluded.error`).bind(game.gameId,game.date,team,now,'FAILED',error).run().catch(()=>{})
   console.warn('Research lineup capture failed',game.gameId,team,error)
   return {captured:0,skipped:0,error}
  }
