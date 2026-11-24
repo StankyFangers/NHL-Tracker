@@ -24,4 +24,6 @@ jobs:
       - name: Check renderer build
         run: npm run build
       - name: Verify research worker syntax
-        run: node --check combo-research-cloud/src/worker.mjs
+        run: node --check combo-research-cloud/src/worker.mjs && node --check combo-research-cloud/src/collector.mjs
+      - name: Test research capture and API protection
+        run: node --test combo-research-cloud/test/*.test.mjs
