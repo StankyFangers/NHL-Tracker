@@ -14,14 +14,15 @@ function normalized(raw){
  const odds=numeric(raw.odds),pp=numeric(raw.ppUnit),fl=numeric(raw.forwardLine)
  const ids=Array.isArray(raw.playerIds)&&raw.playerIds.length===players.length&&raw.playerIds.every(x=>Number.isInteger(Number(x))&&Number(x)>0)?raw.playerIds.map(Number):null
  const id=String(raw.id||[date,gameId,team,...players.map(nameKey).sort()].join(':'))
+ const context=raw.context&&typeof raw.context==='object'?Object.fromEntries(['goalsForPerGame','powerPlayPct','opponentGoalsAllowedPerGame','opponentXGAllowedPerGame','opponentPKPct','restDays','opponentRestDays','backToBack'].map(key=>[key,key==='backToBack'?raw.context[key]===true:Number.isFinite(Number(raw.context[key]))?Number(raw.context[key]):null])):{}
  const result=['HIT','MISS','UNVERIFIED'].includes(String(raw.result))?String(raw.result):'UNVERIFIED'
- return {id,date,gameId,team,result,opponent:String(raw.opponent||''),matchup:String(raw.matchup||''),players,playerIds:ids,forwardLine:fl,ppUnit:pp,odds:odds!==null&&Math.abs(odds)>=100?odds:null,venue:raw.venue==='HOME'||raw.venue==='AWAY'?raw.venue:null,goalieGaa:numeric(raw.goalieGaa),goalieDifferential:numeric(raw.goalieDifferential),snapshotAt:String(raw.snapshotAt||''),source:String(raw.source||'import').slice(0,80)}
+ return {id,date,gameId,team,result,context,opponent:String(raw.opponent||''),matchup:String(raw.matchup||''),players,playerIds:ids,forwardLine:fl,ppUnit:pp,odds:odds!==null&&Math.abs(odds)>=100?odds:null,venue:raw.venue==='HOME'||raw.venue==='AWAY'?raw.venue:null,goalieGaa:numeric(raw.goalieGaa),goalieDifferential:numeric(raw.goalieDifferential),snapshotAt:String(raw.snapshotAt||''),source:String(raw.source||'import').slice(0,80)}
 }
 async function list(req,env){
  const u=new URL(req.url),limit=Math.min(10000,Math.max(1,Number(u.searchParams.get('limit'))||1000))
  const after=u.searchParams.get('after')||'',start=u.searchParams.get('start')||'0000-01-01',end=u.searchParams.get('end')||'9999-12-31'
  const result=await env.DB.prepare('SELECT * FROM research_combos WHERE game_date >= ? AND game_date <= ? AND id > ? ORDER BY id LIMIT ?').bind(start,end,after,limit).all()
- const combos=(result.results||[]).map(r=>({id:r.id,date:r.game_date,gameId:r.game_id,team:r.team,opponent:r.opponent,matchup:r.matchup,players:JSON.parse(r.players_json),playerIds:r.player_ids_json?JSON.parse(r.player_ids_json):null,forwardLine:r.forward_line,ppUnit:r.pp_unit,odds:r.odds,result:r.result,venue:r.venue,goalieGaa:r.goalie_gaa,goalieDifferential:r.goalie_differential,snapshotAt:r.snapshot_at,source:r.source}))
+ const combos=(result.results||[]).map(r=>({id:r.id,date:r.game_date,gameId:r.game_id,team:r.team,opponent:r.opponent,matchup:r.matchup,players:JSON.parse(r.players_json),playerIds:r.player_ids_json?JSON.parse(r.player_ids_json):null,forwardLine:r.forward_line,ppUnit:r.pp_unit,odds:r.odds,result:r.result,venue:r.venue,goalieGaa:r.goalie_gaa,goalieDifferential:r.goalie_differential,snapshotAt:r.snapshot_at,source:r.source,context:r.context_json?JSON.parse(r.context_json):{}}))
  return json({combos,nextCursor:combos.length===limit?combos.at(-1).id:null})
 }
 async function importRows(req,env){
@@ -33,8 +34,8 @@ async function importRows(req,env){
   const r=normalized(input);if(!r){rejected++;continue}
   // Existing snapshots are immutable here: importer cannot silently rewrite pregame odds or lineup conditions.
   await env.DB.prepare(`INSERT OR IGNORE INTO research_combos
-  (id,game_date,game_id,team,opponent,matchup,players_json,player_ids_json,forward_line,pp_unit,odds,venue,goalie_gaa,goalie_differential,snapshot_at,source,result)
-  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(r.id,r.date,r.gameId,r.team,r.opponent,r.matchup,JSON.stringify(r.players),r.playerIds?JSON.stringify(r.playerIds):null,r.forwardLine,r.ppUnit,r.odds,r.venue,r.goalieGaa,r.goalieDifferential,r.snapshotAt,r.source,r.result).run()
+  (id,game_date,game_id,team,opponent,matchup,players_json,player_ids_json,forward_line,pp_unit,odds,venue,goalie_gaa,goalie_differential,snapshot_at,source,result,context_json)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(r.id,r.date,r.gameId,r.team,r.opponent,r.matchup,JSON.stringify(r.players),r.playerIds?JSON.stringify(r.playerIds):null,r.forwardLine,r.ppUnit,r.odds,r.venue,r.goalieGaa,r.goalieDifferential,r.snapshotAt,r.source,r.result,JSON.stringify(r.context)).run()
   accepted++
  }
  return json({accepted,rejected,duplicatesPossible:true})
