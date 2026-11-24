@@ -7,15 +7,16 @@ const API_KEY='nhlTracker:research:apiUrl:v1'
 const dollars = new Intl.NumberFormat('en-US', {style:'currency', currency:'USD', signDisplay:'exceptZero'})
 const readLocal=():ResearchCombo[]=>{try{return JSON.parse(localStorage.getItem(STORE)||'[]')}catch{return[]}}
 const unique=(rows:ResearchCombo[])=>[...new Map(rows.map(r=>[r.id,r])).values()]
-const kalshiProfitRange=(category:ResearchClass,cost:number,stake:number)=>{
+const payoutCurrency = new Intl.NumberFormat('en-US', {style:'currency', currency:'USD'})
+const kalshiPayoutRange=(category:ResearchClass,cost:number,stake:number)=>{
  if(!stake)return '—'
- const dollar=(rate:number)=>'$'+(rate*cost).toFixed(2)
- if(category==='PP1_DUO_101_150')return dollar(1.01)+'–'+dollar(1.5)
- if(category==='PP1_DUO_151_200')return dollar(1.51)+'–'+dollar(2)
- if(category==='PP1_DUO_HIGH'||category==='PP1_TRIO_HIGH')return dollar(2.01)+'+'
- if(category==='PP1_TRIO_101_200')return dollar(1.01)+'–'+dollar(2)
- if(category==='PP2_DUO_LOW')return 'Up to '+dollar(3)
- if(category==='PP2_DUO_FL2_HIGH'||category==='PP2_DUO_OTHER_HIGH')return dollar(3.01)+'+'
+ const payout = (odds: number) => payoutCurrency.format(cost * (100 + odds) / 100)
+ if(category==='PP1_DUO_101_150')return payout(101)+'–'+payout(150)
+ if(category==='PP1_DUO_151_200')return payout(151)+'–'+payout(200)
+ if(category==='PP1_DUO_HIGH'||category==='PP1_TRIO_HIGH')return payout(201)+'+'
+ if(category==='PP1_TRIO_101_200')return payout(101)+'–'+payout(200)
+ if(category==='PP2_DUO_LOW')return 'Up to '+payout(300)
+ if(category==='PP2_DUO_FL2_HIGH'||category==='PP2_DUO_OTHER_HIGH')return payout(301)+'+'
  return '—'
 }
 export default function ComboResearchCenter({unitSize}:{unitSize:number}){
@@ -121,7 +122,7 @@ export default function ComboResearchCenter({unitSize}:{unitSize:number}){
      </td><td>{x.exposure?x.roi.toFixed(2)+'%':'—'}</td><td>{x.drawdown.toFixed(2)}u</td></tr>)}</tbody></table></div>
      {filtered.length>0 && summary[0].placed===0 && <p>No priced, graded combos in this selection. To add historical odds, open Collection Status and choose “Overlay odds from private settled XLSX”.</p>}
     </div>
-    <div className="researchCard"><h2>{profile}u · Betting reference</h2><p>Unit size: <strong>${unitSize.toFixed(2)}</strong>. Kalshi profit thresholds are calculated from the actual position cost, not just the unit size. The range below assumes the displayed stake is the position cost, before fees.</p><div className="researchTable"><table><thead><tr><th>Combo</th><th>American odds</th><th>Units</th><th>Position cost</th><th>Potential Kalshi net profit</th></tr></thead><tbody>{RULE_NAMES.map(x=>{const units=RULES[x.key][profile],cost=units*unitSize;return <tr key={x.key}><td>{x.title}</td><td>{x.odds}</td><td>{units?units.toFixed(2)+'u':'SKIP'}</td><td>{units?'$'+cost.toFixed(2):'—'}</td><td>{kalshiProfitRange(x.key,cost,units)}</td></tr>})}</tbody></table></div><p className="researchFootnote">All seven profiles (300u–600u) use fixed version 1 historical-fit rules, not future profit guarantees.</p></div>
+    <div className="researchCard"><h2>{profile}u · Betting reference</h2><p>Unit size: <strong>${unitSize.toFixed(2)}</strong>. Kalshi Payout includes the position cost plus profit on a winning wager, before fees.</p><div className="researchTable"><table><thead><tr><th>Combo</th><th>American odds</th><th>Units</th><th>Position cost</th><th>Kalshi Payout</th></tr></thead><tbody>{RULE_NAMES.map(x=>{const units=RULES[x.key][profile],cost=units*unitSize;return <tr key={x.key}><td>{x.title}</td><td>{x.odds}</td><td>{units?units.toFixed(2)+'u':'SKIP'}</td><td>{units?'$'+cost.toFixed(2):'—'}</td><td>{kalshiPayoutRange(x.key,cost,units)}</td></tr>})}</tbody></table></div><p className="researchFootnote">All seven profiles (300u–600u) use fixed version 1 historical-fit rules, not future profit guarantees.</p></div>
    </>}
   </>}
  </main>
