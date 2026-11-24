@@ -2000,7 +2000,7 @@ function PregameComboAnalyzer({unitSize,accountKey,game,bets,onRebet,onBatch,sla
     <abbr style={{textDecoration:'none'}} title="Hits / prior graded games for this exact combo">{hits}/{results.length} hit</abbr>
     {' | '}{results.length?(100*hits/results.length).toFixed(1)+'%':'—'} hit
     {' | '}<abbr style={{textDecoration:'none'}} title={`Based on ${count} of 5 prior priced games`}>L5 Avg Odds: {odds===null?'—':odds>0?'+'+odds:odds}</abbr>
-    {' | '}<strong title={`${profile}u strategy`}>{category==='UNKNOWN'?'Awaiting odds':units?`${units}u ($${(units*unitSize).toFixed(2)})`:'SKIP'}</strong>
+    {' | '}<strong title={`${profile}u strategy`}>{category==='UNKNOWN'?'Awaiting odds':`${units}u (${(units*unitSize).toFixed(2)})`}</strong>
    </div>
   })}</div>
  }
