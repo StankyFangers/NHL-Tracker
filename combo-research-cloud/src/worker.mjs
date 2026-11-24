@@ -51,11 +51,13 @@ function playerMap(box){
  return {byId,byName}
 }
 async function gradePending(env){
- const pending=await env.DB.prepare("SELECT DISTINCT game_id FROM research_combos WHERE result='UNVERIFIED' AND game_date <= ? AND game_id <> '' LIMIT 60").bind(new Date().toISOString().slice(0,10)).all()
+ const now=Date.now()
+ const pending=await env.DB.prepare("SELECT DISTINCT c.game_id FROM research_combos c LEFT JOIN research_grade_attempts a ON a.game_id=c.game_id WHERE c.result='UNVERIFIED' AND c.game_date <= ? AND c.game_id <> '' AND (a.game_id IS NULL OR (a.attempts < 12 AND a.checked_ms < ?)) LIMIT 40").bind(new Date(now).toISOString().slice(0,10),now-4*3600000).all()
  let checked=0,graded=0
  for(const row of pending.results||[]){
   if(!/^\d+$/.test(row.game_id))continue
   try{
+   await env.DB.prepare("INSERT INTO research_grade_attempts(game_id,checked_ms,attempts,last_status) VALUES(?,?,1,'CHECKING') ON CONFLICT(game_id) DO UPDATE SET checked_ms=excluded.checked_ms,attempts=research_grade_attempts.attempts+1,last_status='CHECKING'").bind(row.game_id,now).run()
    const response=await fetch('https://api-web.nhle.com/v1/gamecenter/'+row.game_id+'/boxscore',{signal:AbortSignal.timeout(12000)})
    if(!response.ok)continue
    const box=await response.json()
