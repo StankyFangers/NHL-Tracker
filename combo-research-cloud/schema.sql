@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS research_combos (
  snapshot_at TEXT,
  source TEXT NOT NULL DEFAULT 'import',
  lineup_status TEXT NOT NULL DEFAULT 'UNKNOWN',
+ context_json TEXT,
  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
