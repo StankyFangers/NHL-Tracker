@@ -1,7 +1,8 @@
 import {useEffect,useMemo,useState,type ChangeEvent} from 'react'
 import {RESEARCH_PROFILES,RULES,RULE_NAMES,analyzeProfile,analyzeFlatOne,parseResearchImport,type ResearchCombo,type ResearchProfile,type ResearchClass} from './comboResearchModel'
 import './comboResearch.css'
-import {overlaySettledWagerOdds} from './comboResearchPrices'
+import type {Bet} from './App'
+import {accountWagerPrices,overlaySettledWagerOdds} from './comboResearchPrices'
 const STORE='nhlTracker:research:preview:v1'
 const API_KEY='nhlTracker:research:apiUrl:v1'
 const dollars = new Intl.NumberFormat('en-US', {style:'currency', currency:'USD', signDisplay:'exceptZero'})
@@ -23,8 +24,10 @@ export function savedResearchProfile(accountKey:string):ResearchProfile {
  const value=localStorage.getItem('nhlTracker:research:profile:'+accountKey)
  return RESEARCH_PROFILES.find(profile=>profile===value)??'450'
 }
-export default function ComboResearchCenter({unitSize,accountKey}:{unitSize:number;accountKey:string}){
- const [rows,setRows]=useState<ResearchCombo[]>(readResearchHistory)
+export default function ComboResearchCenter({unitSize,accountKey,wagers,priceOf}:{unitSize:number;accountKey:string;wagers:Bet[]|null;priceOf:(bet:Bet)=>number|undefined}){
+ const [baseRows,setRows]=useState<ResearchCombo[]>(readResearchHistory)
+ const accountPrices=useMemo(()=>accountWagerPrices(baseRows,wagers??[],priceOf),[baseRows,wagers,priceOf])
+ const rows=accountPrices.rows
  const [section,setSection]=useState<'EXPLORER'|'STRATEGIES'|'STATUS'>('EXPLORER')
  const [profile,selectProfile]=useState<ResearchProfile>(()=>savedResearchProfile(accountKey))
  const setProfile=(value:ResearchProfile)=>{
@@ -87,7 +90,7 @@ export default function ComboResearchCenter({unitSize,accountKey}:{unitSize:numb
   const input=e.target,file=input.files?.[0];if(!file)return
   try{
    if(!rows.length)throw Error('Import Combo Logger records first, then overlay wager prices.')
-   const result=await overlaySettledWagerOdds(file,rows)
+   const result=await overlaySettledWagerOdds(file,baseRows)
    setRows(result.rows);localStorage.setItem(STORE,JSON.stringify(result.rows))
    setMessage(`Local wager-price overlay: ${result.matchedCount} uniquely priced combos; ${result.ambiguous} ambiguous; ${result.invalid} unmatched or invalid wagers. The XLSX file was never uploaded.`)
   }catch(err){setMessage('Price overlay failed: '+String(err))}
@@ -98,7 +101,7 @@ export default function ComboResearchCenter({unitSize,accountKey}:{unitSize:numb
   try{
    const parsed=parseResearchImport(JSON.parse(await file.text()))
    if(!parsed.rows.length)throw new Error('No valid normalized research rows found.')
-   const next=unique([...rows,...parsed.rows]);setRows(next);localStorage.setItem(STORE,JSON.stringify(next))
+   const next=unique([...baseRows,...parsed.rows]);setRows(next);localStorage.setItem(STORE,JSON.stringify(next))
    setMessage(`Imported ${parsed.rows.length} records (${parsed.invalid} invalid). ${next.length} distinct records in local DEV preview.`)
   }catch(err){setMessage('Import failed: '+String(err))}
   input.value=''
@@ -109,7 +112,7 @@ export default function ComboResearchCenter({unitSize,accountKey}:{unitSize:numb
   <div className="researchNav">{(['EXPLORER','STRATEGIES','STATUS'] as const).map(x=><button key={x} className={section===x?'on':''} onClick={()=>setSection(x)}>{x==='EXPLORER'?'HIT RATE EXPLORER':x==='STRATEGIES'?'STRATEGY PERFORMANCE':'COLLECTION STATUS'}</button>)}</div>
   {message&&<p className="researchNotice" role="status">{message}</p>}
   <div className="researchMetrics"><div><small>COMBOS FILTERED</small><strong>{filtered.length}</strong></div><div><small>GRADED</small><strong>{graded.length}</strong></div><div><small>HIT RATE</small><strong>{graded.length?(wins/graded.length*100).toFixed(1)+'%':'—'}</strong></div><div><small>DISTINCT GAMES</small><strong>{totalGames}</strong></div></div>
-  {section==='STATUS'?<div className="researchCard"><h2>Research collection status</h2><p>This DEV screen accepts normalized Combo Research records and can query the standalone research Worker. An empty screen means no research data has been imported or synced yet; no example results are invented.</p><label>RESEARCH CLOUD URL<input placeholder="https://your-research-worker.workers.dev" value={apiUrl} onChange={e=>setApiUrl(e.target.value)}/></label><p>Current preview: <strong>{rows.length}</strong> distinct research records. The production research database is not deployed by this branch.</p>
+  {section==='STATUS'?<div className="researchCard"><h2>Research collection status</h2><p>{wagers===null?'Account wager history unavailable.':`Account history · ${accountPrices.matchedCount} combos matched to settled odds · ${accountPrices.ambiguous} with conflicting prices.`}</p><p>This DEV screen accepts normalized Combo Research records and can query the standalone research Worker. An empty screen means no research data has been imported or synced yet; no example results are invented.</p><label>RESEARCH CLOUD URL<input placeholder="https://your-research-worker.workers.dev" value={apiUrl} onChange={e=>setApiUrl(e.target.value)}/></label><p>Current preview: <strong>{rows.length}</strong> distinct research records. The production research database is not deployed by this branch.</p>
   <button type="button" onClick={()=>void refreshCloudStatus()}>CHECK CLOUD COLLECTION STATUS</button>
   {statusError&&<p role="alert" className="researchNotice">Cloud status unavailable: {statusError}</p>}
   {cloudStatus&&<div className="researchStatusPanel"><p><strong>{cloudStatus.counts?.total??0}</strong> stored combos · <strong>{cloudStatus.counts?.graded??0}</strong> graded · <strong>{cloudStatus.counts?.games??0}</strong> distinct games</p><p>Last grading check: {cloudStatus.check?.checked_at||'Not yet run'}</p><div className="researchTable"><table><thead><tr><th>Date</th><th>Team</th><th>Snapshot</th><th>Lineup</th><th>Combos</th><th>Source issue</th></tr></thead><tbody>{(cloudStatus.captures||[]).slice(0,30).map((c,i)=><tr key={c.game_date+c.team+i}><td>{c.game_date}</td><td>{c.team}</td><td>{c.capture_status}</td><td>{c.lineup_status||'UNKNOWN'}</td><td>{c.combo_count}</td><td>{c.error||'—'}</td></tr>)}</tbody></table></div></div>}<label className="researchImport">IMPORT NORMALIZED RESEARCH JSON<input type="file" accept=".json,application/json" onChange={e=>void importFile(e)}/></label><p>Accepts the original Combo Logger 0.1.0 export (rows / combo / context) or normalized research JSON. Standalone logger records include pregame lineups and results but do not contain wager prices.</p><label className="researchImport">OVERLAY ODDS FROM PRIVATE SETTLED XLSX<input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={e=>void importWagerPrices(e)}/></label><p>The XLSX is read only on this computer. Odds attach only to a uniquely matched game-date / player combination. Private bets and unit sizes are not shared with the research cloud.</p><button onClick={()=>{if(window.confirm('Clear only the locally cached research preview? Your Bet Hub wagers will not be changed.')){setRows([]);localStorage.removeItem(STORE);setMessage('Local research preview cleared.')}}}>CLEAR LOCAL RESEARCH PREVIEW</button></div>:<>
@@ -128,7 +131,7 @@ export default function ComboResearchCenter({unitSize,accountKey}:{unitSize:numb
     <div className="researchCard"><div className="researchCardTop"><div><h2>Strategy performance · date range</h2><p>Hypothetical P/L uses your ${unitSize.toFixed(2)} unit. ROI is net profit divided by total units wagered.</p></div><label>PROFILE<select value={profile} onChange={e=>setProfile(e.target.value as ResearchProfile)}>{RESEARCH_PROFILES.map(x=><option key={x} value={x}>{x}u</option>)}</select></label></div><div className="researchTable"><table><thead><tr><th>Profile</th><th>Bet</th><th>Skipped</th><th>Unpriced / ungraded</th><th>Exposure</th><th>Total P/L</th><th>ROI</th><th>Daily-close DD</th></tr></thead><tbody>{summary.map(x=><tr key={x.profile} className={profile===x.profile?'researchSelected':''} onClick={()=>{if(x.profile!=='Flat 1u')setProfile(x.profile as ResearchProfile)}}><td>{x.profile==='Flat 1u'?x.profile:`${x.profile}u`}</td><td>{x.placed}</td><td>{x.skipped}</td><td>{x.unpriced}</td><td>{x.exposure.toFixed(2)}u</td><td className={x.net>0?'researchWin':x.net<0?'researchLoss':undefined}>
       {x.exposure>0 ? `${dollars.format(x.net * unitSize)} (${x.net.toFixed(2)}u)` : '—'}
      </td><td>{x.exposure?x.roi.toFixed(2)+'%':'—'}</td><td>{x.drawdown.toFixed(2)}u</td></tr>)}</tbody></table></div>
-     {filtered.length>0 && summary[0].placed===0 && <p>No priced, graded combos in this selection. To add historical odds, open Collection Status and choose “Overlay odds from private settled XLSX”.</p>}
+     {filtered.length>0 && summary[0].placed===0 && <p>No priced, graded combos in this selection. Eligible settled wagers from your account are matched automatically. Check Collection Status for match counts.</p>}
     </div>
     <div className="researchCard"><h2>{profile}u · Betting reference</h2><p>Unit size: <strong>${unitSize.toFixed(2)}</strong>. Kalshi Payout includes the position cost plus profit on a winning wager, before fees.</p><div className="researchTable"><table><thead><tr><th>Combo</th><th>American odds</th><th>Units</th><th>Position cost</th><th>Kalshi Payout</th></tr></thead><tbody>{RULE_NAMES.map(x=>{const units=RULES[x.key][profile],cost=units*unitSize;return <tr key={x.key}><td>{x.title}</td><td>{x.odds}</td><td>{units?units.toFixed(2)+'u':'SKIP'}</td><td>{units?'$'+cost.toFixed(2):'—'}</td><td>{kalshiPayoutRange(x.key,cost,units)}</td></tr>})}</tbody></table></div><p className="researchFootnote">All seven profiles (300u–600u) use fixed version 1 historical-fit rules, not future profit guarantees.</p></div>
    </>}

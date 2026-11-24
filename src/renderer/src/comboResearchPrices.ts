@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx'
+import type {Bet} from './App'
 import type {ResearchCombo} from './comboResearchModel'
 
 // Private, client-side price overlay. Full wager rows and sportsbook balances never leave the desktop.
@@ -10,6 +11,28 @@ export async function overlaySettledWagerOdds(file:File,rows:ResearchCombo[]){
  const sheet=workbook.Sheets['Settled Wagers']
  if(!sheet)throw Error('Expected an XLSX sheet named "Settled Wagers".')
  const bets=XLSX.utils.sheet_to_json<Record<string,unknown>>(sheet,{defval:null})
+ return matchSettledPrices(rows,bets)
+}
+
+// Use the authenticated history already loaded by the desktop. The result is a view only.
+export function accountWagerPrices(rows:ResearchCombo[],wagers:Bet[],priceOf:(bet:Bet)=>number|undefined){
+ const eligible:Record<string,unknown>[]=[]
+ for(const bet of wagers){
+  if(bet.status!=='WON'&&bet.status!=='LOST')continue
+  if(bet.voidAudit?.length||bet.legs.length<2||bet.legs.length>3)continue
+  if(!bet.legs.every(l=>l.kind!=='TEAM'&&!l.voided&&l.side!=='UNDER'&&Number(l.qty)===1&&['p','point','points'].includes(String(l.stat).trim().toLowerCase())))continue
+  const entry:Record<string,unknown>={Date:bet.date,Category:bet.category||'COMBOS',Status:bet.status,'American Odds':priceOf(bet)}
+  bet.legs.forEach((leg,i)=>{
+   entry['Player '+(i+1)]=leg.player
+   entry['Market '+(i+1)]='Point'
+   entry['Target '+(i+1)]=1
+  })
+  eligible.push(entry)
+ }
+ return matchSettledPrices(rows,eligible)
+}
+
+function matchSettledPrices(rows:ResearchCombo[],bets:Record<string,unknown>[]){
  const eligible=new Map<string,ResearchCombo[]>()
  for(const row of rows){const key=comboKey(row.date,row.players),list=eligible.get(key)||[];list.push(row);eligible.set(key,list)}
  const prices=new Map<string,Set<number>>()
