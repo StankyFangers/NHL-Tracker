@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS research_combos (
  goalie_differential REAL,
  snapshot_at TEXT,
  source TEXT NOT NULL DEFAULT 'import',
+ lineup_status TEXT NOT NULL DEFAULT 'UNKNOWN',
  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -31,3 +32,22 @@ CREATE TABLE IF NOT EXISTS research_checks (
  combos_graded INTEGER NOT NULL DEFAULT 0,
  error TEXT
 );
+
+CREATE TABLE IF NOT EXISTS research_schedule_cache (
+ game_date TEXT PRIMARY KEY,
+ payload TEXT NOT NULL,
+ updated_ms INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS research_capture_state (
+ game_id TEXT NOT NULL,
+ game_date TEXT NOT NULL,
+ team TEXT NOT NULL,
+ checked_ms INTEGER NOT NULL,
+ captured_at TEXT,
+ capture_status TEXT NOT NULL DEFAULT 'PENDING',
+ lineup_status TEXT DEFAULT 'UNKNOWN',
+ combo_count INTEGER NOT NULL DEFAULT 0,
+ error TEXT,
+ PRIMARY KEY(game_id,team)
+);
+CREATE INDEX IF NOT EXISTS idx_capture_date ON research_capture_state(game_date);
