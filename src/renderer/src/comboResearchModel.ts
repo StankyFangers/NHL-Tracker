@@ -55,7 +55,9 @@ export function analyzeProfile(rows:ResearchCombo[],profile:ResearchProfile) {
  let exposure=0,net=0,placed=0,skipped=0,unpriced=0,wins=0,losses=0
  const day=new Map<string,number>()
  for(const row of rows){
-  const stake=RULES[classifyResearch(row)][profile]
+  const classification=classifyResearch(row)
+  if(classification==='UNKNOWN'){unpriced++;continue}
+  const stake=RULES[classification][profile]
   if(!stake){skipped++;continue}
   const unitNet=netAtOneUnit(row)
   if(unitNet===null){unpriced++;continue}
@@ -72,7 +74,7 @@ export function validResearchCombo(input:unknown):ResearchCombo|null {
  const x=input as Record<string,unknown>
  const players=Array.isArray(x.players)?x.players.filter((v):v is string=>typeof v==='string'&&v.trim().length>0):[]
  const date=String(x.date||'');const team=String(x.team||'').toUpperCase()
- if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)||!/^([A-Z]{2,3})$/.test(team)||players.length<2||players.length>3)return null
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!/^([A-Z]{2,3})$/.test(team)||players.length<2||players.length>3)return null
  const num=(v:unknown)=>v===null||v===undefined||v===''?null:Number.isFinite(Number(v))?Number(v):null
  const pp=num(x.ppUnit),fl=num(x.forwardLine),odds=num(x.odds)
  const status=['HIT','MISS','UNVERIFIED'].includes(String(x.result))?String(x.result) as ResearchCombo['result']:'UNVERIFIED'
