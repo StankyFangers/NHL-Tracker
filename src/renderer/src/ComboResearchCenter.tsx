@@ -5,7 +5,7 @@ import {overlaySettledWagerOdds} from './comboResearchPrices'
 const STORE='nhlTracker:research:preview:v1'
 const API_KEY='nhlTracker:research:apiUrl:v1'
 const dollars = new Intl.NumberFormat('en-US', {style:'currency', currency:'USD', signDisplay:'exceptZero'})
-const readLocal=():ResearchCombo[]=>{try{return JSON.parse(localStorage.getItem(STORE)||'[]')}catch{return[]}}
+export const readResearchHistory=():ResearchCombo[]=>{try{return JSON.parse(localStorage.getItem(STORE)||'[]')}catch{return[]}}
 const unique=(rows:ResearchCombo[])=>[...new Map(rows.map(r=>[r.id,r])).values()]
 const payoutCurrency = new Intl.NumberFormat('en-US', {style:'currency', currency:'USD'})
 const kalshiPayoutRange=(category:ResearchClass,cost:number,stake:number)=>{
@@ -19,10 +19,18 @@ const kalshiPayoutRange=(category:ResearchClass,cost:number,stake:number)=>{
  if(category==='PP2_DUO_FL2_HIGH'||category==='PP2_DUO_OTHER_HIGH')return payout(301)+'+'
  return '—'
 }
-export default function ComboResearchCenter({unitSize}:{unitSize:number}){
- const [rows,setRows]=useState<ResearchCombo[]>(readLocal)
+export function savedResearchProfile(accountKey:string):ResearchProfile {
+ const value=localStorage.getItem('nhlTracker:research:profile:'+accountKey)
+ return RESEARCH_PROFILES.find(profile=>profile===value)??'450'
+}
+export default function ComboResearchCenter({unitSize,accountKey}:{unitSize:number;accountKey:string}){
+ const [rows,setRows]=useState<ResearchCombo[]>(readResearchHistory)
  const [section,setSection]=useState<'EXPLORER'|'STRATEGIES'|'STATUS'>('EXPLORER')
- const [profile,setProfile]=useState<ResearchProfile>('450')
+ const [profile,selectProfile]=useState<ResearchProfile>(()=>savedResearchProfile(accountKey))
+ const setProfile=(value:ResearchProfile)=>{
+  localStorage.setItem('nhlTracker:research:profile:'+accountKey,value)
+  selectProfile(value)
+ }
  const [start,setStart]=useState(''),[end,setEnd]=useState('')
  const [team,setTeam]=useState('ALL'),[pp,setPp]=useState('ALL'),[fl,setFl]=useState('ALL'),[size,setSize]=useState('ALL'),[venue,setVenue]=useState('ALL')
  const [gaa,setGaa]=useState('ALL'),[diff,setDiff]=useState('ALL'),[view,setView]=useState('HIT')

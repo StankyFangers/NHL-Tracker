@@ -35,7 +35,7 @@ export const RULE_NAMES: {key:ResearchClass; title:string; odds:string}[] = [
  {key:'PP2_DUO_OTHER_HIGH',title:'PP2 duo · other FL',odds:'Above +300'},
  {key:'PP2_TRIO',title:'PP2 trio',odds:'All odds'}
 ]
-export function classifyResearch(row:ResearchCombo):ResearchClass {
+export function classifyResearch(row:Pick<ResearchCombo,'ppUnit'|'forwardLine'|'players'|'odds'>):ResearchClass {
  if(row.ppUnit===2 && row.players.length===3)return 'PP2_TRIO'
  if(row.odds===null || !Number.isFinite(row.odds))return 'UNKNOWN'
  // American prices: negative odds are always shorter than +100.
@@ -126,4 +126,20 @@ export function parseResearchImport(data:unknown):{rows:ResearchCombo[];invalid:
   if(r)rows.push(r);else invalid++
  }
  return {rows,invalid}
+}
+
+export function pairingKey(players:string[]){
+ return players.map(name=>name.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')).sort().join('|')
+}
+
+export function lastFivePrice(days:Map<string,Set<number>>|undefined){
+ const recent=Array.from(days??[]).sort(([a],[b])=>b.localeCompare(a)).slice(0,5)
+ if(!recent.length)return {odds:null,count:0}
+ // Give each appearance equal weight when multiple books priced the same game.
+ const probability=recent.reduce((total,[,prices])=>{
+  const sum=Array.from(prices).reduce((n,o)=>n+(o>0?100/(100+o):o/(o-100)),0)
+  return total+sum/prices.size
+ },0)/recent.length
+ const odds=probability>0.5?-100*probability/(1-probability):100*(1-probability)/probability
+ return {odds:Math.round(odds),count:recent.length}
 }
