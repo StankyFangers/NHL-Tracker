@@ -85,6 +85,26 @@ export function parseResearchImport(data:unknown):{rows:ResearchCombo[];invalid:
  const raw=Array.isArray(payload)?payload:Array.isArray(payload?.combos)?payload.combos:Array.isArray(payload?.rows)?payload.rows:null
  if(!raw)throw new Error('Expected an array of research combos, or an object containing combos or rows. No data imported.')
  const rows:ResearchCombo[]=[];let invalid=0
- for(const entry of raw){const r=validResearchCombo(entry);if(r)rows.push(r);else invalid++}
+ for(const entry of raw){
+  const e=entry as any
+  // Native Combo Logger v0.1.0 export: each graded row contains a 'combo' with player IDs,
+  // FL / PP assignments and a separate result object. This export DOES NOT contain odds.
+  const native=e?.combo&&Array.isArray(e.combo.players)
+  const candidate=native?{
+   id:[e.date,e.gameId,e.team,e.combo.signature||e.combo.players.map((p:any)=>p.id).sort().join('-')].join(':'),
+   date:e.date,gameId:e.gameId,team:e.team,opponent:e.opponent,
+   matchup:e.team+' vs '+e.opponent,
+   players:e.combo.players.map((p:any)=>p.name),
+   playerIds:e.combo.players.map((p:any)=>p.id),
+   ppUnit:e.combo.pp,forwardLine:e.combo.fl,
+   odds:null,
+   result:e.result?.status==='HIT'||e.result?.status==='MISS'?e.result.status:'UNVERIFIED',
+   venue:e.context?.home===true?'HOME':e.context?.home===false?'AWAY':null,
+   goalieGaa:e.context?.gaa,goalieDifferential:e.context?.goalieDifferential,
+   snapshotAt:e.lineupObservedAt||e.at,source:'Combo Logger 0.1.0'
+  }:entry
+  const r=validResearchCombo(candidate)
+  if(r)rows.push(r);else invalid++
+ }
  return {rows,invalid}
 }
