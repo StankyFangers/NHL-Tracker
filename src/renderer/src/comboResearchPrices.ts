@@ -20,9 +20,14 @@ export async function overlaySettledWagerOdds(file:File,rows:ResearchCombo[]){
   const date=String(bet['Date']||'')
   const players=Array.from({length:6},(_,i)=>bet['Player '+(i+1)]).filter((v):v is string=>typeof v==='string'&&v.trim().length>0)
   if(players.length<2||players.length>3){invalid++;continue}
+  // Research combos are all 1+ POINT per member; do not attach odds from unrelated markets.
+  const onePoint=players.every((_,i)=>String(bet['Market '+(i+1)]||'').toLowerCase()==='point'&&Number(bet['Target '+(i+1)])===1)
+  if(!onePoint){invalid++;continue}
   const matched=eligible.get(comboKey(date,players))||[]
   const odds=Number(bet['American Odds'])
   if(matched.length!==1||!Number.isFinite(odds)||Math.abs(odds)<100){invalid++;continue}
+  const expected=String(bet['Status']).toUpperCase()==='WON'?'HIT':'MISS'
+  if(matched[0].result!=='UNVERIFIED'&&matched[0].result!==expected){invalid++;continue}
   const id=matched[0].id,list=prices.get(id)||new Set<number>()
   list.add(odds);prices.set(id,list)
  }
