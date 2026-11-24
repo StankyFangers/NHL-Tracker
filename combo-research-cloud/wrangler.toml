@@ -1,0 +1,11 @@
+name = "nhl-combo-research-dev"
+main = "src/worker.mjs"
+compatibility_date = "2026-10-15"
+
+[triggers]
+crons = ["0 10 * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "nhl-combo-research-dev"
+database_id = "local"
