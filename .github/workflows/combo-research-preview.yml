@@ -26,4 +26,4 @@ jobs:
       - name: Verify research worker syntax
         run: node --check combo-research-cloud/src/worker.mjs && node --check combo-research-cloud/src/collector.mjs
       - name: Test research capture and API protection
-        run: node --test combo-research-cloud/test/*.test.mjs
+        run: node --test combo-research-cloud/test/*.test.mjs tests/comboResearchModel.test.mjs
