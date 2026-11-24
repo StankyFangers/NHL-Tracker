@@ -1,0 +1,27 @@
+name: Combo Research DEV Preview Check
+
+on:
+  push:
+    branches:
+      - feature/combo-research-cloud-preview
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install application dependencies
+        run: npm ci
+      - name: Check renderer build
+        run: npm run build
+      - name: Verify research worker syntax
+        run: node --check combo-research-cloud/src/worker.mjs
