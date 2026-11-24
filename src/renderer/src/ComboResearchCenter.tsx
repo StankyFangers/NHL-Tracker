@@ -28,7 +28,25 @@ export default function ComboResearchCenter({unitSize}:{unitSize:number}){
   }catch(err){setStatusError(String(err));setCloudStatus(null)}
  }
  const teams=useMemo(()=>[...new Set(rows.map(r=>r.team))].sort(),[rows])
- const filtered=useMemo(()=>rows.filter(r=>(!start||r.date>=start)&&(!end||r.date<=end)&&(team==='ALL'||r.team===team)&&(pp==='ALL'||r.ppUnit===Number(pp))&&(fl==='ALL'||r.forwardLine===Number(fl))&&(size==='ALL'||r.players.length===Number(size))&&(venue==='ALL'||r.venue===venue)&&(diff==='ALL'||(r.goalieDifferential!==null&&(diff==='NEG'?r.goalieDifferential!<0:diff==='EVEN'?r.goalieDifferential!>=0&&r.goalieDifferential!<=.5:r.goalieDifferential!>.5)))&&(gaa==='ALL'||(r.goalieGaa!==null&&(gaa==='LOW'?r.goalieGaa!<2.5:gaa==='MID'?r.goalieGaa!>=2.5&&r.goalieGaa!<=3.25:r.goalieGaa!>3.25)))&&(!offenseMin||(typeof r.context?.goalsForPerGame==='number'&&r.context.goalsForPerGame>=Number(offenseMin)))&&(!opponentGAMin||(typeof r.context?.opponentGoalsAllowedPerGame==='number'&&r.context.opponentGoalsAllowedPerGame>=Number(opponentGAMin)))&&(!opponentXGMin||(typeof r.context?.opponentXGAllowedPerGame==='number'&&r.context.opponentXGAllowedPerGame>=Number(opponentXGMin)))&&(!opponentPKMax||(typeof r.context?.opponentPKPct==='number'&&r.context.opponentPKPct<=Number(opponentPKMax))),[rows,start,end,team,pp,fl,size,venue,gaa,diff,offenseMin,opponentGAMin,opponentXGMin,opponentPKMax])
+ const filtered=useMemo(()=>rows.filter(r=>{
+  if(start&&r.date<start||end&&r.date>end)return false
+  if(team!=='ALL'&&r.team!==team)return false
+  if(pp!=='ALL'&&r.ppUnit!==Number(pp))return false
+  if(fl!=='ALL'&&r.forwardLine!==Number(fl))return false
+  if(size!=='ALL'&&r.players.length!==Number(size))return false
+  if(venue!=='ALL'&&r.venue!==venue)return false
+  if(gaa!=='ALL'){
+   const n=r.goalieGaa
+   if(n==null||!(gaa==='LOW'?n<2.5:gaa==='MID'?n>=2.5&&n<=3.25:n>3.25))return false
+  }
+  if(diff!=='ALL'){
+   const n=r.goalieDifferential
+   if(n==null||!(diff==='NEG'?n<0:diff==='EVEN'?n>=0&&n<=.5:n>.5))return false
+  }
+  const matchMin=(k:string,v:string)=>!v||(typeof r.context?.[k]==='number'&&Number(r.context[k])>=Number(v))
+  const matchMax=(k:string,v:string)=>!v||(typeof r.context?.[k]==='number'&&Number(r.context[k])<=Number(v))
+  return matchMin('goalsForPerGame',offenseMin)&&matchMin('opponentGoalsAllowedPerGame',opponentGAMin)&&matchMin('opponentXGAllowedPerGame',opponentXGMin)&&matchMax('opponentPKPct',opponentPKMax)
+ }),[rows,start,end,team,pp,fl,size,venue,gaa,diff,offenseMin,opponentGAMin,opponentXGMin,opponentPKMax])
  const graded=filtered.filter(r=>r.result!=='UNVERIFIED'),wins=graded.filter(r=>r.result==='HIT').length
  const summary=RESEARCH_PROFILES.map(p=>({profile:p,...analyzeProfile(filtered,p)}))
  const totalGames=new Set(filtered.map(r=>r.gameId||r.date+':'+r.matchup)).size
