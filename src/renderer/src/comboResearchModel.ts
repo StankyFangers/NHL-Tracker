@@ -45,8 +45,9 @@ export function classifyResearch(row:ResearchCombo):ResearchClass {
  return 'UNKNOWN'
 }
 export function netAtOneUnit(row:ResearchCombo):number|null {
+ if(row.odds===null||Math.abs(row.odds)<100)return null
  if(row.result==='MISS')return -1
- if(row.result!=='HIT'||row.odds===null||Math.abs(row.odds)<100)return null
+ if(row.result!=='HIT')return null
  return row.odds>0?row.odds/100:100/Math.abs(row.odds)
 }
 export function analyzeProfile(rows:ResearchCombo[],profile:ResearchProfile) {
