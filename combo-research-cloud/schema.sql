@@ -51,3 +51,10 @@ CREATE TABLE IF NOT EXISTS research_capture_state (
  PRIMARY KEY(game_id,team)
 );
 CREATE INDEX IF NOT EXISTS idx_capture_date ON research_capture_state(game_date);
+
+CREATE TABLE IF NOT EXISTS research_grade_attempts (
+ game_id TEXT PRIMARY KEY,
+ checked_ms INTEGER NOT NULL,
+ attempts INTEGER NOT NULL DEFAULT 0,
+ last_status TEXT NOT NULL DEFAULT 'UNKNOWN'
+);
