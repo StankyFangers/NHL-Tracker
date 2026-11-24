@@ -69,6 +69,20 @@ export function analyzeProfile(rows:ResearchCombo[],profile:ResearchProfile) {
  for(const date of [...day.keys()].sort()){run+=day.get(date)!;peak=Math.max(peak,run);drawdown=Math.max(drawdown,peak-run)}
  return {exposure,net,roi:exposure?net/exposure*100:0,placed,skipped,unpriced,wins,losses,drawdown}
 }
+export function analyzeFlatOne(rows:ResearchCombo[]){
+ let exposure=0,net=0,placed=0,unpriced=0,wins=0,losses=0
+ const daily=new Map<string,number>()
+ for(const row of rows){
+  const value=netAtOneUnit(row)
+  if(value===null){unpriced++;continue}
+  exposure++;net+=value;placed++
+  if(row.result==='HIT')wins++;else losses++
+  daily.set(row.date,(daily.get(row.date)||0)+value)
+ }
+ let run=0,peak=0,drawdown=0
+ for(const date of [...daily.keys()].sort()){run+=daily.get(date)!;peak=Math.max(peak,run);drawdown=Math.max(drawdown,peak-run)}
+ return {exposure,net,roi:exposure?net/exposure*100:0,placed,skipped:0,unpriced,wins,losses,drawdown}
+}
 export function validResearchCombo(input:unknown):ResearchCombo|null {
  if(!input||typeof input!=='object')return null
  const x=input as Record<string,unknown>
