@@ -1,5 +1,5 @@
-import {useEffect,useMemo,useState} from 'react'
-import {RESEARCH_PROFILES,RULES,RULE_NAMES,analyzeProfile,parseResearchImport,validResearchCombo,type ResearchCombo,type ResearchProfile} from './comboResearchModel'
+import {useEffect,useMemo,useState,type ChangeEvent} from 'react'
+import {RESEARCH_PROFILES,RULES,RULE_NAMES,analyzeProfile,parseResearchImport,type ResearchCombo,type ResearchProfile} from './comboResearchModel'
 import './comboResearch.css'
 const STORE='nhlTracker:research:preview:v1'
 const API_KEY='nhlTracker:research:apiUrl:v1'
@@ -32,15 +32,15 @@ export default function ComboResearchCenter({unitSize}:{unitSize:number}){
   }catch(e){setMessage('Cloud sync unavailable: '+String(e))}
   finally{setLoading(false)}
  }
- const importFile=async(e:React.ChangeEvent<HTMLInputElement>)=>{
-  const file=e.target.files?.[0];if(!file)return
+ const importFile=async(e:ChangeEvent<HTMLInputElement>)=>{
+  const input=e.target;const file=input.files?.[0];if(!file)return
   try{
    const parsed=parseResearchImport(JSON.parse(await file.text()))
    if(!parsed.rows.length)throw new Error('No valid normalized research rows found.')
    const next=unique([...rows,...parsed.rows]);setRows(next);localStorage.setItem(STORE,JSON.stringify(next))
    setMessage(`Imported ${parsed.rows.length} records (${parsed.invalid} invalid). ${next.length} distinct records in local DEV preview.`)
   }catch(err){setMessage('Import failed: '+String(err))}
-  e.currentTarget.value=''
+  input.value=''
  }
  useEffect(()=>{if(apiUrl.trim())localStorage.setItem(API_KEY,apiUrl.trim());else localStorage.removeItem(API_KEY)},[apiUrl])
  const header=<div className="researchHeader"><div><small>COMBO RESEARCH · CLOUD PREVIEW</small><h1>Combo History & Strategy Center</h1><p>Pregame lineup snapshots → intact combos → verified results. Shared research stays separate from private bets.</p></div><button onClick={()=>void sync()} disabled={loading}>{loading?'SYNCING…':'↻ SYNC CLOUD'}</button></div>
