@@ -1,6 +1,6 @@
 export type ResearchCombo = {
   id:string; date:string; gameId:string; team:string; opponent?:string; matchup?:string;
-  players:string[]; forwardLine:number|null; ppUnit:number|null; odds:number|null;
+  players:string[]; playerIds?:number[]|null; forwardLine:number|null; ppUnit:number|null; odds:number|null;
   result:'HIT'|'MISS'|'UNVERIFIED'; venue?:'HOME'|'AWAY'|null; goalieGaa?:number|null;
   goalieDifferential?:number|null; snapshotAt?:string; source?:string
 }
@@ -76,6 +76,7 @@ export function validResearchCombo(input:unknown):ResearchCombo|null {
  const pp=num(x.ppUnit),fl=num(x.forwardLine),odds=num(x.odds)
  const status=['HIT','MISS','UNVERIFIED'].includes(String(x.result))?String(x.result) as ResearchCombo['result']:'UNVERIFIED'
  return {id:String(x.id||[date,String(x.gameId||''),team,...players.map(p=>p.toLowerCase()).sort()].join(':')),date,gameId:String(x.gameId||''),team,players,
+  playerIds:Array.isArray(x.playerIds)&&x.playerIds.length===players.length&&x.playerIds.every((v:unknown)=>Number.isInteger(Number(v))&&Number(v)>0)?x.playerIds.map(Number):null,
   ppUnit:pp,forwardLine:fl,odds:odds===null||Math.abs(odds)<100?null:odds,result:status,
   matchup:String(x.matchup||''),opponent:String(x.opponent||''),venue:x.venue==='HOME'||x.venue==='AWAY'?x.venue:null,
   goalieGaa:num(x.goalieGaa),goalieDifferential:num(x.goalieDifferential),snapshotAt:String(x.snapshotAt||''),source:String(x.source||'')}
