@@ -24,7 +24,7 @@ if(!filepath||!apiBase||!process.env.RESEARCH_INGEST_TOKEN){
    forwardLine:row.combo.fl,ppUnit:row.combo.pp,
    result:['HIT','MISS'].includes(row.result?.status)?row.result.status:'UNVERIFIED',
    odds:null,venue:row.context?.home===true?'HOME':row.context?.home===false?'AWAY':null,
-   goalieGaa:row.context?.gaa??null,goalieDifferential:row.context?.goalieDifferential??null,
+   goalieGaa:row.context?.gaa??null,goalieDifferential:row.context?.goalieDifferential??null,context:row.context,
    snapshotAt:row.lineupObservedAt||row.at,source:'Combo Logger 0.1.0'
   })
  }
