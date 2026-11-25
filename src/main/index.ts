@@ -273,6 +273,24 @@ app.whenReady().then(() => {
   // LIVE wager transport: authenticated, account-scoped requests only.
   // Production mutations remain independently gated by NHL_LIVE_WAGER_WRITES_ENABLED
   // on the server. The renderer must explicitly handle 409 conflicts.
+  ipcMain.handle('live-chat:request', async (_event, payload) => {
+    const token=liveAccountToken
+    if(testEnvironment || !token)return {error:'Sign in to LIVE to use chat'}
+    const url=new URL('https://nhl-tracker-vercel-api.vercel.app/api/live-chat')
+    const sending=payload?.body!==undefined
+    if(payload?.head)url.searchParams.set('head','1')
+    if(payload?.after)url.searchParams.set('after',String(payload.after))
+    try{
+      const response=await net.fetch(url.toString(),{
+        method:sending?'POST':'GET',cache:'no-store',signal:AbortSignal.timeout(12000),
+        headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+        ...(sending?{body:JSON.stringify({body:payload.body,nonce:payload.nonce})}:{})
+      })
+      if(token!==liveAccountToken)return {error:'Account changed'}
+      const result=await response.json()
+      return response.ok?result:{error:result.error||'Chat unavailable'}
+    }catch{return {error:'Could not reach group chat'}}
+  })
   ipcMain.handle('live-wagers:request', async (_e, request: {method:string;limit?:number;cursor?:string;id?:string;expectedUpdatedAt?:string;wager?:unknown;source?:string;sourceExternalId?:string|null}) => {
     if (testEnvironment) return {error:'LIVE wagers are unavailable in TEST mode'}
     if (!liveAccountToken) return {error:'Sign in to LIVE before requesting cloud wagers'}

@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('nhlTracker', {
   telegramAccountRequest: (payload: {action:string;preferences?:unknown;date?:string;teams?:string[]}) => ipcRenderer.invoke('telegram-account:request',payload),
   liveAccountRequest: (payload: {action:string;username?:string;email?:string;login?:string;password?:string}) => ipcRenderer.invoke('live-account:request', payload),
   livePlayersRequest: (payload: {method:'GET'|'POST';id?:number;name?:string;team?:string}) => ipcRenderer.invoke('live-players:request', payload),
+  liveChat: (request:{head?:boolean;after?:string;body?:string;nonce?:string})=>ipcRenderer.invoke('live-chat:request',request),
   liveWagersRequest: (payload: {method:'GET'|'POST'|'PATCH'|'DELETE';limit?:number;cursor?:string;id?:string;expectedUpdatedAt?:string;wager?:unknown;source?:'manual'|'kalshi'|'import';sourceExternalId?:string|null}) => ipcRenderer.invoke('live-wagers:request', payload),
   devAccountRequest: (payload: {action:string;username?:string;email?:string;login?:string;password?:string;setupKey?:string}) => ipcRenderer.invoke('dev-account:request', payload),
   registryPlayers: () => ipcRenderer.invoke('registry:players'),
