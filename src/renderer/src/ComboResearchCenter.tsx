@@ -1,5 +1,6 @@
 import {useEffect,useMemo,useState,type ChangeEvent} from 'react'
-import {RESEARCH_PROFILES,RULES,RULE_NAMES,analyzeProfile,analyzeFlatOne,parseResearchImport,type ResearchCombo,type ResearchProfile,type ResearchClass} from './comboResearchModel'
+import {RESEARCH_PROFILES,analyzeProfile,analyzeFlatOne,parseResearchImport,type ResearchCombo,type ResearchProfile} from './comboResearchModel'
+import {PROFILE_CHANGED, savedResearchProfile, StrategyReference} from './StrategyReference'
 import './comboResearch.css'
 import type {Bet} from './App'
 import {accountWagerPrices,overlaySettledWagerOdds} from './comboResearchPrices'
@@ -7,22 +8,6 @@ import {STORE, RESEARCH_UPDATED, researchUrl, lastResearchSync, readResearchHist
 export {readResearchHistory} from './comboResearchSync'
 const dollars = new Intl.NumberFormat('en-US', {style:'currency', currency:'USD', signDisplay:'exceptZero'})
 const unique=(rows:ResearchCombo[])=>[...new Map(rows.map(r=>[r.id,r])).values()]
-const payoutCurrency = new Intl.NumberFormat('en-US', {style:'currency', currency:'USD'})
-const kalshiPayoutRange=(category:ResearchClass,cost:number,stake:number)=>{
- if(!stake)return '—'
- const payout = (odds: number) => payoutCurrency.format(cost * (100 + odds) / 100)
- if(category==='PP1_DUO_101_150')return payout(101)+'–'+payout(150)
- if(category==='PP1_DUO_151_200')return payout(151)+'–'+payout(200)
- if(category==='PP1_DUO_HIGH'||category==='PP1_TRIO_HIGH')return payout(201)+'+'
- if(category==='PP1_TRIO_101_200')return payout(101)+'–'+payout(200)
- if(category==='PP2_DUO_LOW')return 'Up to '+payout(300)
- if(category==='PP2_DUO_FL2_HIGH'||category==='PP2_DUO_OTHER_HIGH')return payout(301)+'+'
- return '—'
-}
-export function savedResearchProfile(accountKey:string):ResearchProfile {
- const value=localStorage.getItem('nhlTracker:research:profile:'+accountKey)
- return RESEARCH_PROFILES.find(profile=>profile===value)??'450'
-}
 export default function ComboResearchCenter({unitSize,accountKey,wagers,priceOf}:{unitSize:number;accountKey:string;wagers:Bet[]|null;priceOf:(bet:Bet)=>number|undefined}){
  const [syncTime,setSyncTime]=useState(lastResearchSync)
  const [baseRows,setRows]=useState<ResearchCombo[]>(readResearchHistory)
@@ -38,6 +23,7 @@ export default function ComboResearchCenter({unitSize,accountKey,wagers,priceOf}
  const setProfile=(value:ResearchProfile)=>{
   localStorage.setItem('nhlTracker:research:profile:'+accountKey,value)
   selectProfile(value)
+  window.dispatchEvent(new Event(PROFILE_CHANGED))
  }
  const [start,setStart]=useState(''),[end,setEnd]=useState('')
  const [team,setTeam]=useState('ALL'),[pp,setPp]=useState('ALL'),[fl,setFl]=useState('ALL'),[size,setSize]=useState('ALL'),[venue,setVenue]=useState('ALL')
@@ -132,7 +118,7 @@ export default function ComboResearchCenter({unitSize,accountKey,wagers,priceOf}
      </td><td>{x.exposure?x.roi.toFixed(2)+'%':'—'}</td><td>{x.drawdown.toFixed(2)}u</td></tr>)}</tbody></table></div>
      {filtered.length>0 && summary[0].placed===0 && <p>No priced, graded combos in this selection. Eligible settled wagers from your account are matched automatically. Check Collection Status for match counts.</p>}
     </div>
-    <div className="researchCard"><h2>{profile}u · Betting reference</h2><p>Unit size: <strong>${unitSize.toFixed(2)}</strong>. Kalshi Payout includes the position cost plus profit on a winning wager, before fees.</p><div className="researchTable"><table><thead><tr><th>Combo</th><th>American odds</th><th>Units</th><th>Position cost</th><th>Kalshi Payout</th></tr></thead><tbody>{RULE_NAMES.map(x=>{const units=RULES[x.key][profile],cost=units*unitSize;return <tr key={x.key}><td>{x.title}</td><td>{x.odds}</td><td>{units?units.toFixed(2)+'u':'SKIP'}</td><td>{units?'$'+cost.toFixed(2):'—'}</td><td>{kalshiPayoutRange(x.key,cost,units)}</td></tr>})}</tbody></table></div><p className="researchFootnote">All seven profiles (300u–600u) use fixed version 1 historical-fit rules, not future profit guarantees.</p></div>
+    <StrategyReference profile={profile} unitSize={unitSize}/>
    </>}
   </>}
  </main>
