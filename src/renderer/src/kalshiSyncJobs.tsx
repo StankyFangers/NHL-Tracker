@@ -1,5 +1,7 @@
 import {useSyncExternalStore} from 'react'
 
+import {syncResearch} from './comboResearchSync'
+
 export type KalshiKind='daily'|'history'
 export type KalshiJobState={
  busy:boolean;msg:string;preview:any;skipDetails:any[];failures:any[];phase:'idle'|'running'|'done'|'cancelled'|'error'
@@ -40,6 +42,13 @@ export function startKalshiJob(kind:KalshiKind,task:(job:KalshiJobContext)=>Prom
    await task(ctx)
    if(!active())return
    change(kind,{busy:false,phase:'done'})
+   void Promise.resolve().then(()=>syncResearch()).then(
+    result=>reportResearch('Combo Research synced · '+result.received+' rows received.'),
+    ()=>reportResearch('Combo Research unavailable. Retry with Sync Cloud in Combo Research.')
+   )
+   function reportResearch(message:string){
+    if(sequence===id)change(kind,{msg:state[kind].msg+' '+message})
+   }
    safeNotify('Kalshi '+(kind==='history'?'Historical':'Daily')+' Sync finished',state[kind].msg||'Return to NHL Tracker to review the results.')
   }catch(e:any){
    if(!active())return

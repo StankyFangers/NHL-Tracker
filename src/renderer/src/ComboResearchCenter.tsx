@@ -3,10 +3,9 @@ import {RESEARCH_PROFILES,RULES,RULE_NAMES,analyzeProfile,analyzeFlatOne,parseRe
 import './comboResearch.css'
 import type {Bet} from './App'
 import {accountWagerPrices,overlaySettledWagerOdds} from './comboResearchPrices'
-const STORE='nhlTracker:research:preview:v1'
-const API_KEY='nhlTracker:research:apiUrl:v1'
+import {API_KEY, STORE, RESEARCH_UPDATED, researchUrl, readResearchHistory, syncResearch} from './comboResearchSync'
+export {readResearchHistory} from './comboResearchSync'
 const dollars = new Intl.NumberFormat('en-US', {style:'currency', currency:'USD', signDisplay:'exceptZero'})
-export const readResearchHistory=():ResearchCombo[]=>{try{return JSON.parse(localStorage.getItem(STORE)||'[]')}catch{return[]}}
 const unique=(rows:ResearchCombo[])=>[...new Map(rows.map(r=>[r.id,r])).values()]
 const payoutCurrency = new Intl.NumberFormat('en-US', {style:'currency', currency:'USD'})
 const kalshiPayoutRange=(category:ResearchClass,cost:number,stake:number)=>{
@@ -26,6 +25,11 @@ export function savedResearchProfile(accountKey:string):ResearchProfile {
 }
 export default function ComboResearchCenter({unitSize,accountKey,wagers,priceOf}:{unitSize:number;accountKey:string;wagers:Bet[]|null;priceOf:(bet:Bet)=>number|undefined}){
  const [baseRows,setRows]=useState<ResearchCombo[]>(readResearchHistory)
+ useEffect(()=>{
+  const refresh=()=>setRows(readResearchHistory())
+  window.addEventListener(RESEARCH_UPDATED,refresh)
+  return ()=>window.removeEventListener(RESEARCH_UPDATED,refresh)
+ },[])
  const accountPrices=useMemo(()=>accountWagerPrices(baseRows,wagers??[],priceOf),[baseRows,wagers,priceOf])
  const rows=accountPrices.rows
  const [section,setSection]=useState<'EXPLORER'|'STRATEGIES'|'STATUS'>('EXPLORER')
@@ -38,7 +42,7 @@ export default function ComboResearchCenter({unitSize,accountKey,wagers,priceOf}
  const [team,setTeam]=useState('ALL'),[pp,setPp]=useState('ALL'),[fl,setFl]=useState('ALL'),[size,setSize]=useState('ALL'),[venue,setVenue]=useState('ALL')
  const [gaa,setGaa]=useState('ALL'),[diff,setDiff]=useState('ALL'),[view,setView]=useState('HIT')
  const [offenseMin,setOffenseMin]=useState(''),[opponentGAMin,setOpponentGAMin]=useState(''),[opponentXGMin,setOpponentXGMin]=useState(''),[opponentPKMax,setOpponentPKMax]=useState(''),[message,setMessage]=useState('')
- const [apiUrl,setApiUrl]=useState(()=>localStorage.getItem(API_KEY)||String(import.meta.env.VITE_COMBO_RESEARCH_URL||''))
+ const [apiUrl,setApiUrl]=useState(researchUrl)
  const [loading,setLoading]=useState(false)
  const [cloudStatus,setCloudStatus]=useState<{counts?:{total:number;graded:number;games:number};check?:{checked_at:string;games_checked:number;combos_graded:number};captures?:{game_date:string;team:string;capture_status:string;lineup_status:string;combo_count:number;captured_at:string;error?:string}[]}|null>(null)
  const [statusError,setStatusError]=useState('')
@@ -77,11 +81,8 @@ export default function ComboResearchCenter({unitSize,accountKey,wagers,priceOf}
   if(!apiUrl.trim()){setMessage('Set a research API URL in Collection Status first.');setSection('STATUS');return}
   setLoading(true);setMessage('')
   try{
-   const url=new URL('/research/combos',apiUrl);url.searchParams.set('limit','10000')
-   const res=await fetch(url.toString());if(!res.ok)throw new Error('Cloud API HTTP '+res.status)
-   const json=await res.json();const imported=parseResearchImport(json)
-   setRows(old=>{const previous=new Map(old.map(row=>[row.id,row]));const merged=imported.rows.map(row=>({...row,odds:previous.get(row.id)?.odds??row.odds}));return unique([...old,...merged])}) // Cloud grades refresh in memory; local private odds overlays remain intact.
-   setMessage(`Cloud sync: ${imported.rows.length} rows received; ${imported.invalid} invalid rows excluded.`)
+   const result=await syncResearch(apiUrl)
+   setMessage(`Cloud sync: ${result.received} rows received; ${result.invalid} invalid rows excluded.`)
    void refreshCloudStatus()
   }catch(e){setMessage('Cloud sync unavailable: '+String(e))}
   finally{setLoading(false)}
