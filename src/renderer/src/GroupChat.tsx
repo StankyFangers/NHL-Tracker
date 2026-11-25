@@ -13,7 +13,7 @@ function betText(b:Bet){
  return [b.date,legs,b.units+'u',b.odds==null?'':(b.odds>0?'+':'')+b.odds,b.book].filter(Boolean).join(' · ')
 }
 
-export function GroupChat({username,bets,date}:{username:string;bets:Bet[];date:string}){
+export function GroupChat({username,bets,date,preview=false}:{username:string;bets:Bet[];date:string;preview?:boolean}){
  const key='nhlTracker:groupChat:read:'+username
  const [read,setRead]=useState(()=>Number(localStorage.getItem(key))||0)
  const [latest,setLatest]=useState(0),[open,setOpen]=useState(false)
@@ -34,6 +34,7 @@ export function GroupChat({username,bets,date}:{username:string;bets:Bet[];date:
   return ()=>window.removeEventListener('resize',resize)
  },[open])
  useEffect(()=>{
+  if(preview)return
   let stopped=false,timer:ReturnType<typeof setTimeout>
   async function poll(){
    try{
@@ -55,7 +56,7 @@ export function GroupChat({username,bets,date}:{username:string;bets:Bet[];date:
   }
   void poll()
   return ()=>{stopped=true;clearTimeout(timer)}
- },[open,refresh,username])
+ },[open,refresh,username,preview])
  function markRead(){
   if(!open||!document.hasFocus()||!follow.current||!messages.length)return
   const seen=Number(messages[messages.length-1].id)
@@ -69,7 +70,7 @@ export function GroupChat({username,bets,date}:{username:string;bets:Bet[];date:
  },[open,messages,read])
  async function send(){
   const text=draft.trim()
-  if(!text||sending)return
+  if(preview||!text||sending)return
   if(pending.current.text!==text)pending.current={text,nonce:crypto.randomUUID()}
   setSending(true);setSendError('')
   try{
@@ -88,12 +89,13 @@ export function GroupChat({username,bets,date}:{username:string;bets:Bet[];date:
    <div ref={log} className="groupChatLog" onScroll={()=>{const el=log.current;if(el){follow.current=el.scrollHeight-el.scrollTop-el.clientHeight<20;markRead()}}}>
     {messages.map(m=><article key={m.id}><b>{m.username}</b> <time dateTime={m.created_at}>{stamp.format(new Date(m.created_at))}</time><p>{m.body}</p></article>)}
    </div>
+   {preview&&<small>TEST preview · Sending messages requires a LIVE session.</small>}
    {(sendError||error)&&<small role="alert">{sendError||error}</small>}
    {sharing&&<select aria-label="Choose a bet to share" value="" onChange={e=>{const b=bets.find(b=>b.id===e.target.value);if(b)setDraft(old=>[old,betText(b)].filter(Boolean).join('\n').slice(0,2000));setSharing(false)}}>
     <option value="">Choose a bet for {date}</option>{bets.filter(b=>b.date===date).map(b=><option key={b.id} value={b.id}>{betText(b)}</option>)}
    </select>}
    <textarea aria-label="Chat message" placeholder="Message the group…" rows={2} maxLength={2000} disabled={sending} value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send()}}}/>
-   <footer><button disabled={sending} onClick={()=>setSharing(!sharing)}>Share bet</button><button disabled={sending||!draft.trim()} onClick={()=>void send()}>Send</button></footer>
+   <footer><button disabled={sending} onClick={()=>setSharing(!sharing)}>Share bet</button><button disabled={preview||sending||!draft.trim()} onClick={()=>void send()}>Send</button></footer>
   </section>,document.body)}
  </>
 }
