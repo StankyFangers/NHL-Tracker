@@ -13,6 +13,7 @@ import {subtleBackground} from './smartThemes'
 import {confidenceLogStatus} from './confidenceLogStatus'
 import {TrioComparison} from './TrioComparisonPanel'
 import PlayerWagerAnalytics from './PlayerWagerAnalytics'
+import {DevResearchEndpoint} from './DevResearchEndpoint'
 import ComboResearchCenter, {readResearchHistory,savedResearchProfile} from './ComboResearchCenter'
 import {classifyResearch,lastFivePrice,pairingKey,RULES} from './comboResearchModel'
 import {officialLegEvidence,officialWagerBoxscore,type OfficialGameRecords} from './wagerLegEvidence'
@@ -1395,6 +1396,7 @@ function TrackerApp({initialTestAccount,onTestLogout,liveAccount,onLiveLogout}:{
  {tab==='BET PERFORMANCE'&&<HistoryDashboard bets={bets} setBets={setBets} verifiedDays={verifiedDays} unitSize={unitSize} games={games}/>}
  {tab==='CONFIDENCE PERFORMANCE'&&<ConfidencePerformanceView bets={bets} revision={confidenceRevision}/>}
  {tab==='DEV'&&(liveAccount||account)?.role==='DEV'&&<main className="devCenter"><section className="toolbar settingsToolbar"><div><h1>DEV CONTROL CENTER <span className="devCenterPill">{(liveAccount||account)?.username.toUpperCase()} · DEV</span></h1><p>Administrative workspace · DEV privileges · {isTestMode?'TEST environment':'LIVE environment'} · No PINs</p></div></section><div className="devCenterGrid">
+ <DevResearchEndpoint/>
  <section className="devCenterCard"><div className="devCenterCardTitle"><span>♙</span><h2>User Management</h2></div><p>Promote trusted users to MOD, restrict chat, and manage account bans.</p><div className="devCenterNotice">Server-side role management and moderation endpoints are not enabled yet. No account changes can be made from this panel until the database migration and authenticated API are installed.</div><button disabled title="Requires DEV-authorized moderation API">MANAGE USERS · COMING NEXT</button></section>
  <section className="devCenterCard"><div className="devCenterCardTitle"><span>▤</span><h2>Daily Combo Report</h2></div><p>Generate a pregame PDF of qualifying forwards who share both a forward line and a power-play unit. Preserves three-player combinations.</p><button disabled={reportBusy} onClick={()=>void generateDailyComboReport()}>{reportBusy?'GENERATING…':'GENERATE DAILY PDF'}</button></section>
  <section className="devCenterCard"><div className="devCenterCardTitle"><span>◷</span><h2>End of Day Combo Report</h2></div><p>Grade the qualifying daily combos against final player stats and compare actual net units.</p><div className="devCenterNotice">Grades the saved pregame snapshot against final NHL boxscores. Unpriced and unverified combos are excluded from financial totals.</div><button disabled={eodBusy||!trackedCombos.length} onClick={()=>void generateEndOfDayComboReport()}>{eodBusy?'CHECKING FINALS…':'GENERATE END OF DAY PDF'}</button></section>

@@ -3,7 +3,7 @@ import {RESEARCH_PROFILES,RULES,RULE_NAMES,analyzeProfile,analyzeFlatOne,parseRe
 import './comboResearch.css'
 import type {Bet} from './App'
 import {accountWagerPrices,overlaySettledWagerOdds} from './comboResearchPrices'
-import {API_KEY, STORE, RESEARCH_UPDATED, researchUrl, readResearchHistory, syncResearch} from './comboResearchSync'
+import {STORE, RESEARCH_UPDATED, researchUrl, readResearchHistory, syncResearch} from './comboResearchSync'
 export {readResearchHistory} from './comboResearchSync'
 const dollars = new Intl.NumberFormat('en-US', {style:'currency', currency:'USD', signDisplay:'exceptZero'})
 const unique=(rows:ResearchCombo[])=>[...new Map(rows.map(r=>[r.id,r])).values()]
@@ -42,14 +42,12 @@ export default function ComboResearchCenter({unitSize,accountKey,wagers,priceOf}
  const [team,setTeam]=useState('ALL'),[pp,setPp]=useState('ALL'),[fl,setFl]=useState('ALL'),[size,setSize]=useState('ALL'),[venue,setVenue]=useState('ALL')
  const [gaa,setGaa]=useState('ALL'),[diff,setDiff]=useState('ALL'),[view,setView]=useState('HIT')
  const [offenseMin,setOffenseMin]=useState(''),[opponentGAMin,setOpponentGAMin]=useState(''),[opponentXGMin,setOpponentXGMin]=useState(''),[opponentPKMax,setOpponentPKMax]=useState(''),[message,setMessage]=useState('')
- const [apiUrl,setApiUrl]=useState(researchUrl)
  const [loading,setLoading]=useState(false)
  const [cloudStatus,setCloudStatus]=useState<{counts?:{total:number;graded:number;games:number};check?:{checked_at:string;games_checked:number;combos_graded:number};captures?:{game_date:string;team:string;capture_status:string;lineup_status:string;combo_count:number;captured_at:string;error?:string}[]}|null>(null)
  const [statusError,setStatusError]=useState('')
  const refreshCloudStatus=async()=>{
-  if(!apiUrl.trim()){setStatusError('Enter the cloud URL before checking status.');return}
   try{
-   const res=await fetch(new URL('/research/status',apiUrl).toString())
+   const res=await fetch(new URL('/research/status',researchUrl()).toString())
    if(!res.ok)throw new Error('HTTP '+res.status)
    setCloudStatus(await res.json());setStatusError('')
   }catch(err){setStatusError(String(err));setCloudStatus(null)}
@@ -78,10 +76,9 @@ export default function ComboResearchCenter({unitSize,accountKey,wagers,priceOf}
  const summary=[{profile:'Flat 1u',...analyzeFlatOne(filtered)},...RESEARCH_PROFILES.map(p=>({profile:p,...analyzeProfile(filtered,p)}))]
  const totalGames=new Set(filtered.map(r=>r.gameId||r.date+':'+r.matchup)).size
  const sync=async()=>{
-  if(!apiUrl.trim()){setMessage('Set a research API URL in Collection Status first.');setSection('STATUS');return}
   setLoading(true);setMessage('')
   try{
-   const result=await syncResearch(apiUrl)
+   const result=await syncResearch()
    setMessage(`Cloud sync: ${result.received} rows received; ${result.invalid} invalid rows excluded.`)
    void refreshCloudStatus()
   }catch(e){setMessage('Cloud sync unavailable: '+String(e))}
@@ -107,13 +104,12 @@ export default function ComboResearchCenter({unitSize,accountKey,wagers,priceOf}
   }catch(err){setMessage('Import failed: '+String(err))}
   input.value=''
  }
- useEffect(()=>{if(apiUrl.trim())localStorage.setItem(API_KEY,apiUrl.trim());else localStorage.removeItem(API_KEY)},[apiUrl])
  const header=<div className="researchHeader"><div><small>COMBO RESEARCH · CLOUD PREVIEW</small><h1>Combo History & Strategy Center</h1><p>Pregame lineup snapshots → intact combos → verified results. Shared research stays separate from private bets.</p></div><button onClick={()=>void sync()} disabled={loading}>{loading?'SYNCING…':'↻ SYNC CLOUD'}</button></div>
  return <main className="researchRoot">{header}
   <div className="researchNav">{(['EXPLORER','STRATEGIES','STATUS'] as const).map(x=><button key={x} className={section===x?'on':''} onClick={()=>setSection(x)}>{x==='EXPLORER'?'HIT RATE EXPLORER':x==='STRATEGIES'?'STRATEGY PERFORMANCE':'COLLECTION STATUS'}</button>)}</div>
   {message&&<p className="researchNotice" role="status">{message}</p>}
   <div className="researchMetrics"><div><small>COMBOS FILTERED</small><strong>{filtered.length}</strong></div><div><small>GRADED</small><strong>{graded.length}</strong></div><div><small>HIT RATE</small><strong>{graded.length?(wins/graded.length*100).toFixed(1)+'%':'—'}</strong></div><div><small>DISTINCT GAMES</small><strong>{totalGames}</strong></div></div>
-  {section==='STATUS'?<div className="researchCard"><h2>Research collection status</h2><p>{wagers===null?'Account wager history unavailable.':`Account history · ${accountPrices.matchedCount} combos matched to settled odds · ${accountPrices.ambiguous} with conflicting prices.`}</p><p>This DEV screen accepts normalized Combo Research records and can query the standalone research Worker. An empty screen means no research data has been imported or synced yet; no example results are invented.</p><label>RESEARCH CLOUD URL<input placeholder="https://your-research-worker.workers.dev" value={apiUrl} onChange={e=>setApiUrl(e.target.value)}/></label><p>Current preview: <strong>{rows.length}</strong> distinct research records. The production research database is not deployed by this branch.</p>
+  {section==='STATUS'?<div className="researchCard"><h2>Research collection status</h2><p>{wagers===null?'Account wager history unavailable.':`Account history · ${accountPrices.matchedCount} combos matched to settled odds · ${accountPrices.ambiguous} with conflicting prices.`}</p><p><strong>{rows.length}</strong> distinct research records on this device.</p>
   <button type="button" onClick={()=>void refreshCloudStatus()}>CHECK CLOUD COLLECTION STATUS</button>
   {statusError&&<p role="alert" className="researchNotice">Cloud status unavailable: {statusError}</p>}
   {cloudStatus&&<div className="researchStatusPanel"><p><strong>{cloudStatus.counts?.total??0}</strong> stored combos · <strong>{cloudStatus.counts?.graded??0}</strong> graded · <strong>{cloudStatus.counts?.games??0}</strong> distinct games</p><p>Last grading check: {cloudStatus.check?.checked_at||'Not yet run'}</p><div className="researchTable"><table><thead><tr><th>Date</th><th>Team</th><th>Snapshot</th><th>Lineup</th><th>Combos</th><th>Source issue</th></tr></thead><tbody>{(cloudStatus.captures||[]).slice(0,30).map((c,i)=><tr key={c.game_date+c.team+i}><td>{c.game_date}</td><td>{c.team}</td><td>{c.capture_status}</td><td>{c.lineup_status||'UNKNOWN'}</td><td>{c.combo_count}</td><td>{c.error||'—'}</td></tr>)}</tbody></table></div></div>}<label className="researchImport">IMPORT NORMALIZED RESEARCH JSON<input type="file" accept=".json,application/json" onChange={e=>void importFile(e)}/></label><p>Accepts the original Combo Logger 0.1.0 export (rows / combo / context) or normalized research JSON. Standalone logger records include pregame lineups and results but do not contain wager prices.</p><label className="researchImport">OVERLAY ODDS FROM PRIVATE SETTLED XLSX<input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={e=>void importWagerPrices(e)}/></label><p>The XLSX is read only on this computer. Odds attach only to a uniquely matched game-date / player combination. Private bets and unit sizes are not shared with the research cloud.</p><button onClick={()=>{if(window.confirm('Clear only the locally cached research preview? Your Bet Hub wagers will not be changed.')){setRows([]);localStorage.removeItem(STORE);setMessage('Local research preview cleared.')}}}>CLEAR LOCAL RESEARCH PREVIEW</button></div>:<>
