@@ -3,6 +3,8 @@ import {parseResearchImport, type ResearchCombo} from './comboResearchModel'
 export const STORE = 'nhlTracker:research:preview:v1'
 export const API_KEY = 'nhlTracker:research:apiUrl:v1'
 export const RESEARCH_UPDATED = 'nhlTracker:research:updated'
+const SYNC_TIME = 'nhlTracker:research:lastSuccessfulSync:v1'
+export const lastResearchSync = () => localStorage.getItem(SYNC_TIME)
 const defaultUrl = 'https://nhl-combo-research-dev.nhl-tracker.workers.dev'
 export const researchUrl = () => localStorage.getItem(API_KEY)?.trim() || import.meta.env?.VITE_COMBO_RESEARCH_URL?.trim() || defaultUrl
 
@@ -34,6 +36,7 @@ async function downloadResearch(base: string) {
  const merged = new Map(readResearchHistory().map(row => [row.id, row]))
  for (const row of incoming) merged.set(row.id, {...row, odds: merged.get(row.id)?.odds ?? row.odds})
  localStorage.setItem(STORE, JSON.stringify([...merged.values()]))
+ localStorage.setItem(SYNC_TIME, new Date().toISOString())
  window.dispatchEvent(new Event(RESEARCH_UPDATED))
  return {received: incoming.length, invalid}
 }
