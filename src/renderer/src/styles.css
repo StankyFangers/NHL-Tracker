@@ -1399,3 +1399,5 @@ html,body,#root,.app,main{scrollbar-width:thin;scrollbar-color:#3e7898 #0a1118}
 .settledExportRange input{padding:8px;border:1px solid #3c6a7b;background:#091e29;color:white;border-radius:5px}
 .settledExportRange button{padding:10px 15px;background:#17664c;color:white;border:1px solid #32be88;border-radius:6px;cursor:pointer}
 .settledExportRange button:hover{background:#1e8764}
+
+.comboNameStatus .comboPlacedMark{font-size:11px;font-weight:700;color:#75e9bd;letter-spacing:normal;text-transform:none}
