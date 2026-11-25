@@ -10,8 +10,16 @@
 .groupChatLog p {white-space:pre-wrap;overflow-wrap:anywhere;margin:3px 0}
 .groupChatUnread {color:#ffd15e}
 
-.groupChatToggle {display:inline-flex;align-items:center;gap:6px}
-.groupChatGlyph {position:relative;width:11px;height:8px;border:1px solid currentColor;border-radius:3px}
+.nhl1815AllGamesButton.groupChatToggle {
+ display:inline-flex;
+ align-items:center;
+ justify-content:center;
+ gap:7px;
+ min-height:30px;
+ padding:5px 11px!important;
+ font-size:11px!important;
+}
+.groupChatGlyph {position:relative;width:13px;height:10px;border:1px solid currentColor;border-radius:3px}
 .groupChatGlyph::after {content:'';position:absolute;left:1px;bottom:-3px;height:3px;border-left:1px solid currentColor;transform:skew(-25deg)}
 .groupChatPanel {padding-bottom:18px}
 .groupChatGrip {position:absolute;bottom:0;width:18px;height:18px;touch-action:none;user-select:none}
