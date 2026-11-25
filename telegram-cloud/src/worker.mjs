@@ -1,7 +1,8 @@
+import {hourET,pollingInterval} from '../../shared/lineupPolling.mjs'
+export {pollingInterval} from '../../shared/lineupPolling.mjs'
 const SLUGS={ANA:'anaheim-ducks',BOS:'boston-bruins',BUF:'buffalo-sabres',CAR:'carolina-hurricanes',CBJ:'columbus-blue-jackets',CGY:'calgary-flames',CHI:'chicago-blackhawks',COL:'colorado-avalanche',DAL:'dallas-stars',DET:'detroit-red-wings',EDM:'edmonton-oilers',FLA:'florida-panthers',LAK:'los-angeles-kings',MIN:'minnesota-wild',MTL:'montreal-canadiens',NJD:'new-jersey-devils',NSH:'nashville-predators',NYI:'new-york-islanders',NYR:'new-york-rangers',OTT:'ottawa-senators',PHI:'philadelphia-flyers',PIT:'pittsburgh-penguins',SEA:'seattle-kraken',SJS:'san-jose-sharks',STL:'st-louis-blues',TBL:'tampa-bay-lightning',TOR:'toronto-maple-leafs',UTA:'utah-mammoth',VAN:'vancouver-canucks',VGK:'vegas-golden-knights',WPG:'winnipeg-jets',WSH:'washington-capitals'};
 function dateET(d=new Date()){const p=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d).filter(x=>['year','month','day'].includes(x.type)).map(x=>[x.type,x.value]));return p.year+'-'+p.month+'-'+p.day}
 function timeET(d){return new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',hour:'numeric',minute:'2-digit'}).format(d)}
-function hourET(d){return Number(new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',hour:'numeric',hourCycle:'h23'}).format(d))}
 function clean(s){return String(s||'').replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,' ').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,' ').replace(/<[^>]*>/g,' ').replace(/&amp;/g,'&').replace(/&nbsp;/g,' ').replace(/&#39;|&#x27;/g,"'").replace(/\s+/g,' ').trim()}
 export function parseLineStatus(html,gameDate){
  const text=clean(html),m=html.match(/Source:[\s\S]{0,500}?<a[^>]+href=["'][^"']+["'][^>]*>([\s\S]*?)<\/a>/i);
@@ -39,7 +40,6 @@ export function lineupChanges(oldValue,newValue){
  }
  return out;
 }
-export function pollingInterval(ms){return ms<=0||ms>9*3600000?Infinity:ms<=15*60000?60000:ms<=3600000?300000:ms<=4*3600000?900000:ms<=7*3600000?1800000:3600000}
 const keyTeam=(date,team)=>date+':team:'+team;
 const keyGroup=(date,start)=>date+':group:'+start;
 async function getText(url){const r=await fetch(url,{headers:{'User-Agent':'NHL-Tracker-Telegram/1.0'},signal:AbortSignal.timeout(12000)});if(!r.ok)throw Error('HTTP '+r.status);return r.text()}

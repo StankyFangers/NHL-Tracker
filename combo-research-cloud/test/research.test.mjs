@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {parseResearchLineup,combosFromLineup} from '../src/collector.mjs'
+import {parseResearchLineup,combosFromLineup,collectPregame} from '../src/collector.mjs'
 import worker from '../src/worker.mjs'
 const a=n=>`<a href="/players/p-${n.toLowerCase().replaceAll(' ','-')}">${n}</a>`
 const forwards=['Alpha One','Bravo Two','Charlie Three','Delta Four','Echo Five','Foxtrot Six','Golf Seven','Hotel Eight','India Nine','Juliet Ten','Kilo Eleven','Lima Twelve']
@@ -32,4 +32,30 @@ test('unauthorized importer is blocked and health is readable',async()=>{
  const body=await health.json();assert.equal(body.ok,true)
  const res=await worker.fetch(new Request('https://research.example/research/combos',{method:'POST',headers:{'content-type':'application/json'},body:'{"combos":[]}' }),{}, {})
  assert.equal(res.status,401)
+})
+
+test('collector checks teams on the Telegram pregame cadence',async()=>{
+ const now=Date.parse('2026-11-24T19:00:00-05:00')
+ let start,age
+ const db={prepare(sql){return {bind(){return this},async first(){
+  if(sql.includes('research_schedule_cache'))return {updated_ms:now,payload:JSON.stringify([{gameId:'1',start,away:'VGK',home:'EDM'}])}
+  if(sql.includes('research_capture_state'))return {checked_ms:now-age}
+  return {n:0}
+ }}},async batch(){}}
+ const original=globalThis.fetch
+ globalThis.fetch=async()=>new Response(html)
+ try{
+  for(const [minutes,gap] of [[540,60],[420,30],[240,15],[60,5],[15,1]]){
+   start=now+minutes*60000
+   age=gap*60000-1
+   assert.equal((await collectPregame({DB:db},now)).attempted,0)
+   age++
+   assert.equal((await collectPregame({DB:db},now)).attempted,2)
+  }
+  for(const offset of [-60000,0,540*60000+1]){
+   start=now+offset
+   assert.equal((await collectPregame({DB:db},now)).games,0)
+  }
+  assert.equal((await collectPregame({},Date.parse('2026-11-24T09:59:00-05:00'))).games,0)
+ }finally{globalThis.fetch=original}
 })

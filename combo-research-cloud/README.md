@@ -37,7 +37,7 @@ Only the research data is sent to the Worker; the private settled XLSX is never 
 - POST `/research/collect` — bearer-token protected manual pregame collector tick
 - GET `/research/status` — includes recent pregame capture status and source failures
 
-The scheduled Worker checks the NHL schedule, captures Daily Faceoff forward-line and PP overlaps in the final 15 minutes before puck drop, then grades recorded combos against NHL boxscores after final. Ambiguous player matches stay UNVERIFIED. Source errors and lineup status are retained in the capture-status table.
+The scheduled Worker checks the NHL schedule, refreshes Daily Faceoff forward-line and PP overlaps on the Telegram monitor’s pregame cadence from 10 AM Eastern (hourly within nine hours, every 30 minutes within seven hours, every 15 minutes within four hours, every five minutes within one hour, every minute within 15 minutes), then grades recorded combos against NHL boxscores after final. Ambiguous player matches stay UNVERIFIED. Source errors and lineup status are retained in the capture-status table.
 
 ## Deployment setup
 Create a **new** Cloudflare D1 database, replace `database_id = "local"` with its actual database ID in `wrangler.toml`, apply `schema.sql` remotely, and set the `RESEARCH_INGEST_TOKEN` secret. Do **not** reuse the Telegram notification D1 database. Confirm migrations, access controls, and export backups before connecting production clients.

@@ -1,3 +1,4 @@
+import {hourET,pollingInterval} from '../../shared/lineupPolling.mjs'
 // Server-side research collection. Shares Daily Faceoff parsing conventions with the Telegram Worker,
 // but uses its own database and never sends research records to personal accounts.
 const TEAM_SLUGS={ANA:'anaheim-ducks',BOS:'boston-bruins',BUF:'buffalo-sabres',CAR:'carolina-hurricanes',CBJ:'columbus-blue-jackets',CGY:'calgary-flames',CHI:'chicago-blackhawks',COL:'colorado-avalanche',DAL:'dallas-stars',DET:'detroit-red-wings',EDM:'edmonton-oilers',FLA:'florida-panthers',LAK:'los-angeles-kings',MIN:'minnesota-wild',MTL:'montreal-canadiens',NJD:'new-jersey-devils',NSH:'nashville-predators',NYI:'new-york-islanders',NYR:'new-york-rangers',OTT:'ottawa-senators',PHI:'philadelphia-flyers',PIT:'pittsburgh-penguins',SEA:'seattle-kraken',SJS:'san-jose-sharks',STL:'st-louis-blues',TBL:'tampa-bay-lightning',TOR:'toronto-maple-leafs',UTA:'utah-mammoth',VAN:'vancouver-canucks',VGK:'vegas-golden-knights',WPG:'winnipeg-jets',WSH:'washington-capitals'}
@@ -47,7 +48,7 @@ async function schedule(env,day,now){
 }
 async function captureTeam(env,game,team,opponent,now){
  const state=await env.DB.prepare('SELECT checked_ms FROM research_capture_state WHERE game_id=? AND team=?').bind(game.gameId,team).first()
- const gap=game.start-now<=5*60000?55000:4*60000
+ const gap=pollingInterval(game.start-now)
  if(state&&now-Number(state.checked_ms)<gap)return {captured:0,skipped:1}
  try{
   const html=await textAt('https://www.dailyfaceoff.com/teams/'+TEAM_SLUGS[team]+'/line-combinations')
@@ -73,10 +74,11 @@ async function captureTeam(env,game,team,opponent,now){
  }
 }
 export async function collectPregame(env,now=Date.now()){
+ if(hourET(new Date(now))<10)return {games:0,attempted:0,captured:0}
  const dates=[etDate(new Date(now)),etDate(new Date(now+4*3600000))]
  const all=[]
  for(const d of new Set(dates))try{all.push(...await schedule(env,d,now))}catch(e){console.error('Research schedule unavailable',d,String(e))}
- const games=[...new Map(all.map(g=>[g.gameId,g])).values()].filter(g=>g.start>=now&&g.start-now<=15*60000).sort((a,b)=>a.start-b.start)
+ const games=[...new Map(all.map(g=>[g.gameId,g])).values()].filter(g=>Number.isFinite(pollingInterval(g.start-now))).sort((a,b)=>a.start-b.start)
  let captured=0,attempted=0
  for(const g of games){for(const [team,opponent] of [[g.away,g.home],[g.home,g.away]]){
   const r=await captureTeam(env,g,team,opponent,now)
