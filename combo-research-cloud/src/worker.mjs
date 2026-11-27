@@ -40,20 +40,38 @@ async function importRows(req,env){
  }
  return json({accepted,rejected,duplicatesPossible:true})
 }
-function playerMap(box){
- const all=[...(box?.playerByGameStats?.awayTeam?.forwards||[]),...(box?.playerByGameStats?.awayTeam?.defense||[]),...(box?.playerByGameStats?.homeTeam?.forwards||[]),...(box?.playerByGameStats?.homeTeam?.defense||[])]
- const byId=new Map(),byName=new Map()
- for(const p of all){
-  const pts=Number(p.points);if(!Number.isFinite(pts))continue
-  const id=Number(p.playerId);if(id>0)byId.set(id,pts)
-  const key=nameKey(p.name?.default||p.name||[p.firstName?.default,p.lastName?.default].filter(Boolean).join(' '))
-  if(key){const arr=byName.get(key)||[];arr.push(pts);byName.set(key,arr)}
+export function finalPoints(box,roster){
+ const teams=new Map()
+ for(const side of ['homeTeam','awayTeam']){
+  const team=box[side]
+  if(!team?.abbrev || !team.id)continue
+  const points=new Map(),names=new Map()
+  for(const group of ['forwards','defense']){
+   for(const skater of box.playerByGameStats?.[side]?.[group]||[]){
+    if(Number.isInteger(skater.points) && skater.points>=0)points.set(skater.playerId,skater.points)
+   }
+  }
+  for(const player of roster){
+   if(player.teamId!==team.id || !player.firstName?.default || !player.lastName?.default)continue
+   const key=nameKey(player.firstName.default+' '+player.lastName.default)
+   if(!names.has(key))names.set(key,new Set())
+   names.get(key).add(player.playerId)
+  }
+  teams.set(team.abbrev,{points,names})
  }
- return {byId,byName}
+ return (team,name,id)=>{
+  const stats=teams.get(team)
+  if(!stats)return null
+  const matches=stats.names.get(nameKey(name))
+  // DFO lists Gabriel while NHL rosters use Gabe for player 8484210.
+  const alias=nameKey(name)==='gabrielperreault' && stats.names.get('gabeperreault')?.has(8484210)?8484210:null
+  const playerId=id?Number(id):matches?.size===1?[...matches][0]:matches?null:alias
+  return stats.points.get(playerId)??null
+ }
 }
 async function gradePending(env){
  const now=Date.now()
- const pending=await env.DB.prepare("SELECT DISTINCT c.game_id FROM research_combos c LEFT JOIN research_grade_attempts a ON a.game_id=c.game_id WHERE c.result='UNVERIFIED' AND c.game_date <= ? AND c.game_id <> '' AND (a.game_id IS NULL OR (a.attempts < 12 AND a.checked_ms < ?)) LIMIT 40").bind(new Date(now).toISOString().slice(0,10),now-4*3600000).all()
+ const pending=await env.DB.prepare("SELECT DISTINCT c.game_id FROM research_combos c LEFT JOIN research_grade_attempts a ON a.game_id=c.game_id WHERE c.result='UNVERIFIED' AND c.game_date <= ? AND c.game_id <> '' AND c.game_id NOT GLOB '*[^0-9]*' AND (a.game_id IS NULL OR a.checked_ms < ? OR (a.attempts < 12 AND a.checked_ms < ?)) ORDER BY COALESCE(a.checked_ms,0),c.game_id LIMIT 3").bind(new Date(now).toISOString().slice(0,10),now-24*3600000,now-4*3600000).all()
  let checked=0,graded=0
  for(const row of pending.results||[]){
   if(!/^\d+$/.test(row.game_id))continue
@@ -63,12 +81,14 @@ async function gradePending(env){
    if(!response.ok)continue
    const box=await response.json()
    if(!['FINAL','OFF'].includes(String(box.gameState)))continue
-   const stats=playerMap(box)
-   const entries=await env.DB.prepare("SELECT id,players_json,player_ids_json FROM research_combos WHERE game_id=? AND result='UNVERIFIED'").bind(row.game_id).all()
+   const rosterResponse=await fetch('https://api-web.nhle.com/v1/gamecenter/'+row.game_id+'/play-by-play',{signal:AbortSignal.timeout(12000)})
+   const roster=rosterResponse.ok?await rosterResponse.json():null
+   const points=finalPoints(box,roster?.rosterSpots||[])
+   const entries=await env.DB.prepare("SELECT id,team,players_json,player_ids_json FROM research_combos WHERE game_id=? AND result='UNVERIFIED'").bind(row.game_id).all()
    const updates=[]
    for(const combo of entries.results||[]){
     const players=JSON.parse(combo.players_json),ids=combo.player_ids_json?JSON.parse(combo.player_ids_json):null
-    const values=players.map((p,i)=>ids&&stats.byId.has(Number(ids[i]))?stats.byId.get(Number(ids[i])):(()=>{const found=stats.byName.get(nameKey(p));return found?.length===1?found[0]:null})())
+    const values=players.map((name,i)=>points(combo.team,name,ids?.[i]))
     // Ambiguous/missing players remain UNVERIFIED; never turn data gaps into misses.
     if(values.some(x=>x===null||x===undefined))continue
     updates.push(env.DB.prepare("UPDATE research_combos SET result=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND result='UNVERIFIED'").bind(values.every(x=>x>=1)?'HIT':'MISS',combo.id))
