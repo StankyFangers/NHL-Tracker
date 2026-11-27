@@ -71,7 +71,7 @@ export function finalPoints(box,roster){
 }
 async function gradePending(env){
  const now=Date.now()
- const pending=await env.DB.prepare("SELECT DISTINCT c.game_id FROM research_combos c LEFT JOIN research_grade_attempts a ON a.game_id=c.game_id WHERE c.result='UNVERIFIED' AND c.game_date <= ? AND c.game_id <> '' AND c.game_id NOT GLOB '*[^0-9]*' AND (a.game_id IS NULL OR a.checked_ms < ? OR (a.attempts < 12 AND a.checked_ms < ?)) ORDER BY COALESCE(a.checked_ms,0),c.game_id LIMIT 3").bind(new Date(now).toISOString().slice(0,10),now-24*3600000,now-4*3600000).all()
+ const pending=await env.DB.prepare("SELECT DISTINCT c.game_id FROM research_combos c LEFT JOIN research_grade_attempts a ON a.game_id=c.game_id WHERE c.result='UNVERIFIED' AND c.game_date <= ? AND c.game_id <> '' AND c.game_id NOT GLOB '*[^0-9]*' AND (a.game_id IS NULL OR a.checked_ms < ? OR (a.attempts < 12 AND a.checked_ms < ?)) ORDER BY COALESCE(a.checked_ms,0),c.game_id LIMIT 8").bind(new Date(now).toISOString().slice(0,10),now-24*3600000,now-4*3600000).all()
  let checked=0,graded=0
  for(const row of pending.results||[]){
   if(!/^\d+$/.test(row.game_id))continue
@@ -91,9 +91,16 @@ async function gradePending(env){
     const values=players.map((name,i)=>points(combo.team,name,ids?.[i]))
     // Ambiguous/missing players remain UNVERIFIED; never turn data gaps into misses.
     if(values.some(x=>x===null||x===undefined))continue
-    updates.push(env.DB.prepare("UPDATE research_combos SET result=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND result='UNVERIFIED'").bind(values.every(x=>x>=1)?'HIT':'MISS',combo.id))
+    updates.push([combo.id,values.every(x=>x>=1)?'HIT':'MISS'])
    }
-   if(updates.length){await env.DB.batch(updates);graded+=updates.length}
+   if(updates.length){
+    const written=await env.DB.prepare(`UPDATE research_combos AS c
+     SET result=json_extract(g.value,'$[1]'), updated_at=CURRENT_TIMESTAMP
+     FROM json_each(?) AS g
+     WHERE c.id=json_extract(g.value,'$[0]') AND c.game_id=? AND c.result='UNVERIFIED'`)
+     .bind(JSON.stringify(updates),row.game_id).run()
+    graded+=written.meta.changes
+   }
    checked++
   }catch(e){console.error('Research grade error',row.game_id,String(e))}
  }
@@ -119,11 +126,9 @@ export default {
    return json({error:'Not Found'},404)
   }catch(e){console.error('Research API error',String(e));return json({error:'Research service failure'},500)}
  },
- async scheduled(_event,env,ctx){
-  ctx.waitUntil((async()=>{
-   try{await collectPregame(env)}catch(e){console.error('Research capture failed',String(e))}
-   // Restrict NHL boxscore grading to occasional ticks to avoid repeated API calls.
-   if(new Date().getUTCMinutes()%15===0)try{await gradePending(env)}catch(e){console.error('Research grading failed',String(e))}
-  })())
+ async scheduled(event,env,ctx){
+  // Each cron invocation gets its own request budget.
+  if(event.cron==='*/15 * * * *')ctx.waitUntil(gradePending(env))
+  else ctx.waitUntil(collectPregame(env))
  }
 }
