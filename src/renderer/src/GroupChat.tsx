@@ -52,6 +52,7 @@ export function GroupChat({username,bets,date,preview=false}:{username:string;be
  const [error,setError]=useState(''),[sendError,setSendError]=useState(''),[sending,setSending]=useState(false)
  const [refresh,setRefresh]=useState(0),[sharing,setSharing]=useState(false)
  const [pos,setPos]=useState(()=>fitPanel({x:window.innerWidth-424,y:90,width:400,height:390}))
+ const composer=useRef<HTMLTextAreaElement>(null)
  const log=useRef<HTMLDivElement>(null)
  const lastIncoming=useRef<number|null>(null)
  const cursor=useRef('0'),follow=useRef(true),pending=useRef({text:'',nonce:''})
@@ -107,12 +108,17 @@ export function GroupChat({username,bets,date,preview=false}:{username:string;be
   const text=draft.trim()
   if(preview||!text||sending)return
   if(pending.current.text!==text)pending.current={text,nonce:crypto.randomUUID()}
+  composer.current?.focus()
+  setDraft('')
   setSending(true);setSendError('')
   try{
    const result=await request({body:text,nonce:pending.current.nonce})
    if(!result.sent)throw Error(result.error||'Chat message could not be sent')
-   pending.current={text:'',nonce:''};setDraft('');follow.current=true;setRefresh(x=>x+1)
-  }catch(e){setSendError(String(e instanceof Error?e.message:e))}
+   pending.current={text:'',nonce:''};follow.current=true;setRefresh(x=>x+1)
+  }catch(e){
+   setDraft(current=>current||draft)
+   setSendError(`Could not send “${text}”. ${e instanceof Error?e.message:String(e)}`)
+  }
   finally{setSending(false)}
  }
  return <>
@@ -129,7 +135,7 @@ export function GroupChat({username,bets,date,preview=false}:{username:string;be
    {sharing&&<select aria-label="Choose a bet to share" value="" onChange={e=>{const b=bets.find(b=>b.id===e.target.value);if(b)setDraft(old=>[old,betText(b)].filter(Boolean).join('\n').slice(0,2000));setSharing(false)}}>
     <option value="">Choose a bet for {date}</option>{bets.filter(b=>b.date===date).map(b=><option key={b.id} value={b.id}>{betText(b)}</option>)}
    </select>}
-   <textarea aria-label="Chat message" placeholder="Message the group…" rows={2} maxLength={2000} disabled={sending} value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send()}}}/>
+   <textarea ref={composer} autoFocus aria-label="Chat message" placeholder="Message the group…" rows={2} maxLength={2000} value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send()}}}/>
    <footer><button disabled={sending} onClick={()=>setSharing(!sharing)}>Share bet</button><button disabled={preview||sending||!draft.trim()} onClick={()=>void send()}>Send</button></footer>
    {(['left','right'] as const).map(side=><span key={side} className={'groupChatGrip '+side} title={'Resize from bottom '+side}
     onPointerDown={e=>{if(e.button!==0)return;e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);resizing.current={rect:pos,startX:e.clientX,startY:e.clientY}}}
