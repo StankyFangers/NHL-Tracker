@@ -18,6 +18,6 @@ export function DailyUnitsSummary({bets,date}:{bets:Bet[];date:string}){
  },[bets,date])
  return <div className="dailyUnitsSummary" aria-label={'Units wagered on '+date} title={'Entire slate · '+date}>
   <strong>Total Units Bet: {format.format(units.Total)}u</strong>
-  {labels.map(label=><span key={label}>{label}: {format.format(units[label])}u</span>)}
+  {labels.filter(label=>units[label]>0).map(label=><span key={label}>{label}: {format.format(units[label])}u</span>)}
  </div>
 }
