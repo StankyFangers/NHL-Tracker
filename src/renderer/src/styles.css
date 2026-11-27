@@ -1401,3 +1401,8 @@ html,body,#root,.app,main{scrollbar-width:thin;scrollbar-color:#3e7898 #0a1118}
 .settledExportRange button:hover{background:#1e8764}
 
 .comboNameStatus .comboPlacedMark{font-size:11px;font-weight:700;color:#75e9bd;letter-spacing:normal;text-transform:none}
+
+.betsTop .dailyUnitsHeader{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.dailyUnitsHeader .dailyUnitsSummary{display:flex;flex:1 1 200px;flex-wrap:wrap;align-items:baseline;gap:3px 9px;font-size:11px;letter-spacing:normal;font-variant-numeric:tabular-nums}
+.dailyUnitsSummary>strong,.dailyUnitsSummary>span{white-space:nowrap}
+.dailyUnitsHeader .addBetButton{margin-left:auto}

@@ -13,6 +13,24 @@ function betText(b:Bet){
  return [b.date,legs,b.units+'u',b.odds==null?'':(b.odds>0?'+':'')+b.odds,b.book].filter(Boolean).join(' · ')
 }
 
+function chatChime(){
+ if(localStorage.getItem('soundMaster')==='false')return
+ const volume=Number(localStorage.getItem('soundVolume')??'.35')
+ if(!(volume>0))return
+ try{
+  const ctx=new AudioContext()
+  if(ctx.state!=='running'){void ctx.close();return}
+  const tone=ctx.createOscillator(),gain=ctx.createGain(),now=ctx.currentTime
+  tone.frequency.value=660
+  gain.gain.setValueAtTime(0.0001,now)
+  gain.gain.exponentialRampToValueAtTime(Math.max(0.0002,0.09*Math.min(1,volume)),now+0.018)
+  gain.gain.exponentialRampToValueAtTime(0.0001,now+0.24)
+  tone.connect(gain);gain.connect(ctx.destination)
+  tone.onended=()=>{void ctx.close()}
+  tone.start(now);tone.stop(now+0.25)
+ }catch{/* Chat polling also works on devices without audio. */}
+}
+
 type PanelRect={x:number;y:number;width:number;height:number}
 function fitPanel(rect:PanelRect){
  const width=Math.min(window.innerWidth,Math.max(280,rect.width))
@@ -35,6 +53,7 @@ export function GroupChat({username,bets,date,preview=false}:{username:string;be
  const [refresh,setRefresh]=useState(0),[sharing,setSharing]=useState(false)
  const [pos,setPos]=useState(()=>fitPanel({x:window.innerWidth-424,y:90,width:400,height:390}))
  const log=useRef<HTMLDivElement>(null)
+ const lastIncoming=useRef<number|null>(null)
  const cursor=useRef('0'),follow=useRef(true),pending=useRef({text:'',nonce:''})
  const drag=useRef<{dx:number;dy:number}|null>(null)
  const resizing=useRef<{rect:PanelRect;startX:number;startY:number}|null>(null)
@@ -52,15 +71,20 @@ export function GroupChat({username,bets,date,preview=false}:{username:string;be
     const data=await request(open?{after:cursor.current}:{head:true})
     if(stopped)return
     if(data.error)throw Error(data.error)
+    let incoming=0
     if(open){
      const rows=data.messages||[]
      if(rows.length){
       cursor.current=rows[rows.length-1].id
       setMessages(old=>[...old,...rows].slice(-1000))
       const others=rows.filter(m=>m.username!==username)
-      if(others.length)setLatest(Number(others[others.length-1].id))
+      if(others.length)incoming=Number(others[others.length-1].id)
      }
-    }else setLatest(Number(data.latest)||0)
+    }else incoming=Number(data.latest)||0
+    const previous=lastIncoming.current
+    if(previous!==null && incoming>previous)chatChime()
+    lastIncoming.current=Math.max(previous??0,incoming)
+    setLatest(lastIncoming.current)
     setError('')
    }catch(e){if(!stopped)setError(String(e instanceof Error?e.message:e))}
    if(!stopped)timer=setTimeout(poll,open?5000:30000)
